@@ -9,6 +9,8 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -16,7 +18,8 @@ jobs:
       - name: Check source and licenses
         run: |
           python Tools/prepare_dependencies.py
-          python Tools/check_publication.py
+          python Tools/check_publication.py --history
+          python -m unittest discover -s Tests -p test_publication.py
           python -m unittest discover -s Tests -p test_unreal_descriptors.py
       - name: Build and test native components
         shell: cmd

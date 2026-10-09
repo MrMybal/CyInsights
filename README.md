@@ -70,6 +70,10 @@ indexed files reuse their disk cache. Select an interval to constrain statistics
 histograms and AI findings. Optional task adapters must be built locally for the
 engine version; see [NativeTasks](Tools/NativeTasks/README.md).
 
+Choose your installed analyzer in **Session > Select UnrealInsights.exe**, or
+set the local `CYINSIGHTS_UNREAL_INSIGHTS` environment variable to its executable
+path before launching. Matching versions are searched beside that installation.
+
 The existing local development release `Release-20261010.1` predates this licensing
 adaptation and is not a GitHub release. Historical security/build evidence and
 limitations remain in [testing notes](Docs/TestingRelease.md) and
