@@ -104,6 +104,18 @@ const char* RemoteStateName(RemoteState s) {
     }return "Unknown";
 }
 bool NativeTraceHeader(const std::string& p,bool eof,std::string& error) {
+    // UE4.27 and early UE5 use TRCE (ECRT on the wire), followed directly
+    // by transport/protocol bytes. TRC2 adds the metadata-length envelope.
+    if(p.size()>=4 && p.compare(0,4,"ECRT")==0) {
+        if(p.size()>=6) {
+            if(static_cast<unsigned char>(p[4])==0||static_cast<unsigned char>(p[5])==0) {
+                error="Invalid legacy native trace transport/protocol";return false;
+            }
+            return true;
+        }
+        if(eof)error="Incomplete native Unreal trace header";
+        return false;
+    }
     if(p.size()>=4 && p.compare(0,4,"2CRT")!=0){error="Invalid native Unreal trace signature";return false;}
     if(p.size()>=6) {
         size_t size=static_cast<unsigned char>(p[4])+(size_t(static_cast<unsigned char>(p[5]))<<8);

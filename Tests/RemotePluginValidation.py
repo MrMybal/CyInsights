@@ -67,7 +67,7 @@ def validate(host, port):
             time.sleep(.2)
             check(rpc(client, file, "stop", session_id=start["session_id"])["ok"], "owned manual stop")
             thread.join(6)
-            check(not thread.is_alive() and raw[:4] == b"2CRT", "native stream drains to EOF")
+            check(not thread.is_alive() and raw[:4] in (b"2CRT", b"ECRT"), "native stream drains to EOF")
             check(rpc(client, file, "status")["state"] == "idle", "manual stop reaches idle")
         # Dropping the owning control connection must stop its network capture.
         with listener(client) as receiver:
@@ -80,7 +80,7 @@ def validate(host, port):
             client.shutdown(socket.SHUT_RDWR)
             client.close()
             thread.join(6)
-            check(not thread.is_alive() and raw[:4] == b"2CRT", "owner disconnect stops native writer")
+            check(not thread.is_alive() and raw[:4] in (b"2CRT", b"ECRT"), "owner disconnect stops native writer")
     time.sleep(.1)
     client, file = connect()
     with client, file:
@@ -91,7 +91,7 @@ def validate(host, port):
             thread.start()
             check(rpc(client, file, "start", receiver_port=receiver.getsockname()[1], seconds=.3)["ok"], "timed capture")
             thread.join(6)
-            check(not thread.is_alive() and raw[:4] == b"2CRT", "timed stop drains native stream")
+            check(not thread.is_alive() and raw[:4] in (b"2CRT", b"ECRT"), "timed stop drains native stream")
             final = rpc(client, file, "status")
             check(final["state"] == "idle" and final["manifest"]["session_id"] == final["session_id"], "final manifest matches session")
     print(f"{checks} remote Unreal checks passed")

@@ -6,6 +6,15 @@
 #include "Containers/Ticker.h"
 #include "Modules/ModuleInterface.h"
 #include "Templates/Function.h"
+#include "Runtime/Launch/Resources/Version.h"
+
+#if ENGINE_MAJOR_VERSION >= 5
+using FCyGpuTicker = FTSTicker;
+using FCyGpuTickerHandle = FTSTicker::FDelegateHandle;
+#else
+using FCyGpuTicker = FTicker;
+using FCyGpuTickerHandle = FDelegateHandle;
+#endif
 
 class FViewport;
 
@@ -65,7 +74,7 @@ private:
 
 	void RegisterViewExtension();
 
-	FTSTicker::FDelegateHandle TickHandle;
+	FCyGpuTickerHandle TickHandle;
 	TArray<class IConsoleObject*> ConsoleObjects;
 	TFunction<FViewport*()> MainViewportResolver;
 	TSharedPtr<class FCyGPUInspectorViewExtension, ESPMode::ThreadSafe> ViewExtension;

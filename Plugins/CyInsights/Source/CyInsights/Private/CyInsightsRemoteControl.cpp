@@ -12,6 +12,7 @@
 #include "ProfilingDebugging/TraceAuxiliary.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
+#include "Policies/CondensedJsonPrintPolicy.h"
 
 static TAutoConsoleVariable<int32> RemoteEnabled(TEXT("CyInsights.RemoteCapture"), 1,
     TEXT("Accept capture-only LAN commands in supported development builds. 0 disables the endpoint."));
@@ -89,7 +90,11 @@ void FCyInsightsRemoteControl::Tick()
     if (Input.Find(uint8('\n'), End)) {
         const FUTF8ToTCHAR Converted(reinterpret_cast<const ANSICHAR*>(Input.GetData()), End);
         const FString Line(Converted.Length(), Converted.Get());
+#if ENGINE_MAJOR_VERSION > 5 || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 5)
         Input.RemoveAt(0, End + 1, EAllowShrinking::No);
+#else
+        Input.RemoveAt(0, End + 1, false);
+#endif
         Dispatch(Line);
     }
 #endif
@@ -134,7 +139,7 @@ void FCyInsightsRemoteControl::Dispatch(const FString& Line)
     if (!Error.IsEmpty()) Reply->SetStringField(TEXT("error"), Error);
     Reply->SetStringField(TEXT("session_id"), Owner.SessionId);
     Reply->SetStringField(TEXT("state"), Owner.bNetworkPending ? TEXT("starting") : Owner.bCapturing ? TEXT("recording") : TEXT("idle"));
-    Reply->SetBoolField(TEXT("native_trace_active"), FTraceAuxiliary::IsConnected());
+    Reply->SetBoolField(TEXT("native_trace_active"), CyInsightsTrace::IsConnected());
     if (!Owner.NetworkError.IsEmpty()) Reply->SetStringField(TEXT("capture_error"), Owner.NetworkError);
     // Start/status snapshots; the finalized manifest is retained after native EOF.
     TSharedPtr<FJsonObject> Manifest;

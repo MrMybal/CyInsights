@@ -129,7 +129,7 @@ void FCyGPUInspectorModule::StartupModule()
 		}),
 		ECVF_Default));
 
-	TickHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateRaw(this, &FCyGPUInspectorModule::Tick), 0.1f);
+	TickHandle = FCyGpuTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateRaw(this, &FCyGPUInspectorModule::Tick), 0.1f);
 
 	// The markers of the main viewport's render need the engine; this module may load before it.
 	if (GEngine != nullptr)
@@ -173,7 +173,7 @@ void FCyGPUInspectorModule::ShutdownModule()
 	ViewExtension.Reset();
 	if (TickHandle.IsValid())
 	{
-		FTSTicker::GetCoreTicker().RemoveTicker(TickHandle);
+		FCyGpuTicker::GetCoreTicker().RemoveTicker(TickHandle);
 		TickHandle.Reset();
 	}
 	for (IConsoleObject* Object : ConsoleObjects)

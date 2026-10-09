@@ -6,6 +6,7 @@
 #include "Containers/Ticker.h"
 #include "CoreMinimal.h"
 #include "Async/Future.h"
+#include "CyInsightsTrace.h"
 
 class CYINSIGHTS_API FCyInsightsModule : public IModuleInterface
 {
@@ -38,6 +39,6 @@ private:
 	double StopAtSeconds = 0;
 	TUniquePtr<FArchive> SyncWriter;
 	FDelegateHandle FrameHandle;
-	FTSTicker::FDelegateHandle TickHandle;
+	FCyInsightsTickerHandle TickHandle;
 	TArray<class IConsoleObject*> Commands;
 };

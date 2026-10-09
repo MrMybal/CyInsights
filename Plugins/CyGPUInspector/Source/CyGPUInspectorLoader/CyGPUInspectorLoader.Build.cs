@@ -13,8 +13,8 @@ public class CyGPUInspectorLoader : ModuleRules
 
 		PublicDependencyModuleNames.AddRange(new string[] { "Core" });
 		PrivateDependencyModuleNames.AddRange(new string[] { "Projects" });
-		// ICyGPUInspectorLoader lives in the CyGPUInspector module, which exists in every build; this
-		// one does not exist in Shipping, so nothing may depend on it.
+		// ICyGPUInspectorLoader lives in the CyGPUInspector module. Both modules are
+		// excluded from Shipping, Test and Server by their descriptor.
 		PrivateIncludePathModuleNames.Add("CyGPUInspector");
 
 		// When ReShade and the add-on are put in the plugin itself, a packaged Development or

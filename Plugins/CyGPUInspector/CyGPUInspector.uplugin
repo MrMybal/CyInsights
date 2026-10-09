@@ -20,13 +20,13 @@
       "Name": "CyGPUInspectorLoader",
       "Type": "Runtime",
       "LoadingPhase": "PostConfigInit",
-      "PlatformAllowList": [
+      "WhitelistPlatforms": [
         "Win64"
       ],
-      "TargetDenyList": [
+      "BlacklistTargets": [
         "Server"
       ],
-      "TargetConfigurationAllowList": [
+      "WhitelistTargetConfigurations": [
         "Debug",
         "DebugGame",
         "Development"
@@ -36,29 +36,29 @@
       "Name": "CyGPUInspector",
       "Type": "Runtime",
       "LoadingPhase": "Default",
-      "TargetConfigurationAllowList": [
+      "BlacklistTargets": [
+        "Server"
+      ],
+      "WhitelistTargetConfigurations": [
         "Debug",
         "DebugGame",
         "Development"
-      ],
-      "TargetDenyList": [
-        "Server"
       ]
     },
     {
       "Name": "CyGPUInspectorEditor",
       "Type": "Editor",
       "LoadingPhase": "PostEngineInit",
-      "PlatformAllowList": [
+      "WhitelistPlatforms": [
         "Win64"
       ],
-      "TargetConfigurationAllowList": [
+      "BlacklistTargets": [
+        "Server"
+      ],
+      "WhitelistTargetConfigurations": [
         "Debug",
         "DebugGame",
         "Development"
-      ],
-      "TargetDenyList": [
-        "Server"
       ]
     }
   ]

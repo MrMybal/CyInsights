@@ -4,6 +4,7 @@
 // the same actions in Tools. A capture ends with a notification, the way a RenderDoc capture does.
 
 #include "CyGPUInspector.h"
+#include "Runtime/Launch/Resources/Version.h"
 #include "CyGPUInspectorSettings.h"
 
 #include "Brushes/SlateImageBrush.h"
@@ -97,7 +98,11 @@ private:
 	{
 		FToolMenuOwnerScoped Owner(this);
 
-		UToolMenu* Toolbar = UToolMenus::Get()->ExtendMenu("LevelEditor.LevelEditorToolBar.User");
+		#if ENGINE_MAJOR_VERSION >= 5
+        UToolMenu* Toolbar = UToolMenus::Get()->ExtendMenu("LevelEditor.LevelEditorToolBar.User");
+#else
+        UToolMenu* Toolbar = UToolMenus::Get()->ExtendMenu("LevelEditor.LevelEditorToolBar");
+#endif
 		FToolMenuSection& Section = Toolbar->FindOrAddSection("CyGPUInspector");
 		Section.AddEntry(FToolMenuEntry::InitToolBarButton(
 			"CyGPUInspectorCapture",
@@ -115,7 +120,11 @@ private:
 			FSlateIcon(StyleName(), "CyGPUInspector.Capture"),
 			true));
 
-		UToolMenu* Tools = UToolMenus::Get()->ExtendMenu("LevelEditor.MainMenu.Tools");
+		#if ENGINE_MAJOR_VERSION >= 5
+        UToolMenu* Tools = UToolMenus::Get()->ExtendMenu("LevelEditor.MainMenu.Tools");
+#else
+        UToolMenu* Tools = UToolMenus::Get()->ExtendMenu("LevelEditor.MainMenu.Window");
+#endif
 		// The one-argument form: the one with a label only exists from 5.5 on.
 		FToolMenuSection& ToolsSection = Tools->FindOrAddSection("CyGPUInspector");
 		ToolsSection.Label = LOCTEXT("ToolsSection", "CyGPUInspector");

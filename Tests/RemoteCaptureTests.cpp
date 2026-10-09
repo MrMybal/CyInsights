@@ -15,7 +15,7 @@ cygi::Json Manifest() {
     cygi::Json::Parse(R"({"format":"cycapture","version":1,"session_id":"mock-session","metadata":{"platform":"Android"},"sources":[{"id":"unreal.trace","status":"measured","path":"unreal.utrace"},{"id":"unreal.sync","status":"measured","path":"unreal.utrace"},{"id":"meta.openxr.metrics","status":"measured","path":"unreal.utrace"}]})",j);
     return j;
 }
-enum class Mode { good, bad_header, reset, wrong_session, missing_payload, bad_response, auto_stop, busy, oversized_response };
+enum class Mode { good, legacy, bad_header, reset, wrong_session, missing_payload, bad_response, auto_stop, busy, oversized_response };
 struct Game {
     SOCKET listener=INVALID_SOCKET;
     uint16_t port=0;
@@ -29,6 +29,7 @@ struct Game {
         if(bind(listener,reinterpret_cast<sockaddr*>(&addr),sizeof(addr))||listen(listener,1))throw std::runtime_error("mock bind failed");
         int len=sizeof(addr);getsockname(listener,reinterpret_cast<sockaddr*>(&addr),&len);port=ntohs(addr.sin_port);
         payload=std::string("2CRT\0\0\4\7",8)+std::string(70000,'X');
+        if(m==Mode::legacy)payload=std::string("ECRT\3\4",6)+std::string(70002,'X');
         if(m==Mode::bad_header)payload.replace(0,4,"FAIL");
         control=std::thread([this](){Serve();});
     }
@@ -109,6 +110,11 @@ int main(int argc,char** argv) {
     test(!NativeTraceHeader("FAIL",false,error)&&!error.empty(),"invalid native signature rejected");error.clear();
     test(!NativeTraceHeader(std::string("2CRT\xff\xff",6),false,error)&&!error.empty(),"bounded native metadata");error.clear();
     test(NativeTraceHeader(std::string("2CRT\0\0\4\7",8),true,error),"valid native preamble");
+    error.clear();
+    test(!NativeTraceHeader("ECRT",false,error)&&error.empty(),"fragmented legacy header waits");
+    test(!NativeTraceHeader("ECRT",true,error)&&!error.empty(),"truncated legacy header rejected");error.clear();
+    test(NativeTraceHeader(std::string("ECRT\3\4",6),true,error),"UE4.27 native preamble accepted");
+    test(!NativeTraceHeader(std::string("ECRT\0\4",6),true,error)&&!error.empty(),"invalid legacy transport rejected");error.clear();
     {
         RemoteCapture capture;RemoteOptions o;o.ipv4="bad IP";o.output_directory=dir;
         capture.Start(o);test(Wait(capture).state==RemoteState::failed,"invalid IP fails off UI thread");
@@ -127,17 +133,17 @@ int main(int argc,char** argv) {
         o.control_port=41855;o.seconds=-1;capture.Start(o);
         test(Wait(capture).state==RemoteState::failed,"invalid duration refused");
     }
-    for(auto mode:{Mode::good,Mode::bad_header,Mode::reset,Mode::wrong_session,Mode::missing_payload,Mode::bad_response,Mode::auto_stop}) {
+    for(auto mode:{Mode::good,Mode::legacy,Mode::bad_header,Mode::reset,Mode::wrong_session,Mode::missing_payload,Mode::bad_response,Mode::auto_stop}) {
         Game game(mode);RemoteCapture capture;RemoteOptions o;o.ipv4="127.0.0.1";o.control_port=game.port;o.output_directory=dir;
         o.seconds=mode==Mode::auto_stop?1:0;capture.Start(o);
         test(!capture.Start(o),"reject overlapping receiver capture");
         auto until=std::chrono::steady_clock::now()+2s;
         while(capture.Snapshot().state==RemoteState::starting&&std::chrono::steady_clock::now()<until)std::this_thread::sleep_for(20ms);
         if(mode!=Mode::auto_stop)capture.Stop();auto result=Wait(capture);
-        if(mode==Mode::good||mode==Mode::auto_stop) {
+        if(mode==Mode::good||mode==Mode::legacy||mode==Mode::auto_stop) {
             test(result.state==RemoteState::complete,"stop then native EOF packages capture");
             Capture archived;error.clear();test(Inspect(result.archive,archived,error),"received archive validates");
-            auto extracted=dir/((mode==Mode::good)?"extracted-manual":"extracted-auto");
+            auto extracted=dir/(mode==Mode::legacy?"extracted-legacy":mode==Mode::good?"extracted-manual":"extracted-auto");
             test(Extract(archived,extracted,error),"received capture extracts");
             std::ifstream input(extracted/"unreal.utrace",std::ios::binary);std::string received((std::istreambuf_iterator<char>(input)),{});
             test(received==game.payload,"native bytes preserved including delayed final packet");

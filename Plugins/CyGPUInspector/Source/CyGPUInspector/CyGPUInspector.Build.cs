@@ -4,9 +4,8 @@ using System.IO;
 using UnrealBuildTool;
 
 // Captures on request: the console commands, the Blueprint nodes, the settings, and the link to
-// the add-on and the standalone. Built for every target so that a project calling its Blueprint
-// nodes still packages for Shipping or another platform; there, everything it does compiles out
-// and the nodes answer that CyGPUInspector is not available.
+// the add-on and the standalone. The descriptor excludes Shipping, Test and Server.
+// Capture is enabled only on Windows in the supported development configurations.
 public class CyGPUInspector : ModuleRules
 {
 	public CyGPUInspector(ReadOnlyTargetRules Target) : base(Target)

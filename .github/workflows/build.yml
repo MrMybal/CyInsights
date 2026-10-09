@@ -17,6 +17,7 @@ jobs:
         run: |
           python Tools/prepare_dependencies.py
           python Tools/check_publication.py
+          python -m unittest discover -s Tests -p test_unreal_descriptors.py
       - name: Build and test native components
         shell: cmd
         run: build.cmd Release --tests-only

@@ -3,6 +3,7 @@
 #include "CyInsightsRemoteControl.h"
 #include "Async/Async.h"
 #include "Trace/Trace.h"
+#include "Trace/Trace.inl"
 #include "ProfilingDebugging/CountersTrace.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformFileManager.h"
@@ -21,10 +22,11 @@
 #include "ProfilingDebugging/MiscTrace.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
+#include "Policies/CondensedJsonPrintPolicy.h"
 #include "RHI.h"
 #include "ICyInsightsQuestMetrics.h"
 #include "Features/IModularFeatures.h"
-#if PLATFORM_WINDOWS && CYINSIGHTS_ENABLED
+#if CYINSIGHTS_WINDOWS_COLLECTOR
 #include "CyGPUInspector.h"
 #include "CyGPUInspectorInProcessApi.h"
 #include "Windows/AllowWindowsPlatformTypes.h"
@@ -34,10 +36,12 @@
 DEFINE_LOG_CATEGORY_STATIC(LogCyInsights, Log, All);
 // These anchors are transmitted inside the native trace as well as saved locally.
 #if COUNTERSTRACE_ENABLED
+// Own channel: UE 4.27's CountersChannel is not exported by Core.
+UE_TRACE_CHANNEL_DEFINE(CyInsightsSyncChannel);
 UE_TRACE_EVENT_BEGIN(CyInsights, Sync)
     UE_TRACE_EVENT_FIELD(uint64, CpuTicks)
     UE_TRACE_EVENT_FIELD(uint64, ObservedGameFrame)
-    UE_TRACE_EVENT_FIELD(UE::Trace::WideString, SessionId)
+    UE_TRACE_EVENT_FIELD(CyInsightsNativeTrace::WideString, SessionId)
 UE_TRACE_EVENT_END()
 #endif
 namespace {
@@ -57,7 +61,7 @@ void FCyInsightsModule::StartupModule() {
     Commands.Add(C.RegisterConsoleCommand(TEXT("CyInsights.Capture"),TEXT("Record a timed native capture: CyInsights.Capture [seconds]"),FConsoleCommandWithArgsDelegate::CreateLambda([this](const TArray<FString>& A){if(StartCapture())StopAtSeconds=FPlatformTime::Seconds()+FMath::Clamp(A.Num()?FCString::Atod(*A[0]):5.0,0.5,300.0);}),ECVF_Default));
     FrameHandle=FCoreDelegates::OnBeginFrame.AddRaw(this,&FCyInsightsModule::RecordFrame);
     RemoteControl=MakeUnique<FCyInsightsRemoteControl>(*this);
-    TickHandle=FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateRaw(this,&FCyInsightsModule::Tick),.01f);
+    TickHandle=FCyInsightsTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateRaw(this,&FCyInsightsModule::Tick),.01f);
 #endif
 }
 void FCyInsightsModule::ShutdownModule() {
@@ -74,13 +78,13 @@ void FCyInsightsModule::ShutdownModule() {
         const double Until=FPlatformTime::Seconds()+1;
         do { FPlatformProcess::Sleep(.01f);StopCapture(); }while(bStopRequested&&FPlatformTime::Seconds()<Until);
     }
-    FCoreDelegates::OnBeginFrame.Remove(FrameHandle);FTSTicker::GetCoreTicker().RemoveTicker(TickHandle);
+    FCoreDelegates::OnBeginFrame.Remove(FrameHandle);FCyInsightsTicker::GetCoreTicker().RemoveTicker(TickHandle);
     for(auto* C:Commands)IConsoleManager::Get().UnregisterConsoleObject(C);Commands.Empty();
 }
 bool FCyInsightsModule::StartCapture(const FString& Host, uint16 Port) {
 #if CYINSIGHTS_ENABLED
     if(bCapturing||bNetworkPending||IsRunningCommandlet()||IsRunningDedicatedServer())return false;
-    if(FTraceAuxiliary::IsConnected()){UE_LOG(LogCyInsights,Warning,TEXT("A native trace is already active; stop it before CyInsights.Start. No existing trace was changed."));return false;}
+    if(CyInsightsTrace::IsConnected()){UE_LOG(LogCyInsights,Warning,TEXT("A native trace is already active; stop it before CyInsights.Start. No existing trace was changed."));return false;}
     SessionId=FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens);
     FinalManifest.Reset();
     CreatedUtc=FDateTime::UtcNow().ToIso8601();
@@ -93,6 +97,7 @@ bool FCyInsightsModule::StartCapture(const FString& Host, uint16 Port) {
     FString Channels=TEXT("default,cpu,gpu,frame,bookmark,log,counters,task");
     FParse::Value(FCommandLine::Get(),TEXT("CyInsightsChannels="),Channels);
     Channels+=TEXT(",counters"); // Embedded session/frame anchors must follow the native stream.
+    Channels+=TEXT(",cyinsightssync");
 #if PLATFORM_ANDROID
     // Quest metrics are native Counters events in this very trace, even when
     // the user selects a custom subset of Unreal channels.
@@ -100,19 +105,22 @@ bool FCyInsightsModule::StartCapture(const FString& Host, uint16 Port) {
         if (Option->GetInt()!=0) Channels+=TEXT(",counters");
     }
 #endif
-    FTraceAuxiliary::FOptions Options;Options.bExcludeTail=true;
     if(!Host.IsEmpty()) {
         // None configures the worker/channels. Its return value is false in UE 5.5
         // because no output was connected yet. Public SendTo accepts an explicit
         // port on all supported versions; Start(Network) does not in UE 5.5.
-        FTraceAuxiliary::Start(FTraceAuxiliary::EConnectionType::None,nullptr,*Channels,&Options);
+        CyInsightsTrace::ConfigureChannels(Channels);
         bNetworkPending=true;NetworkRequestedAt=FPlatformTime::Seconds();
         NetworkStartTask=Async(EAsyncExecution::Thread,[Host,Port](){
-            return UE::Trace::SendTo(*Host,Port,UE::Trace::FSendFlags::ExcludeTail);
+            return CyInsightsTrace::SendTo(Host,Port);
         });
         WriteManifest();return true;
     }
-    if(!FTraceAuxiliary::Start(FTraceAuxiliary::EConnectionType::File,*(Directory/TEXT("unreal.utrace")),*Channels,&Options)){SyncWriter.Reset();return false;}
+    if(!CyInsightsTrace::StartFile(Directory/TEXT("unreal.utrace"),Channels)){
+        NetworkError=CyInsightsTrace::GetError();
+        UE_LOG(LogCyInsights,Error,TEXT("Cannot start native trace: %s"),*NetworkError);
+        SyncWriter.Reset();WriteManifest();return false;
+    }
     bCapturing=true;
     TRACE_BOOKMARK(TEXT("CyInsights.Session %s"),*SessionId);
     if(!WriteManifest()){StopCapture();return false;}
@@ -127,6 +135,7 @@ void FCyInsightsModule::FinishNetworkStart() {
         if(!NetworkStartTask.IsReady())return;
         if(!NetworkStartTask.Get()) {
             NetworkError=TEXT("Cannot connect to the PC trace receiver");
+            if (!CyInsightsTrace::GetError().IsEmpty()) NetworkError=CyInsightsTrace::GetError();
             bNetworkPending=false;SyncWriter.Reset();StopAtSeconds=0;WriteManifest();return;
         }
         bNetworkQueued=true;
@@ -134,16 +143,16 @@ void FCyInsightsModule::FinishNetworkStart() {
     if(bCancelNetwork) {
         // SendTo queues a handle. Stop can refuse it until the writer consumes
         // that handle, so retry rather than leaking an unattended connection.
-        if(!UE::Trace::Stop()&&FTraceAuxiliary::IsConnected())return;
+        if(!CyInsightsTrace::Stop())return;
         bNetworkPending=false;SyncWriter.Reset();StopAtSeconds=0;
         NetworkError=TEXT("Capture cancelled before connection completed");WriteManifest();return;
     }
-    if(FTraceAuxiliary::IsConnected()) {
+    if(CyInsightsTrace::IsConnected()) {
         bNetworkPending=false;bCapturing=true;
         TRACE_BOOKMARK(TEXT("CyInsights.Session %s"),*SessionId);
         WriteManifest();
     } else if(FPlatformTime::Seconds()-NetworkRequestedAt>10) {
-        UE::Trace::Stop();bNetworkPending=false;SyncWriter.Reset();StopAtSeconds=0;
+        CyInsightsTrace::Stop();bNetworkPending=false;SyncWriter.Reset();StopAtSeconds=0;
         NetworkError=TEXT("Native trace connection did not become active");WriteManifest();
     }
 }
@@ -156,7 +165,11 @@ void FCyInsightsModule::StopCapture() {
     // fails; it must be taken before Stop invalidates the native trace identity.
     FinalManifest=CaptureManifest();
     if (!WriteManifest()) UE_LOG(LogCyInsights,Warning,TEXT("Cannot finalize capture manifest: %s"),*Directory);
-    if(!FTraceAuxiliary::Stop()&&FTraceAuxiliary::IsConnected()){bStopRequested=true;return;}
+    if(!CyInsightsTrace::Stop()){bStopRequested=true;return;}
+    if (!CyInsightsTrace::GetError().IsEmpty()) {
+        NetworkError=CyInsightsTrace::GetError();
+        UE_LOG(LogCyInsights,Error,TEXT("%s"),*NetworkError);
+    }
     bStopRequested=false;bCapturing=false;StopAtSeconds=0;if(SyncWriter){SyncWriter->Close();SyncWriter.Reset();}
 #if PLATFORM_ANDROID
     auto& Features=IModularFeatures::Get();
@@ -169,14 +182,14 @@ void FCyInsightsModule::RecordFrame() {
     if(!bCapturing||!SyncWriter)return;
     const uint64 CpuTicks=FPlatformTime::Cycles64();
 #if COUNTERSTRACE_ENABLED
-    UE_TRACE_LOG(CyInsights,Sync,CountersChannel)
+    UE_TRACE_LOG(CyInsights,Sync,CyInsightsSyncChannel)
         << Sync.CpuTicks(CpuTicks) << Sync.ObservedGameFrame(GFrameCounter) << Sync.SessionId(*SessionId);
 #endif
     auto Row=MakeShared<FJsonObject>();Row->SetStringField(TEXT("session_id"),SessionId);
     Row->SetStringField(TEXT("unreal_game_frame"),LexToString(GFrameCounter));
     Row->SetStringField(TEXT("cpu_ticks"),LexToString(CpuTicks));
     Row->SetStringField(TEXT("clock_id"),TEXT("unreal.cpu"));Row->SetStringField(TEXT("status"),TEXT("measured"));
-#if PLATFORM_WINDOWS && CYINSIGHTS_ENABLED
+#if CYINSIGHTS_WINDOWS_COLLECTOR
     // A present counter sampled on the game thread is an approximate association.
     // It is never labelled as the GPU frame executed by this game tick.
     if(auto Addon=GetModuleHandleW(L"CyGPUInspectorRS.addon64")) {
@@ -192,7 +205,8 @@ bool FCyInsightsModule::Tick(float) {
     FinishNetworkStart();
     if(bStopRequested)StopCapture();
     if(RemoteControl)RemoteControl->Tick();
-    if(bCapturing&&!NetworkHost.IsEmpty()&&!FTraceAuxiliary::IsConnected()) {
+    if(bCapturing&&!CyInsightsTrace::GetError().IsEmpty())StopCapture();
+    if(bCapturing&&!NetworkHost.IsEmpty()&&!CyInsightsTrace::IsConnected()) {
         NetworkError=TEXT("Native trace stream interrupted");StopCapture();
     }
     if((bCapturing||bNetworkPending)&&StopAtSeconds>0&&FPlatformTime::Seconds()>=StopAtSeconds){
@@ -201,7 +215,7 @@ bool FCyInsightsModule::Tick(float) {
     return true;
 }
 bool FCyInsightsModule::CaptureGpu(int32 Frames) {
-#if PLATFORM_WINDOWS && CYINSIGHTS_ENABLED
+#if CYINSIGHTS_WINDOWS_COLLECTOR
     if(!bCapturing&&!StartCapture())return false;
     if(auto* GPU=FCyGPUInspectorModule::Get()){FText Message;auto Options=FCyGPUInspectorCaptureOptions::FromSettings();Options.FrameCount=FMath::Clamp(Frames,1,8);Options.bSaveBuffers=false;bool Ok=GPU->RequestCapture(Options,Message);UE_LOG(LogCyInsights,Display,TEXT("%s"),*Message.ToString());return Ok;}
 #endif
@@ -210,6 +224,9 @@ bool FCyInsightsModule::CaptureGpu(int32 Frames) {
 TSharedPtr<FJsonObject> FCyInsightsModule::CaptureManifest() const {
     auto Root=MakeShared<FJsonObject>();Root->SetStringField(TEXT("format"),TEXT("cycapture"));Root->SetNumberField(TEXT("version"),1);Root->SetStringField(TEXT("session_id"),SessionId);
     auto Meta=MakeShared<FJsonObject>();Meta->SetStringField(TEXT("project"),FApp::GetProjectName());Meta->SetStringField(TEXT("engine_version"),FEngineVersion::Current().ToString());
+    Meta->SetStringField(TEXT("trace_guid_source"),CYINSIGHTS_TRACE_HAS_GUID?TEXT("native"):TEXT("derived: plugin observation epoch"));
+    Meta->SetStringField(TEXT("capture_transport"),CYINSIGHTS_TRACE_HAS_AUX_CAPTURE?TEXT("native writer"):TEXT("native UE4 stream through plugin-owned loopback receiver"));
+    Meta->SetStringField(TEXT("stop_semantics"),CYINSIGHTS_TRACE_HAS_AUX_CAPTURE?TEXT("native writer stop"):TEXT("receiver cutoff after 100 ms drain, at complete packet boundary; in-flight tail may be unavailable"));
     Meta->SetStringField(TEXT("platform"),FPlatformProperties::PlatformName());Meta->SetStringField(TEXT("graphics_api"),GDynamicRHI?GDynamicRHI->GetName():TEXT("unavailable"));
     Meta->SetStringField(TEXT("gpu"),FPlatformMisc::GetPrimaryGPUBrand());Meta->SetStringField(TEXT("cpu"),FPlatformMisc::GetCPUBrand());Meta->SetStringField(TEXT("created_utc"),CreatedUtc);Root->SetObjectField(TEXT("metadata"),Meta);
     TArray<TSharedPtr<FJsonValue>> Sources;
@@ -232,7 +249,7 @@ TSharedPtr<FJsonObject> FCyInsightsModule::CaptureManifest() const {
     if (Features.IsModularFeatureAvailable(ICyInsightsQuestMetrics::FeatureName()))
         Status=Features.GetModularFeature<ICyInsightsQuestMetrics>(ICyInsightsQuestMetrics::FeatureName()).GetMetricsStatus();
     FGuid NativeSessionGuid,NativeTraceGuid;
-    const bool Current=FTraceAuxiliary::IsConnected(NativeSessionGuid,NativeTraceGuid)&&
+    const bool Current=CyInsightsTrace::GetIdentity(NativeSessionGuid,NativeTraceGuid)&&
         Status.TraceGuid==NativeTraceGuid.ToString(EGuidFormats::DigitsWithHyphens);
     const bool Measured=Current&&Status.ValidSamples>0;
     auto Metrics=Source(TEXT("meta.openxr.metrics"),Measured?TEXT("measured"):TEXT("unavailable"),

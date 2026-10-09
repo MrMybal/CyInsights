@@ -12,7 +12,13 @@ public:
     }
     void Register() {
         FToolMenuOwnerScoped Owner(this);
-        auto& Section=UToolMenus::Get()->ExtendMenu("LevelEditor.MainMenu.Tools")->AddSection("CyInsights",FText::FromString("CyInsights"));
+#if ENGINE_MAJOR_VERSION >= 5
+        const FName MenuName("LevelEditor.MainMenu.Tools");
+#else
+        const FName MenuName("LevelEditor.MainMenu.Window");
+#endif
+        auto& Section=UToolMenus::Get()->ExtendMenu(MenuName)->FindOrAddSection("CyInsights");
+        Section.Label=FText::FromString("CyInsights");
         Section.AddMenuEntry("CyInsightsStart",FText::FromString("Start native capture"),FText::FromString("Record native Unreal trace and synchronization anchors"),FSlateIcon(),FUIAction(FExecuteAction::CreateLambda([](){FModuleManager::GetModuleChecked<FCyInsightsModule>("CyInsights").StartCapture();})));
         Section.AddMenuEntry("CyInsightsGpu",FText::FromString("Capture GPU frame"),FText::FromString("Request a detailed frame from the Windows collector"),FSlateIcon(),FUIAction(FExecuteAction::CreateLambda([](){FModuleManager::GetModuleChecked<FCyInsightsModule>("CyInsights").CaptureGpu(1);})));
         Section.AddMenuEntry("CyInsightsStop",FText::FromString("Stop native capture"),FText::FromString("Close the native trace; staging is in Saved/CyInsights"),FSlateIcon(),FUIAction(FExecuteAction::CreateLambda([](){FModuleManager::GetModuleChecked<FCyInsightsModule>("CyInsights").StopCapture();})));

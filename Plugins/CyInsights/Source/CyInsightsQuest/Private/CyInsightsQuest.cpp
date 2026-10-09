@@ -1,9 +1,13 @@
 // Copyright (C) 2026 Cyberalien. SPDX-License-Identifier: MIT
-#include "MetaMetricsReader.h"
+#include "CoreMinimal.h"
+#include "CyInsightsTrace.h"
 #include "ICyInsightsQuestMetrics.h"
+#if CYINSIGHTS_QUEST_METRICS_API
+#include "MetaMetricsReader.h"
 #include "IOpenXRExtensionPlugin.h"
 #include "IOpenXRHMDModule.h"
 #include "OpenXRCore.h"
+#endif
 #include "Containers/Ticker.h"
 #include "Features/IModularFeatures.h"
 #include "HAL/IConsoleManager.h"
@@ -14,7 +18,7 @@
 #include "Trace/Trace.inl"
 
 DEFINE_LOG_CATEGORY_STATIC(LogCyInsightsQuest, Log, All);
-#if COUNTERSTRACE_ENABLED
+#if COUNTERSTRACE_ENABLED && CYINSIGHTS_QUEST_METRICS_API
 static TAutoConsoleVariable<int32> CVarQuestMetrics(
     TEXT("CyInsights.QuestGpuMetrics"), 1,
     TEXT("Embed available Meta OpenXR performance counters into the active Unreal trace. 0=disabled, 1=enabled."));
@@ -30,9 +34,9 @@ UE_TRACE_EVENT_BEGIN(CyInsightsQuest, Source)
     UE_TRACE_EVENT_FIELD(uint32, CounterCount)
     UE_TRACE_EVENT_FIELD(uint64, InstanceGeneration)
     UE_TRACE_EVENT_FIELD(uint64, SessionGeneration)
-    UE_TRACE_EVENT_FIELD(UE::Trace::WideString, State)
-    UE_TRACE_EVENT_FIELD(UE::Trace::WideString, Clock)
-    UE_TRACE_EVENT_FIELD(UE::Trace::WideString, TimestampMeaning)
+    UE_TRACE_EVENT_FIELD(CyInsightsNativeTrace::WideString, State)
+    UE_TRACE_EVENT_FIELD(CyInsightsNativeTrace::WideString, Clock)
+    UE_TRACE_EVENT_FIELD(CyInsightsNativeTrace::WideString, TimestampMeaning)
 UE_TRACE_EVENT_END()
 UE_TRACE_EVENT_BEGIN(CyInsightsQuest, Sample)
     UE_TRACE_EVENT_FIELD(uint64, ReadBeginCycle)
@@ -41,7 +45,7 @@ UE_TRACE_EVENT_BEGIN(CyInsightsQuest, Sample)
     UE_TRACE_EVENT_FIELD(uint64, PathId)
     UE_TRACE_EVENT_FIELD(uint64, InstanceGeneration)
     UE_TRACE_EVENT_FIELD(uint64, SessionGeneration)
-    UE_TRACE_EVENT_FIELD(UE::Trace::WideString, Path)
+    UE_TRACE_EVENT_FIELD(CyInsightsNativeTrace::WideString, Path)
     UE_TRACE_EVENT_FIELD(int32, Result)
     UE_TRACE_EVENT_FIELD(int32, Unit)
     UE_TRACE_EVENT_FIELD(uint64, RawFlags)
@@ -59,12 +63,12 @@ public:
     {
         RegisterOpenXRExtensionModularFeature();
         IModularFeatures::Get().RegisterModularFeature(FeatureName(), static_cast<ICyInsightsQuestMetrics*>(this));
-        TickHandle = FTSTicker::GetCoreTicker().AddTicker(
+        TickHandle = FCyInsightsTicker::GetCoreTicker().AddTicker(
             FTickerDelegate::CreateRaw(this, &FCyInsightsQuestModule::Tick));
     }
     void ShutdownModule() override
     {
-        FTSTicker::GetCoreTicker().RemoveTicker(TickHandle);
+        FCyInsightsTicker::GetCoreTicker().RemoveTicker(TickHandle);
         UnregisterOpenXRExtensionModularFeature();
         IModularFeatures::Get().UnregisterModularFeature(FeatureName(), static_cast<ICyInsightsQuestMetrics*>(this));
         FScopeLock Lock(&Mutex);
@@ -138,7 +142,7 @@ private:
     {
         FScopeLock Lock(&Mutex);
         FGuid NativeSessionGuid, CurrentTraceGuid;
-        const bool Connected = FTraceAuxiliary::IsConnected(NativeSessionGuid, CurrentTraceGuid);
+        const bool Connected = CyInsightsTrace::GetIdentity(NativeSessionGuid, CurrentTraceGuid);
         if (Connected && TraceGuid != CurrentTraceGuid) {
             TraceGuid = CurrentTraceGuid;
             ValidSamples = 0;
@@ -228,7 +232,7 @@ private:
     cyinsights::quest::MetricsReader Reader;
     IOpenXRHMDModule* HmdModule = nullptr;
     XrSession Session = XR_NULL_HANDLE;
-    FTSTicker::FDelegateHandle TickHandle;
+    FCyInsightsTickerHandle TickHandle;
     TMap<FString, uint16> CounterIds;
     FGuid TraceGuid;
     uint64 ValidSamples = 0;
@@ -239,13 +243,29 @@ private:
 };
 IMPLEMENT_MODULE(FCyInsightsQuestModule, CyInsightsQuest)
 #else
-class FCyInsightsQuestModule final : public IModuleInterface
+class FCyInsightsQuestModule final : public IModuleInterface, public ICyInsightsQuestMetrics
 {
 public:
     void StartupModule() override
     {
-        UE_LOG(LogCyInsightsQuest, Display, TEXT("Quest metrics unavailable: this target disables Unreal Counters tracing."));
+        IModularFeatures::Get().RegisterModularFeature(FeatureName(), static_cast<ICyInsightsQuestMetrics*>(this));
+        UE_LOG(LogCyInsightsQuest, Display, TEXT("%s"), *GetMetricsStatus().Reason);
     }
+    void ShutdownModule() override
+    {
+        IModularFeatures::Get().UnregisterModularFeature(FeatureName(), static_cast<ICyInsightsQuestMetrics*>(this));
+    }
+    FCyInsightsQuestMetricsStatus GetMetricsStatus() const override
+    {
+        FCyInsightsQuestMetricsStatus Status;
+#if !CYINSIGHTS_QUEST_METRICS_API
+        Status.Reason = TEXT("Quest metrics unavailable: this engine's OpenXR SDK/lifecycle lacks the required Meta metric API or destruction hook");
+#else
+        Status.Reason = TEXT("Quest metrics unavailable: this target disables Unreal Counters tracing");
+#endif
+        return Status;
+    }
+    void StopMetrics() override {}
 };
 IMPLEMENT_MODULE(FCyInsightsQuestModule, CyInsightsQuest)
 #endif

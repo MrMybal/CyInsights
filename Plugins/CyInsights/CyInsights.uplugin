@@ -1,44 +1,98 @@
 {
-	"FileVersion": 3,
-	"Version": 1,
-	"VersionName": "0.1.0",
-	"FriendlyName": "CyInsights",
-	"Description": "Native Unreal and optional GPU capture coordinator for Editor, Development, Debug and DebugGame only.",
-	"Category": "Other",
-	"CreatedBy": "CyberAlien",
-	"CreatedByURL": "",
-	"DocsURL": "",
-	"MarketplaceURL": "",
-	"SupportURL": "",
-	"CanContainContent": false,
-	"IsBetaVersion": true,
-	"IsExperimentalVersion": true,
-	"Installed": false,
-	"Modules": [
-		{
-			"Name": "CyInsightsQuest",
-			"Type": "RuntimeNoCommandlet",
-			"LoadingPhase": "PostConfigInit",
-			"PlatformAllowList": ["Android"],
-			"TargetConfigurationAllowList": ["Debug", "DebugGame", "Development"],
-			"TargetDenyList": ["Server"]
-		},
-		{
-			"Name": "CyInsights",
-			"Type": "Runtime",
-			"LoadingPhase": "Default",
-			"TargetConfigurationAllowList": ["Debug", "DebugGame", "Development"],
-			"TargetDenyList": ["Server"]
-		},
-		{
-			"Name": "CyInsightsEditor",
-			"Type": "Editor",
-			"LoadingPhase": "PostEngineInit",
-			"TargetConfigurationAllowList": ["Debug", "DebugGame", "Development"]
-		}
-	],
-	"Plugins": [
-		{"Name": "CyGPUInspector", "Enabled": true, "Optional": true, "PlatformAllowList": ["Win64"], "TargetConfigurationAllowList": ["Debug", "DebugGame", "Development"]},
-		{"Name": "OpenXR", "Enabled": true, "PlatformAllowList": ["Android"], "TargetConfigurationAllowList": ["Debug", "DebugGame", "Development"]}
-	]
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "0.1.0",
+  "FriendlyName": "CyInsights",
+  "Description": "Native Unreal and optional GPU capture coordinator for Editor, Development, Debug and DebugGame only.",
+  "Category": "Other",
+  "CreatedBy": "CyberAlien",
+  "CreatedByURL": "",
+  "DocsURL": "",
+  "MarketplaceURL": "",
+  "SupportURL": "",
+  "CanContainContent": false,
+  "IsBetaVersion": true,
+  "IsExperimentalVersion": true,
+  "Installed": false,
+  "Modules": [
+    {
+      "Name": "CyInsightsTrace",
+      "Type": "Runtime",
+      "LoadingPhase": "PostConfigInit",
+      "BlacklistTargets": [
+        "Server"
+      ],
+      "WhitelistTargetConfigurations": [
+        "Debug",
+        "DebugGame",
+        "Development"
+      ]
+    },
+    {
+      "Name": "CyInsightsQuest",
+      "Type": "RuntimeNoCommandlet",
+      "LoadingPhase": "PostConfigInit",
+      "WhitelistPlatforms": [
+        "Android"
+      ],
+      "BlacklistTargets": [
+        "Server"
+      ],
+      "WhitelistTargetConfigurations": [
+        "Debug",
+        "DebugGame",
+        "Development"
+      ]
+    },
+    {
+      "Name": "CyInsights",
+      "Type": "Runtime",
+      "LoadingPhase": "Default",
+      "BlacklistTargets": [
+        "Server"
+      ],
+      "WhitelistTargetConfigurations": [
+        "Debug",
+        "DebugGame",
+        "Development"
+      ]
+    },
+    {
+      "Name": "CyInsightsEditor",
+      "Type": "Editor",
+      "LoadingPhase": "PostEngineInit",
+      "WhitelistTargetConfigurations": [
+        "Debug",
+        "DebugGame",
+        "Development"
+      ]
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "CyGPUInspector",
+      "Enabled": true,
+      "Optional": true,
+      "WhitelistPlatforms": [
+        "Win64"
+      ],
+      "WhitelistTargetConfigurations": [
+        "Debug",
+        "DebugGame",
+        "Development"
+      ]
+    },
+    {
+      "Name": "OpenXR",
+      "Enabled": true,
+      "WhitelistPlatforms": [
+        "Android"
+      ],
+      "WhitelistTargetConfigurations": [
+        "Debug",
+        "DebugGame",
+        "Development"
+      ]
+    }
+  ]
 }

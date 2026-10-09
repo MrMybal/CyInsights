@@ -80,8 +80,10 @@ relicense historical binaries.
 
 Copy `Plugins/CyInsights` into your own Unreal project's Plugins directory and
 enable it. Modules permit Editor and Debug/DebugGame/Development clients;
-Shipping, Test and Server are excluded. UE 5.5–5.8 is the supported integration
-range. Only project/plugin modules are compiled; the engine is not modified.
+Shipping, Test and Server are excluded. The plugin sources target UE 4.27 and
+5.0–5.8. See the [compatibility and validation matrix](Docs/UnrealCompatibility.md)
+for tested versions and older-engine limitations. Only project/plugin modules
+are compiled; the engine is not modified.
 
 For Windows GPU detail, also install `Plugins/CyGPUInspector`, build the separately
 licensed [Windows collector](Tools/WindowsCollector/README.md), and configure a

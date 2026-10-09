@@ -9,3 +9,5 @@ Use the separately buildable MIT collector in ../../Tools/WindowsCollector.
 The runtime ReShade DLL is installed separately and keeps its own license.
 Older copied binaries are excluded from Git and retain their historical licenses.
 All modules permit only Debug, DebugGame and Development; Server is excluded.
+The integration targets UE 4.27 and 5.0–5.8. See the tested-version matrix and
+remaining validation gaps in [Unreal compatibility](../../Docs/UnrealCompatibility.md).

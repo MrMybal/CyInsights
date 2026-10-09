@@ -48,7 +48,12 @@ void FCyGPUInspectorViewExtension::PublishScope(const FSceneViewFamily& InViewFa
 {
 	auto NativeOf = [](const TRefCountPtr<IPooledRenderTarget>& Pooled) -> uint64
 	{
+#if ENGINE_MAJOR_VERSION >= 5
 		return Pooled.IsValid() && Pooled->GetRHI() != nullptr ? reinterpret_cast<uint64>(Pooled->GetRHI()->GetNativeResource()) : 0;
+#else
+        FRHITexture* Texture = Pooled.IsValid() ? Pooled->GetRenderTargetItem().TargetableTexture.GetReference() : nullptr;
+        return Texture ? reinterpret_cast<uint64>(Texture->GetNativeResource()) : 0;
+#endif
 	};
 	const uint64 Begin = NativeOf(BeginMarker);
 	const uint64 End = NativeOf(EndMarker);
@@ -89,6 +94,7 @@ void FCyGPUInspectorViewExtension::PublishScope(const FSceneViewFamily& InViewFa
 	}
 }
 
+#if ENGINE_MAJOR_VERSION >= 5
 void FCyGPUInspectorViewExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily)
 {
 	// The markers of the previous frames exist by now: say where they are before this frame's.
@@ -100,5 +106,20 @@ void FCyGPUInspectorViewExtension::PostRenderViewFamily_RenderThread(FRDGBuilder
 {
 	AddMarker(GraphBuilder, EndMarker, TEXT("CyGPUInspector.ViewportEnd"));
 }
+#else
+void FCyGPUInspectorViewExtension::PreRenderViewFamily_RenderThread(FRHICommandListImmediate& RHICmdList, FSceneViewFamily& InViewFamily)
+{
+    PublishScope(InViewFamily);
+    FRDGBuilder GraphBuilder(RHICmdList);
+    AddMarker(GraphBuilder, BeginMarker, TEXT("CyGPUInspector.ViewportBegin"));
+    GraphBuilder.Execute();
+}
+void FCyGPUInspectorViewExtension::PostRenderViewFamily_RenderThread(FRHICommandListImmediate& RHICmdList, FSceneViewFamily& InViewFamily)
+{
+    FRDGBuilder GraphBuilder(RHICmdList);
+    AddMarker(GraphBuilder, EndMarker, TEXT("CyGPUInspector.ViewportEnd"));
+    GraphBuilder.Execute();
+}
+#endif
 
 #endif
