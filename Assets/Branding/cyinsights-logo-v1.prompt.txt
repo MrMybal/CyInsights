@@ -1,0 +1,12 @@
+CyInsights logo v1 — 10 octobre 2026
+Mode : outil image_gen intégré, création inspirée d'une référence puis édition.
+Référence utilisateur : image fournie cyannota-logo.png.
+Livrable : cyinsights-logo-v1.png, RGBA 1254 x 1254, transparence réelle.
+
+Direction initiale : conserver le monogramme blanc Cy de la référence, parfaitement
+centré, sur un disque bleu cobalt/cyan. Remplacer le A translucide par une puce
+et des barres de timeline évoquant le profiling CPU/GPU. Aucun rouge ni texte
+supplémentaire. Un seul logo carré, silhouette ronde, fond extérieur transparent.
+
+Prompt final d'édition (image_gen intégré) :
+Edit the supplied CyInsights logo with ONE precise change: clean and properly contain the outer circular silhouette. Preserve the existing white Cy monogram, its geometry, the translucent microchip and horizontal profiling bars, and the blue-to-cyan gradient exactly. Do not redesign the interior or change any text. The entire circle must now sit inside the square canvas with a consistent transparent margin of about 6% on every side. Its outer edge must be a mathematically smooth perfect circle, sharply antialiased, without the current jagged paint/noise flecks, protrusions, splatter or cropped edges. Remove absolutely all colored specks outside the clean circle. The outside must be true transparent alpha with no background, no black fill, no checkerboard painted in. Maintain a flat polished vector-like app logo suitable for an application icon. One finished square logo only, no mockup, no labels, no shadows.

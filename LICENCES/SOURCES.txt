@@ -1,0 +1,83 @@
+Current CyInsights inventory (2026-10-10):
+See ../THIRD-PARTY-CyGPUInspector.md and ../Docs/Licensing.md for actual scope.
+Application/analysis: AGPL; owned Unreal integrations/Core/collector: MIT.
+Full MIT grant: CyInsights-Integrations-MIT.txt. Third-party notices unchanged.
+The remainder below is a HISTORICAL UPSTREAM inventory followed by the AI update.
+Statements about components not being bundled refer to upstream CyGPUInspector.
+
+CyGPUInspector 0.2.0 - sources and component notices
+Copyright (C) 2026 Cyberalien.
+
+Product source: https://github.com/MrMybal/CyGPUInspector
+Build instructions: https://github.com/MrMybal/CyGPUInspector/blob/main/README.md
+License and distribution: see Docs/Licensing.md and THIRD-PARTY.md.
+CyGPUInspector is licensed under GNU AGPL v3 or later. The full text is in
+CyGPUInspector-AGPL-3.0.txt. Each third-party component retains its own license.
+
+Included components (versions are pinned by the source checkout):
+- ReShade SDK 6.8.x, API 20: https://github.com/crosire/reshade
+  BSD-3-Clause; full text: ReShade-SDK/LICENSE.md.
+- ReShade 6.8.0, official full add-on support build: https://reshade.me
+  Source: https://github.com/crosire/reshade/tree/v6.8.0
+  BSD-3-Clause; full text and embedded dependency notices: ReShade/.
+- Dear ImGui docking 1.93 WIP: https://github.com/ocornut/imgui
+  MIT; full text: DearImGui/LICENSE.txt.
+- Dear ImGui 1.92.5 headers for the ReShade overlay:
+  https://github.com/ocornut/imgui/tree/v1.92.5
+  MIT; full text: DearImGui-ReShade/LICENSE.txt.
+- ImGuiColorTextEdit, commit 99fcb0d7b3bbac831a3125cc712b34e723b77397:
+  https://github.com/goossens/ImGuiColorTextEdit
+  MIT; full text and provenance: ImGuiColorTextEdit/.
+- 3Dmigoto HLSL decompiler, commit 8f329bd:
+  https://github.com/bo3b/3Dmigoto
+  GPL-3.0; full text and provenance: 3Dmigoto/.
+- dxil-spirv 2.73.0, commit bed30ff2115d845fb6bf8752bcbe1c681efb0e01:
+  https://github.com/HansKristian-Work/dxil-spirv
+  MIT; full text: dxil-spirv/LICENSE.MIT.
+- dxbc-spirv (revision vendored with dxil-spirv):
+  https://github.com/doitsujin/dxbc-spirv
+  MIT; full text: dxbc-spirv/LICENSE.
+- Khronos SPIR-V headers (revision vendored with dxil-spirv):
+  https://github.com/KhronosGroup/SPIRV-Headers
+  Full text: SPIRV-Headers/LICENSE.
+- RenderDoc LLVM bitcode reader (revision vendored with dxil-spirv):
+  https://github.com/baldurk/renderdoc
+  MIT; complete source-header notice: RenderDoc-bitcode-reader/LICENSE.txt.
+- glslang SPIR-V builder (revision vendored with dxil-spirv):
+  https://github.com/KhronosGroup/glslang
+  BSD-3-Clause; complete source-header notice: glslang-SPIR-V-builder/LICENSE.txt.
+- SPIRV-Cross, commit be71ee8c12cd7dc5ca8fa9581f708c2e8561fe2a:
+  https://github.com/KhronosGroup/SPIRV-Cross
+  Apache-2.0 OR MIT; complete notices: SPIRV-Cross/.
+
+When Microsoft DirectX Shader Compiler is included in a binary release:
+https://github.com/microsoft/DirectXShaderCompiler
+See DirectXShaderCompiler/ORIGIN.txt for the exact version and archive hash.
+The complete LLVM/NCSA, MIT and Microsoft license texts accompany those DLLs.
+dxil.dll is a separate component under Microsoft Software License Terms.
+
+SDK migration references (not included dependencies of CyGPUInspector):
+- CyToolsCore 0.10.1 (MIT): https://github.com/MrMybal/CyToolsCore
+  https://github.com/MrMybal/CyToolsCore/blob/main/Docs/UpdateExistingProducts.md
+  https://github.com/MrMybal/CyToolsCore/blob/main/Docs/AgentGuide.md
+- CyUEMCPSDK 0.1.8 (MIT): https://github.com/MrMybal/CyUEMCPSDK
+  https://github.com/MrMybal/CyUEMCPSDK/blob/main/Docs/ProjectIntegration.md
+  https://github.com/MrMybal/CyUEMCPSDK/blob/main/Docs/UpdateExistingPlugin.md
+
+The assistant and MCP server are native CyGPUInspector implementations.
+No CyToolsCore wheel, CyUEMCPSDK source, Python companion, provider CLI or model
+weights are bundled. The SDK MIT licenses do not relicense this product.
+Repository links supplement, and never replace, the full license texts.
+
+CyInsights integration update, Release-20261009.6 (2026-10-09):
+The preceding bundle description concerns the upstream CyGPUInspector package.
+CyInsights now includes the official CyToolsCore 0.10.1 Python wheel (MIT),
+from https://github.com/MrMybal/CyToolsCore,
+source commit a8d200f2d0baaade1633e0683663b4506c595f74.
+Complete Core text: CyToolsCore-MIT.txt.
+Official MCP Python SDK 1.30.0: https://github.com/modelcontextprotocol/python-sdk
+Exact 38-package wheel versions and hashes: ../AI/dependency-lock.json.
+Dependency license texts and notices extracted from their pinned wheels: AI/.
+The private venv uses installed Python 3.11 x64; its license: AI/Python-3.11-License.txt.
+No model weights, AI provider CLI or Epic engine binaries are redistributed.
+The SDK and third-party licenses do not relicense the existing derived sources.

@@ -1,0 +1,19 @@
+{
+  "master": "cyinsights-logo-v1.png",
+  "icon_sizes": [
+    16,
+    20,
+    24,
+    32,
+    40,
+    48,
+    64,
+    128,
+    256
+  ],
+  "sha256": {
+    "cyinsights-logo-v1.png": "eec45868c19025efba01997e780c03d512594712253d6330e11976c7ba42dd95",
+    "cyinsights-logo-ui-v1.png": "72fa3a24b1abd06184626a10577ff34ef890a22f5a6bb65e736c0cb2153d4698",
+    "cyinsights-logo-v1.ico": "b34cb06d6e76c1b3de3bc428f19929bb5e0d6c36869a3e0bbdb06179bb947e5d"
+  }
+}

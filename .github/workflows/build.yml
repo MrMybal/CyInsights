@@ -1,0 +1,35 @@
+name: Windows source build
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          architecture: x64
+      - name: Check source and licenses
+        run: |
+          python Tools/prepare_dependencies.py
+          python Tools/check_publication.py
+      - name: Build and test native components
+        shell: cmd
+        run: build.cmd Release --tests-only
+      - name: Compile native interface
+        shell: cmd
+        run: build.cmd Release --compile-only
+      - name: Build isolated MIT collector
+        shell: cmd
+        run: |
+          cmake -S Tools/WindowsCollector -B build/WindowsCollector -G "Visual Studio 17 2022" -A x64
+          cmake --build build/WindowsCollector --config Release
+      - name: Validate optional AI companion
+        shell: powershell
+        run: |
+          ./AI/SetupRuntime.ps1
+          ./AI/runtime/python/Scripts/python.exe -m pytest AI/app/test_tool.py -q
