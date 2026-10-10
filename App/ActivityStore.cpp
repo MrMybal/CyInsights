@@ -16,6 +16,24 @@ uint32_t Small(const std::string& s){auto n=Number(s);if(n>UINT32_MAX)throw std:
 double Time(const std::string& s){size_t used=0;double n=std::stod(s,&used);if(used!=s.size()||!std::isfinite(n))throw std::runtime_error("Invalid activity timestamp");return n;}
 std::string Lower(std::string s){for(auto& c:s)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));return s;}
 void Add(uint64_t& sum,uint64_t v){if(v>UINT64_MAX-sum)throw std::runtime_error("Activity aggregate overflow");sum+=v;}
+// Each observation updates a range of columns once. Propagate extrema after
+// reading instead of touching every covered pixel for every long interval.
+class ActivityColumns {
+ struct Bounds {double minimum=INFINITY,maximum=-INFINITY;};
+ unsigned size_,base_=1;std::vector<uint64_t> starts_,ends_;std::vector<Bounds> bounds_;
+public:
+ explicit ActivityColumns(unsigned size):size_(size),starts_(size),ends_(size+1){while(base_<size_)base_*=2;bounds_.resize(base_*2);}
+ void Observe(unsigned lo,unsigned hi,const ActivityRecord& record){
+  Add(starts_[lo],1);Add(ends_[hi+1],1);if(record.flags&ActivityContentBits)return;
+  double value=record.flags&ActivitySignedGauge?static_cast<double>(static_cast<int64_t>(record.value)):static_cast<double>(record.value);
+  auto apply=[&](unsigned node){auto& b=bounds_[node];b.minimum=std::min(b.minimum,value);b.maximum=std::max(b.maximum,value);};
+  for(lo+=base_,hi+=base_;lo<=hi;lo/=2,hi/=2){if(lo&1)apply(lo++);if(!(hi&1))apply(hi--);}
+ }
+ void Finish(std::vector<ActivityBin>& bins,const std::atomic<bool>* cancel){
+  for(unsigned node=1;node<base_;++node)for(auto child:{node*2,node*2+1}){bounds_[child].minimum=std::min(bounds_[child].minimum,bounds_[node].minimum);bounds_[child].maximum=std::max(bounds_[child].maximum,bounds_[node].maximum);}
+  uint64_t count=0;for(unsigned x=0;x<size_;++x){if((x&1023)==0)Check(cancel);count-=ends_[x];Add(count,starts_[x]);auto& bin=bins[x];auto& b=bounds_[base_+x];bin.count=count;bin.valid=std::isfinite(b.minimum);if(bin.valid){bin.minimum=b.minimum;bin.maximum=b.maximum;}}
+ }
+};
 }
 std::shared_ptr<ActivityStore> ActivityStore::Build(const std::filesystem::path& journal,const std::filesystem::path& binary,const std::atomic<bool>* cancel){
  auto store=std::make_shared<ActivityStore>();store->file_=binary;auto partial=binary;partial+=L".partial";
@@ -47,13 +65,13 @@ std::shared_ptr<ActivityStore> ActivityStore::Build(const std::filesystem::path&
 ActivityWindow ActivityStore::Query(double a,double b,const std::vector<uint32_t>& ids,unsigned pixels,const std::string& search,uint64_t page,const std::atomic<bool>* cancel)const{
  Check(cancel);if(!std::isfinite(a)||!std::isfinite(b)||b<=a||pixels==0||pixels>16384||page>UINT64_MAX/128)throw std::runtime_error("Invalid activity query");
  ActivityWindow result;result.start=a;result.end=b;std::ifstream input(file_,std::ios::binary);if(!input)throw std::runtime_error("Activity cache missing; reopen capture");std::vector<ActivityRecord> batch;
- std::vector<uint8_t> matches(names.size(),1);if(!search.empty())for(size_t i=0;i<names.size();++i)matches[i]=Lower(names[i]).find(Lower(search))!=std::string::npos;
+ std::vector<uint8_t> matches;if(!search.empty()){auto query=Lower(search);matches.resize(names.size());for(size_t i=0;i<names.size();++i){if((i&1023)==0)Check(cancel);matches[i]=Lower(names[i]).find(query)!=std::string::npos;}}
  std::vector<uint32_t> unique=ids;std::sort(unique.begin(),unique.end());unique.erase(std::unique(unique.begin(),unique.end()),unique.end());
- for(auto lane:unique){if(lane>=lanes.size())throw std::runtime_error("Invalid activity lane query");ActivityLaneWindow w;w.lane=lane;w.bins.resize(pixels);const auto& index=indexes_[lane];
+ for(auto lane:unique){if(lane>=lanes.size())throw std::runtime_error("Invalid activity lane query");ActivityLaneWindow w;w.lane=lane;w.bins.resize(pixels);ActivityColumns columns(pixels);const auto& index=indexes_[lane];
   auto first=std::lower_bound(index.prefix_end.begin(),index.prefix_end.end(),a)-index.prefix_end.begin();
   for(size_t i=static_cast<size_t>(first);i<index.blocks.size()&&index.blocks[i].start<b;++i){const auto& block=index.blocks[i];if(block.end<a)continue;Check(cancel);++result.blocks_read;
    batch.resize(block.count);input.clear();input.seekg(static_cast<std::streamoff>(block.offset));input.read(reinterpret_cast<char*>(batch.data()),batch.size()*sizeof(ActivityRecord));if(!input)throw std::runtime_error("Activity cache read failed");
-   for(const auto& r:batch){bool instant=r.start==r.end;if(r.start>=b||(instant?r.start<a:r.end<=a)||!matches[r.name])continue;
+   size_t examined=0;for(const auto& r:batch){if((examined++&1023)==0)Check(cancel);bool instant=r.start==r.end;if(r.start>=b||(instant?r.start<a:r.end<=a)||(!matches.empty()&&!matches[r.name]))continue;
     uint64_t row=w.matched++;if(row>=page*128&&w.rows.size()<128)w.rows.push_back(r);
     w.content+=(r.flags&ActivityContentBits)!=0;w.points+=(r.flags&ActivityPoint)!=0;
     if(!(r.flags&ActivityIncomplete)){++w.complete;if(!(r.flags&(ActivityGauge|ActivityBucketCount)))w.inclusive_seconds+=std::max(0.,std::min(b,r.end)-std::max(a,r.start));}
@@ -61,9 +79,9 @@ ActivityWindow ActivityStore::Query(double a,double b,const std::vector<uint32_t
     if(r.flags&ActivitySignedGauge){auto v=static_cast<int64_t>(r.value);if(!w.signed_values){w.signed_minimum=w.signed_maximum=v;w.signed_values=true;}else{w.signed_minimum=std::min(w.signed_minimum,v);w.signed_maximum=std::max(w.signed_maximum,v);}}
     auto pixel=[&](double t){return static_cast<unsigned>(std::clamp((t-a)/(b-a)*pixels,0.,double(pixels-1)));};
     auto lo=pixel(r.start),hi=instant?lo:pixel(std::nextafter(std::min(b,r.end),a));
-    for(unsigned x=lo;x<=hi;++x){auto& bin=w.bins[x];++bin.count;if(r.flags&ActivityContentBits)continue;double v=r.flags&ActivitySignedGauge?static_cast<double>(static_cast<int64_t>(r.value)):static_cast<double>(r.value);if(!bin.valid){bin.minimum=bin.maximum=v;bin.valid=true;}else {bin.minimum=std::min(bin.minimum,v);bin.maximum=std::max(bin.maximum,v);}}
+    columns.Observe(lo,hi,r);
    }
-  }result.lanes.push_back(std::move(w));
+  }columns.Finish(w.bins,cancel);result.lanes.push_back(std::move(w));
  }return result;
 }
 }

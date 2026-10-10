@@ -81,7 +81,7 @@ Les valeurs mémoire 64 bits, y compris les valeurs LLM signées, sont conservé
 Le dernier point LLM est interrogé isolément pour éviter une ancienne valeur
 retournée par certains fournisseurs dans leur callback final de plage.
 
-Validation locale : 20 vérifications du stockage/requêtes/annulation/échec du lecteur, 15 suites
+Validation locale : 23 vérifications du stockage/requêtes/annulation/échec du lecteur, 15 suites
 de composants, interface compilée, lecteurs 5.5–5.8 compilés et exécutés sur une
 fixture native synthétique réseau/fichiers/LLM. Une trace réelle existante a
 également fourni une opération de fichier. Les modules plugin natifs Editor

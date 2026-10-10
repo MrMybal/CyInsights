@@ -25,6 +25,7 @@ struct TimingTrack {
     double visible_start = 0, visible_end = 0;
     int visible_levels = -1;
     int visible_rows = 0;
+    bool visible_events_valid=false;
     std::vector<TimingGlyph> glyphs;
     float glyph_width = 0;
     int glyph_selected = -2;

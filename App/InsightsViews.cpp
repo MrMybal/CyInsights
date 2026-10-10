@@ -412,6 +412,15 @@ void Application::Timing() {
     }
     float scale = UiScale(), header_height = 20 * scale, row_height = 15 * scale, scope_height = 14 * scale,
           ruler_height = 25 * scale;
+    const bool keyboard=ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)&&!ImGui::GetIO().WantTextInput&&!ImGui::IsPopupOpen(nullptr,ImGuiPopupFlags_AnyPopupId);
+    auto fitSelection=[&]{if(range_start_==range_end_)FitTiming();else{double a=std::min(range_start_,range_end_),b=std::max(range_start_,range_end_),padding=std::max(.000001,(b-a)*.05);view_start_=a-padding;view_end_=b+padding;}};
+    if(keyboard&&!ImGui::GetIO().KeyCtrl&&!ImGui::GetIO().KeyAlt){
+        if(ImGui::IsKeyPressed(ImGuiKey_F))fitSelection();
+        if(ImGui::IsKeyPressed(ImGuiKey_Home))FitCapture();
+        if(ImGui::IsKeyPressed(ImGuiKey_Escape))range_start_=range_end_=0;
+        if(ImGui::IsKeyPressed(ImGuiKey_LeftArrow))StepFrame(-1);
+        if(ImGui::IsKeyPressed(ImGuiKey_RightArrow))StepFrame(1);
+    }
     ImGui::SetCursorPosX(5 * scale);
     if (ImGui::BeginCombo("##track_filter",
                           track_filter_ == 0   ? "All Tracks"
@@ -472,6 +481,8 @@ void Application::Timing() {
     ImGui::SameLine();
     if (ImGui::Button("Fit"))
         FitTiming();
+    if(ImGui::IsItemHovered())ImGui::SetTooltip("Focus three frames. F fits the selection, Home fits the capture, Left/Right step frames, Escape clears the time selection.");
+    ImGui::SameLine();ImGui::BeginDisabled(range_start_==range_end_);if(ImGui::SmallButton("Fit selection"))fitSelection();ImGui::EndDisabled();
     ImGui::SameLine();
     ImGui::BeginDisabled(cpu_frames_.empty());
     if (ImGui::SmallButton("< Frame"))
@@ -482,7 +493,8 @@ void Application::Timing() {
     ImGui::EndDisabled();
     ImGui::SameLine();
     ImGui::SetNextItemWidth(175 * scale);
-    if(ImGui::InputTextWithHint("##timing_search", "Search timing events", search_, sizeof(search_)))timing_exact_name_.clear();
+    if(ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)&&ImGui::GetIO().KeyCtrl&&ImGui::IsKeyPressed(ImGuiKey_F))ImGui::SetKeyboardFocusHere();
+    if(ImGui::InputTextWithHint("##timing_search", "Search timing events (Ctrl+F)", search_, sizeof(search_)))timing_exact_name_.clear();
     ImGui::SameLine();
     if(ImGui::SmallButton("Next slow frame"))FocusSlowFrame();
     if(!timing_exact_name_.empty()){ImGui::TextWrapped("Exact function: %s",timing_exact_name_.c_str());ImGui::SameLine();if(ImGui::SmallButton("Clear function filter"))FilterFunction({});}
@@ -586,8 +598,7 @@ void Application::Timing() {
         auto refresh = [&] {
             if (track.visible_levels != query_rows || track.visible_start != view_start_ ||
                 track.visible_end != view_end_) {
-                track.visible_events.clear();
-                track.Query(native_.events, view_start_, view_end_, query_rows, track.visible_events);
+                track.visible_events_valid=false;
                 track.visible_start = view_start_;
                 track.visible_end = view_end_;
                 track.visible_levels = query_rows;
@@ -599,7 +610,7 @@ void Application::Timing() {
         const int rows=track.visible_rows;
         visible_rows_+=rows;recorded_rows_+=track.RowCount(0);
         if (hide_inactive_tracks_) {
-            if (track.visible_events.empty())
+            if (rows==0)
                 continue;
         }
         auto pos = ImGui::GetCursorScreenPos();
@@ -641,7 +652,9 @@ void Application::Timing() {
             track.collapsed = !track.collapsed;
         if (track.collapsed||rows==0)
             continue;
-        refresh();
+        // Only tracks intersecting the vertical viewport need event lists.
+        // Their row count above remains dynamic while scrolling or panning.
+        if(!track.visible_events_valid){track.visible_events.clear();track.Query(native_.events,view_start_,view_end_,query_rows,track.visible_events);track.visible_events_valid=true;}
         if (track.glyph_width != w || track.glyph_selected != selected_cpu_ ||
             track.glyph_search != filter_key) {
             BuildTimingGlyphs(native_.events, track.visible_events, view_start_, view_end_, w, selected_cpu_,

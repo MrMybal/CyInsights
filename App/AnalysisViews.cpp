@@ -81,10 +81,14 @@ bool Application::InspectFirstTask() {
 void Application::WriteAnalysisReport(const fs::path& output) const {
     std::ofstream out(output);out<<std::setprecision(17)<<std::boolalpha;
     out<<"{\"timing_events\":"<<(native_.store?native_.store->count:0)
+       <<",\"selection_start\":"<<range_start_<<",\"selection_end\":"<<range_end_<<",\"view_start\":"<<view_start_<<",\"view_end\":"<<view_end_
        <<",\"activity_events\":"<<(activity_store_?activity_store_->count:0)
        <<",\"activity_lanes\":"<<(activity_store_?activity_store_->lanes.size():0)
        <<",\"activity_status\":"<<cygi::Json(activity_message_).Write(-1)
        <<",\"activity_visible_lanes\":"<<activity_result_.visible.lanes.size()
+       <<",\"activity_plot_queries\":"<<activity_plot_queries_<<",\"activity_detail_queries\":"<<activity_detail_queries_
+       <<",\"activity_range_start\":"<<activity_result_.details.start<<",\"activity_range_end\":"<<activity_result_.details.end
+       <<",\"activity_matches\":"<<(activity_result_.details.lanes.empty()?0:activity_result_.details.lanes.front().matched)
        <<",\"exact_function_filter\":"<<cygi::Json(timing_exact_name_).Write(-1)<<",\"histogram_function\":"<<cygi::Json(distribution_result_function_).Write(-1)
        <<",\"histogram_range_start\":"<<distribution_a_<<",\"histogram_range_end\":"<<distribution_b_
        <<",\"distribution_count\":"<<distribution_.count<<",\"distribution_unavailable\":"<<distribution_.unavailable

@@ -5,6 +5,8 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include <algorithm>
+#include <cmath>
 #include <Windows.h>
 using namespace cyinsights;
 int main(int argc,char** argv){
@@ -40,5 +42,17 @@ int main(int argc,char** argv){
  check(reader.Start(std::filesystem::absolute(argv[0]),dir,crash,dir/"output",error)&&poll()&&!decoded&&message.find("0xC0000005")!=std::string::npos&&std::filesystem::file_size(crash)==9,"Decoder access violation reports its code, preserves source and publishes no partial result");
  auto slow=dir/"slow.utrace";std::ofstream(slow)<<"preserved";check(reader.Start(std::filesystem::absolute(argv[0]),dir,slow,dir/"output",error),"Owned decoder cancellation fixture starts");reader.Cancel();decoded.reset();check(poll()&&!decoded&&message.find("cancelled")!=std::string::npos,"Cancelling owned process publishes no partial result");
  check(std::filesystem::file_size(source)==9&&std::filesystem::file_size(slow)==9,"Original trace inputs remain unchanged");
+ {
+  auto dense=dir/"overlap.csv";std::ofstream out(dense);out.precision(17);out<<"CYACTIVITY1\nLane,0,memory,Signed and unsigned gauges,bytes\n";std::vector<ActivityRecord> observations;
+  for(int i=0;i<5000;++i){ActivityRecord r;r.start=(i*7919%1000)*.01-1;r.end=r.start+(i%7)*.4;r.flags=i%2?80:16;r.value=i%2?static_cast<uint64_t>(int64_t(i%83)-41):i%97;observations.push_back(r);out<<"Event,0,"<<r.start<<','<<r.end<<','<<r.value<<",0,0,"<<r.flags<<",Sample\n";}out<<"End,5000\n";out.close();auto indexed=ActivityStore::Build(dense,dir/"overlap.bin");
+  for(unsigned width:{1u,31u,2048u}){
+   double a=.25,b=8.5;auto query=indexed->Query(a,b,{0},width);std::vector<ActivityBin> reference(width);uint64_t matched=0;
+   for(auto& r:observations){bool point=r.start==r.end;if(r.start>=b||(point?r.start<a:r.end<=a))continue;++matched;
+    auto pixel=[&](double t){return static_cast<unsigned>(std::clamp((t-a)/(b-a)*width,0.,double(width-1)));};auto lo=pixel(r.start),hi=point?lo:pixel(std::nextafter(std::min(b,r.end),a));double value=r.flags&ActivitySignedGauge?double(static_cast<int64_t>(r.value)):double(r.value);
+    for(unsigned x=lo;x<=hi;++x){auto& bin=reference[x];++bin.count;if(!bin.valid){bin.valid=true;bin.minimum=bin.maximum=value;}else{bin.minimum=std::min(bin.minimum,value);bin.maximum=std::max(bin.maximum,value);}}
+   }
+   bool equal=query.lanes[0].matched==matched;for(size_t x=0;x<width;++x){auto& r=reference[x];auto& v=query.lanes[0].bins[x];equal&=r.count==v.count&&r.valid==v.valid&&r.minimum==v.minimum&&r.maximum==v.maximum;}check(equal,"Range accumulation preserves every overlapped column, signed extrema, points and clipped boundaries");
+  }
+ }
  std::filesystem::remove_all(dir);std::cout<<checks<<" checks, "<<failures<<" failures\n";return failures?1:0;
 }

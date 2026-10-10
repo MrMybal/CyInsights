@@ -115,6 +115,8 @@ add_executable(CyPagedTimingTests Tests/PagedTimingTests.cpp App/NativeTrace.cpp
 target_link_libraries(CyPagedTimingTests PRIVATE CyNativeStorage)
 add_test(NAME CyPagedTimingTests COMMAND CyPagedTimingTests)
 add_executable(CyTimingBenchmark Tools/TimingBenchmark.cpp App/NativeTrace.cpp)
+  add_executable(CyUiPreparationBenchmark Tools/UiPreparationBenchmark.cpp App/NativeTrace.cpp)
+  target_link_libraries(CyUiPreparationBenchmark PRIVATE CyNativeStorage CyCounterModel)
 target_link_libraries(CyTimingBenchmark PRIVATE CyNativeStorage)
 add_executable(CyHistogramBenchmark Tools/HistogramBenchmark.cpp App/NativeTrace.cpp)
 target_link_libraries(CyHistogramBenchmark PRIVATE CyNativeStorage)

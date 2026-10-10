@@ -41,10 +41,20 @@ public:
     // Fixed numeric filenames avoid path/name collisions from trace metadata.
     static bool CanExport(const std::string& name);
     void LoadValues(const std::filesystem::path& directory,const std::atomic<bool>* cancel=nullptr);
-    void Index();
+    // Rebuild after changing samples. Pinning and display metadata do not
+    // invalidate this index; LoadValues builds it off the UI thread.
+    void Index(const std::atomic<bool>* cancel=nullptr);
     bool Available(size_t counter, double time) const;
     const CounterSample* At(size_t counter, double time) const;
     CounterStats Stats(size_t counter, double a, double b) const;
     std::vector<CounterBucket> Plot(size_t counter, double a, double b, int width) const;
+private:
+    static constexpr size_t range_block_samples=64;
+    struct RangeIndex {size_t samples=0,base=0;std::vector<uint8_t> valid;std::vector<CounterStats> tree;};
+    std::vector<RangeIndex> ranges_;
+    bool Indexed(size_t counter) const;
+    bool SampleAvailable(size_t counter,size_t sample) const;
+    CounterStats Combine(size_t counter,const CounterStats& a,const CounterStats& b) const;
+    CounterStats Range(size_t counter,size_t begin,size_t end) const;
 };
 }

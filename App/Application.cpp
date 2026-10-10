@@ -84,7 +84,8 @@ bool Application::OpenNow(const fs::path &file) {
     }
     try {
         ++ai_generation_;ai_issues_cancel_=true;ai_findings_.clear();ai_issues_=cygi::Json::Object();ai_issues_a_=ai_issues_b_=NAN;
-        activity_store_.reset();activity_result_={};activity_pinned_.clear();activity_request_.clear();activity_ready_.clear();activity_message_.clear();activity_auto_started_=false;activity_search_[0]=0;activity_lane_=0;activity_page_=0;++activity_revision_;
+        activity_store_.reset();activity_result_={};activity_pinned_.clear();activity_request_.clear();activity_ready_.clear();activity_details_request_.clear();activity_details_ready_.clear();activity_details_observed_.clear();activity_pending_=false;activity_requested_at_=-1;activity_message_.clear();activity_auto_started_=false;activity_search_[0]=0;activity_lane_=0;activity_page_=0;++activity_revision_;
+        activity_plot_queries_=activity_detail_queries_=0;
         tasks_store_.reset();tasks_={};selected_task_.reset();task_links_.clear();tasks_message_.clear();distribution_={};distribution_message_.clear();
         analysis_a_=analysis_b_=NAN;analysis_whole_=true;distribution_label_.clear();distribution_dirty_=true;distribution_track_=0;distribution_task_thread_=-1;tasks_thread_=-1;tasks_page_=0;tasks_auto_started_=false;
         timing_exact_name_.clear();loaded_exact_name_.clear();timing_filter_key_.clear();timing_timer_matches_.clear();timing_name_matches_.clear();distribution_function_.clear();distribution_summary_.reset();distribution_summary_key_.clear();
@@ -264,7 +265,8 @@ void Application::LoadWindow() {
     requested_start_=view_start_;requested_end_=view_end_;requested_stats_start_=a;requested_stats_end_=b;model_cancel_.store(false);
     float pixels=std::max(1.f,ImGui::GetMainViewport()->WorkSize.x-300*UiScale());
     auto store=native_.store;double start=view_start_,end=view_end_;
-    model_task_=std::async(std::launch::async,[this,store,start,end,a,b,pixels,name=timing_exact_name_] {
+    model_task_=std::async(std::launch::async,[this,store,start,end,a,b,pixels,name=timing_exact_name_,retired=std::move(retired_timing_)]() mutable {
+        retired.reset();
         TimingAnalysis result;
         // Read adjacent scopes too so the old model remains useful while panning.
         double margin=end-start,left=std::max(store->start,start-margin),right=std::min(store->end,end+margin);
@@ -296,6 +298,7 @@ void Application::Draw() {
     if(imported&&!native_.Error().empty()&&native_.Error()!="Analysis cancelled")load_error_=native_.Error();
     if(imported) {
         counters_=std::move(native_.counters);
+        ++counter_catalog_revision_;
         counter_message_=counters_.error;
         if(native_.store&&native_.store->count) {
             // The disk index is ready before the window model. Publish events
@@ -310,7 +313,8 @@ void Application::Draw() {
     }
     if (imported && !native_.store && !native_.events.empty()) {
         try {
-            model_task_ = std::async(std::launch::async, [this,events = std::move(native_.events)]() mutable {
+            model_task_ = std::async(std::launch::async, [this,events = std::move(native_.events),retired=std::move(retired_timing_)]() mutable {
+                retired.reset();
                 TimingAnalysis result;
                 result.events = std::move(events);
                 result.model.Build(result.events,true,&model_cancel_);
@@ -323,6 +327,7 @@ void Application::Draw() {
         }
     }
     if(counter_reader_.Poll(counters_,counter_message_)) {
+        ++counter_catalog_revision_;
         counter_stats_start_=counter_stats_end_=-1;counter_stats_.clear();counter_plots_.clear();
         size_t pins=0;for(auto& counter:counters_.series)
             if(counter.meta&&!counter.availability&&counter.reason.empty()&&pins<4){counter.pinned=true;++pins;}
@@ -335,13 +340,13 @@ void Application::Draw() {
             const auto previous_selected=selected_timer_>=0&&static_cast<size_t>(selected_timer_)<timing_model_.names.size()?timing_model_.names[selected_timer_]:std::string();
             for(auto& track:result.model.tracks)for(const auto& old:timing_model_.tracks)
                 if(track.has_id&&old.has_id?track.id==old.id:track.name==old.name){track.visible=old.visible;track.collapsed=old.collapsed;break;}
-            native_.events = std::move(result.events);
-            timing_model_ = std::move(result.model);
+            native_.events.swap(result.events);
+            std::swap(timing_model_,result.model);
             ++model_version_;
             timer_colours_.clear();timer_colours_.reserve(timing_model_.names.size());
             for(const auto& name:timing_model_.names)timer_colours_.push_back(TimerColour(name));
-            comparison_index_=std::move(result.comparison);
-            comparison_a_summary_=std::move(result.summary);
+            std::swap(comparison_index_,result.comparison);
+            comparison_a_summary_.swap(result.summary);
             comparison_a_start_=comparison_a_end_=-1;
             if(native_.store) {
                 loaded_start_=result.window_start;loaded_end_=result.window_end;window_aggregated_=result.aggregated;
@@ -353,6 +358,7 @@ void Application::Draw() {
             selected_cpu_=-1;
             if(!previous_selected.empty())for(size_t i=0;i<timing_model_.names.size();++i)if(timing_model_.names[i]==previous_selected){selected_timer_=static_cast<int>(i);break;}
             message_ = "Ready: " + std::to_string(native_.store?native_.store->count:native_.events.size()) + " native timing events";
+            retired_timing_=std::make_unique<TimingAnalysis>(std::move(result));
         } catch (const std::exception &e) {
             message_ = model_cancel_.load()?"Visible interval loading cancelled":"Native timing indexing failed: " + std::string(e.what());
             if(!model_cancel_.load())load_error_=message_;

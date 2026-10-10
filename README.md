@@ -1,5 +1,7 @@
 # CyInsights
 
+Native interface navigation, query preparation and performance measurements are documented in [InterfacePerformance](Docs/InterfacePerformance.md).
+
 Native C++ / Dear ImGui profiler for Unreal Engine traces, with an Insights-style
 continuous CPU/GPU timeline and optional extra GPU capture data. The interface
 is written for CyInsights; it does not reuse the CyGPUInspector standalone UI.

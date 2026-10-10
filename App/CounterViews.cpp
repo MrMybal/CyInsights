@@ -48,6 +48,7 @@ void Application::UpdateCounters() {
     double b=range_start_==range_end_?view_end_:std::max(range_start_,range_end_);
     if(counter_stats_start_==a&&counter_stats_end_==b&&counter_stats_.size()==counters_.series.size())return;
     counter_stats_start_=a;counter_stats_end_=b;counter_stats_.clear();
+    ++counter_stats_version_;
     for(size_t i=0;i<counters_.series.size();++i)counter_stats_.push_back(counters_.Stats(i,a,b));
 }
 void Application::Counters() {
@@ -60,7 +61,8 @@ void Application::Counters() {
     }
     if(counter_reader_.Busy()){ImGui::Text("Loading counter samples...");ImGui::SameLine();if(ImGui::SmallButton("Cancel counters"))counter_reader_.Cancel();}
     ImGui::SetNextItemWidth(-1);
-    ImGui::InputTextWithHint("##counter_filter","Search counters",counter_search_,sizeof(counter_search_));
+    if(ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)&&ImGui::GetIO().KeyCtrl&&ImGui::IsKeyPressed(ImGuiKey_F))ImGui::SetKeyboardFocusHere();
+    ImGui::InputTextWithHint("##counter_filter","Search counters (Ctrl+F)",counter_search_,sizeof(counter_search_));
     ImGui::Checkbox("Quest / Meta only",&meta_counters_only_);ImGui::SameLine();
     ImGui::Checkbox("Availability",&show_availability_);
     ImGui::Checkbox("Hide counters without values",&hide_empty_counters_);
@@ -72,12 +74,13 @@ void Application::Counters() {
     UpdateCounters();
     ImGui::TextDisabled(range_start_==range_end_?"Statistics in visible interval":"Statistics in selected interval");
     ImGui::TextDisabled("Mean: derived sample average");
-    std::vector<size_t> visible;
+    std::string filterKey=std::string(counter_search_)+"/"+std::to_string(meta_counters_only_)+std::to_string(show_availability_)+std::to_string(hide_empty_counters_)+"/"+std::to_string(counters_.series.size())+"/"+std::to_string(counter_catalog_revision_);
+    if(filterKey!=counter_filter_key_){counter_filter_key_=std::move(filterKey);counter_order_key_.clear();counter_visible_.clear();
     for(size_t i=0;i<counters_.series.size();++i) {
         auto& c=counters_.series[i];
         if((!meta_counters_only_||c.meta)&&(!c.availability||show_availability_)&&
-           (!hide_empty_counters_||!c.samples.empty())&&Match(c.name,counter_search_))visible.push_back(i);
-    }
+           (!hide_empty_counters_||!c.samples.empty())&&Match(c.name,counter_search_))counter_visible_.push_back(i);
+    }}auto& visible=counter_visible_;
     // Selected metric details stay visible above the scrolling table.
     if(selected_counter_>=0&&static_cast<size_t>(selected_counter_)<counters_.series.size()) {
         auto& c=counters_.series[static_cast<size_t>(selected_counter_)];
@@ -97,6 +100,8 @@ void Application::Counters() {
         ImGui::TableSetupScrollFreeze(0,1);ImGui::TableHeadersRow();
         if(auto sorting=ImGui::TableGetSortSpecs();sorting&&sorting->SpecsCount) {
             auto spec=sorting->Specs[0];
+            auto orderKey=std::to_string(spec.ColumnUserID)+"/"+std::to_string(spec.SortDirection)+"/"+std::to_string(spec.ColumnUserID>=1&&spec.ColumnUserID<=4?counter_stats_version_:0);
+            if(orderKey!=counter_order_key_){counter_order_key_=std::move(orderKey);
             std::stable_sort(visible.begin(),visible.end(),[&](size_t a,size_t b){
                 int order=0;const auto& x=counter_stats_[a];const auto& y=counter_stats_[b];
                 if(spec.ColumnUserID==0)order=counters_.series[a].name.compare(counters_.series[b].name);
@@ -112,7 +117,7 @@ void Application::Counters() {
                       order=vx<vy?-1:vx>vy?1:0;}
                 if(!order)return counters_.series[a].id<counters_.series[b].id;
                 return spec.SortDirection==ImGuiSortDirection_Descending?order>0:order<0;
-            });sorting->SpecsDirty=false;
+            });}sorting->SpecsDirty=false;
         }
         ImGuiListClipper clip;clip.Begin(static_cast<int>(visible.size()));
         while(clip.Step())for(int row=clip.DisplayStart;row<clip.DisplayEnd;++row) {

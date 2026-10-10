@@ -37,6 +37,8 @@ class Application {
         uint64_t count=0,matched=0;int bin=-1;std::array<uint64_t,64> bins{};bool separate_dock=false;
     };
     InteractionState InteractionView() const;
+    struct ActivityState {uint64_t events=0,matches=0,plot_queries=0;double a=0,b=0;};
+    ActivityState ActivityView() const {return {activity_store_?activity_store_->count:0,activity_result_.details.lanes.empty()?0:activity_result_.details.lanes.front().matched,activity_plot_queries_,activity_result_.details.start,activity_result_.details.end};}
     Application();
     ~Application();
     void SetBrandLogo(ImTextureID texture){brand_logo_=texture;}
@@ -54,7 +56,7 @@ class Application {
     void EnableAi(bool control=false,bool capture=false);
     void FocusAi(){show_ai_=true;focus_ai_=true;session_view_=false;}
     void WriteAnalysisReport(const fs::path& output) const;
-    bool AnalysisBusy() const { return !pending_capture_.empty() || native_.Busy() || model_task_.valid() || counter_reader_.Busy() || comparison_reader_.Busy() || distribution_task_.valid() || distribution_pending_ || tasks_pending_ || task_reader_.Busy() || tasks_query_.valid() || links_query_.valid() || activity_reader_.Busy() || activity_query_.valid(); }
+    bool AnalysisBusy() const { return !pending_capture_.empty() || native_.Busy() || model_task_.valid() || counter_reader_.Busy() || comparison_reader_.Busy() || distribution_task_.valid() || distribution_pending_ || tasks_pending_ || task_reader_.Busy() || tasks_query_.valid() || links_query_.valid() || activity_reader_.Busy() || activity_query_.valid() || activity_pending_; }
     void FocusGpu() {
         show_gpu_ = true;
         focus_gpu_ = true;
@@ -108,10 +110,13 @@ class Application {
     void StartActivities();
     void DockActivities();
     ActivityTrace activity_reader_;std::shared_ptr<ActivityStore> activity_store_;
-    struct ActivityResult {ActivityWindow visible,details;};
+    struct ActivityResult {ActivityWindow visible,details;bool has_visible=false,has_details=false;};
     std::future<ActivityResult> activity_query_;std::atomic<bool> activity_cancel_{false};
     ActivityResult activity_result_;std::vector<uint8_t> activity_pinned_;
     std::string activity_message_,activity_request_,activity_ready_;
+    std::string activity_details_request_,activity_details_ready_,activity_details_observed_;
+    double activity_details_changed_at_=0,activity_requested_at_=-1;bool activity_pending_=false;
+    uint64_t activity_plot_queries_=0,activity_detail_queries_=0;
     char activity_search_[256]{};int activity_lane_=0;uint64_t activity_page_=0,activity_revision_=0;
     bool show_activities_=false,activity_auto_started_=false,focus_activities_=false,activity_dock_pending_=false;float activity_width_=1200;
     void UpdateCounters();
@@ -185,6 +190,7 @@ class Application {
     std::string counter_message_;
     double counter_stats_start_ = -1, counter_stats_end_ = -1;
     std::vector<CounterStats> counter_stats_;
+    uint64_t counter_stats_version_=0,counter_catalog_revision_=0;std::string counter_filter_key_,counter_order_key_;std::vector<size_t> counter_visible_;
     struct CounterPlotCache {double a=-1,b=-1;int width=0;std::vector<CounterBucket> buckets;};
     std::vector<CounterPlotCache> counter_plots_;
     struct TimingAnalysis {
@@ -198,6 +204,9 @@ class Application {
     };
     std::atomic<bool> model_cancel_{false};
     std::future<TimingAnalysis> model_task_;
+    // Retain one old display snapshot until the next preparation worker can
+    // reclaim it, keeping string/vector destruction out of a drag frame.
+    std::unique_ptr<TimingAnalysis> retired_timing_;
     fs::path pending_capture_;
     bool pending_shown_=false,window_aggregated_=false,counter_samples_requested_=false,cancelled_load_=false;
     double load_started_=0,loaded_start_=NAN,loaded_end_=NAN;

@@ -4,6 +4,7 @@
 #include "Branding.hpp"
 #include "ResourceIds.h"
 #include <chrono>
+#include <algorithm>
 #include <d3d11.h>
 #include <exception>
 #include <fstream>
@@ -246,7 +247,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
         auto args = CommandLineToArgvW(GetCommandLineW(), &count);
         std::filesystem::path snapshot;
         std::filesystem::path loading_snapshot;
+        std::filesystem::path ui_profile;std::vector<double> draw_profile,drag_profile;
         bool navigation_smoke=false,drag_pan=false,drag_zoom=false,wheel_zoom=false;
+        bool activity_range_smoke=false,activity_range_filtered=false,activity_plot_reused=false;int activity_step=0;uint64_t activity_full=0,activity_plot_before=0;
         bool diagnostic_smoke=false,diagnostic_focused=false;int diagnostic_settle=0;
         bool inspect_task=false,task_inspected=false;
         bool interaction_smoke=false,interaction_filter=false,interaction_range=false,interaction_dock=false,interaction_bin=false;
@@ -262,9 +265,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             std::wstring argument = args[i];
             if (argument == L"--snapshot" && i + 1 < count)
                 snapshot = args[++i];
+            else if(argument==L"--profile-ui"&&i+1<count)ui_profile=args[++i];
             else if(argument==L"--loading-snapshot"&&i+1<count)
                 loading_snapshot=args[++i];
             else if(argument==L"--navigation-smoke")navigation_smoke=true;
+            else if(argument==L"--activity-range-smoke"){activity_range_smoke=true;app.FocusActivities();}
             else if(argument==L"--diagnostics-smoke")diagnostic_smoke=true;
             else if(argument==L"--distribution-view")app.FocusDistribution();
             else if(argument==L"--tasks-view")app.FocusTasks();
@@ -311,6 +316,17 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             }
             ImGui_ImplDX11_NewFrame();
             ImGui_ImplWin32_NewFrame();
+            if(activity_range_smoke){
+                io.ConfigInputTrickleEventQueue=false;auto state=app.ActivityView();auto nav=app.NavigationView();auto range=app.InteractionView();
+                auto pointer=[&](float fraction){io.AddMouseViewportEvent(ImGui::GetMainViewport()->ID);io.AddMousePosEvent(nav.ruler_x+nav.ruler_width*fraction,nav.ruler_y+3);};
+                if(activity_step==0&&!app.AnalysisBusy()&&state.events&&state.matches>1){activity_full=state.matches;activity_plot_before=state.plot_queries;pointer(.05f);io.AddKeyEvent(ImGuiMod_Shift,true);io.AddMouseButtonEvent(0,true);activity_step=1;}
+                else if(activity_step==1){pointer(.5f);activity_step=2;}
+                else if(activity_step==2){io.AddMouseButtonEvent(0,false);io.AddKeyEvent(ImGuiMod_Shift,false);activity_step=3;}
+                else if(activity_step==3&&!app.AnalysisBusy()&&range.selection_a!=range.selection_b&&state.a==std::min(range.selection_a,range.selection_b)&&state.b==std::max(range.selection_a,range.selection_b)){
+                    activity_range_filtered=state.matches>0&&state.matches<activity_full;activity_plot_reused=state.plot_queries==activity_plot_before;activity_step=4;
+                    std::ofstream report(std::filesystem::path(executable).parent_path()/"activity-range-smoke.json");report<<std::boolalpha<<"{\"timeline_range_filters_activity_details\":"<<activity_range_filtered<<",\"selection_reuses_plot_query\":"<<activity_plot_reused<<",\"full_matches\":"<<activity_full<<",\"selected_matches\":"<<state.matches<<'}';
+                }
+            }
             if(interaction_smoke){
                 io.ConfigInputTrickleEventQueue=false;const auto state=app.InteractionView();const auto nav=app.NavigationView();
                 auto pointer=[&](float x,float y){io.AddMouseViewportEvent(ImGui::GetMainViewport()->ID);io.AddMousePosEvent(x,y);};
@@ -344,7 +360,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
                         <<",\"timeline_range_filters_histogram\":"<<interaction_range<<",\"histogram_docked_beside_timeline\":"<<interaction_dock<<",\"cached_bin_retains_statistics\":"<<interaction_bin
                         <<",\"full_samples\":"<<interaction_full_count<<",\"range_samples\":"<<interaction_count<<",\"selected_range_start\":"<<state.hist_a<<",\"selected_range_end\":"<<state.hist_b<<"}";
                 }
-                if(interaction_step>0&&interaction_step<16&&ImGui::GetTime()-interaction_begin>90){std::ofstream(std::filesystem::path(executable).parent_path()/"interaction-failure.txt")<<interaction_step;return 7;}
+                if(interaction_step>0&&interaction_step<16&&ImGui::GetTime()-interaction_begin>90){auto failure=std::filesystem::path(executable).parent_path()/"interaction-failure";std::ofstream(failure.wstring()+L".txt")<<interaction_step;app.WriteAnalysisReport(failure.wstring()+L".json");if(!snapshot.empty())SaveSnapshot(snapshot);return 7;}
             }
             if(navigation_smoke) {
                 // Exercise held input over multiple asynchronous publications, not a single move.
@@ -414,6 +430,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
                 auto nav=app.NavigationView();io.AddMousePosEvent(nav.x+nav.width*.5f,nav.y+nav.height*.6f);
                 ++diagnostic_settle;
             }
+            auto draw_begin=std::chrono::steady_clock::now();
             ImGui::NewFrame();
             app.Draw();
             if(inspect_task&&!task_inspected&&frames>20&&!app.AnalysisBusy()){
@@ -424,15 +441,17 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             context->OMSetRenderTargets(1, &target, nullptr);
             context->ClearRenderTargetView(target, clear);
             ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+            if(!ui_profile.empty()&&app.NavigationView().model_version){double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-draw_begin).count();draw_profile.push_back(ms);if(app.NavigationView().dragging)drag_profile.push_back(ms);}
             if(!loading_snapshot.empty()&&frames>5&&app.AnalysisBusy()) {
                 SaveSnapshot(loading_snapshot);loading_snapshot.clear();
             }
-            if (!snapshot.empty() && ++frames > 20 && !app.AnalysisBusy()&&(!navigation_smoke||navigation_step==11)&&(!diagnostic_smoke||diagnostic_settle>5)&&(!interaction_smoke||interaction_step==16)) {
+            if (!snapshot.empty() && ++frames > 20 && !app.AnalysisBusy()&&(!navigation_smoke||navigation_step==11)&&(!diagnostic_smoke||diagnostic_settle>5)&&(!interaction_smoke||interaction_step==16)&&(!activity_range_smoke||activity_step==4)) {
                 if (!SaveSnapshot(snapshot))
                     return 2;
                 auto report=snapshot;report+=L".json";app.WriteAnalysisReport(report);
                 if(navigation_smoke&&(!drag_pan||!drag_zoom||!wheel_zoom||!continuous_drag||drag_reload_count<3||!frames_follow||!dynamic_height||!ruler_drag||!track_drag))return 4;
                 if(interaction_smoke&&(!interaction_filter||!interaction_range||!interaction_dock||!interaction_bin))return 8;
+                if(activity_range_smoke&&(!activity_range_filtered||!activity_plot_reused))return 9;
                 done = true;
             }
             if (!snapshot.empty() && std::chrono::steady_clock::now() - begin > std::chrono::minutes(20))
@@ -442,6 +461,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
                 ImGui::RenderPlatformWindowsDefault();
             }
             swap->Present(1, 0);
+        }
+        if(!ui_profile.empty()){
+            std::ofstream report(ui_profile);report<<"{\"measurement\":\"CPU main viewport frame preparation; Present and detached windows excluded\",";
+            auto write=[&](const char* name,std::vector<double>& times){std::sort(times.begin(),times.end());report<<'"'<<name<<"\":{\"samples\":"<<times.size();if(!times.empty())report<<",\"median_ms\":"<<times[times.size()/2]<<",\"p95_ms\":"<<times[static_cast<size_t>((times.size()-1)*.95)]<<",\"maximum_ms\":"<<times.back();report<<'}';};
+            write("loaded",draw_profile);report<<',';write("dragging",drag_profile);report<<'}';
         }
     }
     ImGui_ImplDX11_Shutdown();

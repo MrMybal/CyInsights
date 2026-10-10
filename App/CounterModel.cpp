@@ -105,9 +105,9 @@ void CounterModel::LoadValues(const std::filesystem::path& directory,const std::
         if(cancel&&cancel->load())throw std::runtime_error("Counter import cancelled");
         ReadValues(directory/(std::to_string(counter.id)+".csv"),counter,total,bytes,cancel);
     }
-    Index();
+    Index(cancel);
 }
-void CounterModel::Index() {
+void CounterModel::Index(const std::atomic<bool>* cancel) {
     start=INFINITY;end=-INFINITY;std::map<std::string,int> names;
     std::map<std::string,unsigned> types;
     for(const auto& counter:series)if(counter.meta&&!counter.availability)
@@ -130,6 +130,38 @@ void CounterModel::Index() {
         if(!counter.samples.empty()){start=std::min(start,counter.samples.front().time);end=std::max(end,counter.samples.back().time);}
     }
     if(!std::isfinite(start)){start=0;end=0;}
+    ranges_.clear();std::vector<RangeIndex> prepared(series.size());
+    for(size_t counter=0;counter<series.size();++counter){
+        const auto& c=series[counter];if(c.samples.size()<512)continue;
+        auto& index=prepared[counter];index.samples=c.samples.size();index.valid.resize(index.samples);
+        size_t blocks=(index.samples+range_block_samples-1)/range_block_samples;index.base=1;while(index.base<blocks)index.base*=2;index.tree.resize(index.base*2);
+        for(size_t i=0;i<index.samples;++i){
+            if((i&1023)==0&&cancel&&cancel->load())throw std::runtime_error("Counter import cancelled");
+            index.valid[i]=c.samples[i].valid&&Available(counter,c.samples[i].time);
+            CounterStats sample;if(index.valid[i]){sample.count=1;sample.first=sample.last=sample.minimum_sample=sample.maximum_sample=i;sample.mean=sample.minimum=sample.maximum=c.samples[i].Value(c.floating);}else sample.unavailable=1;
+            auto& block=index.tree[index.base+i/range_block_samples];block=Combine(counter,block,sample);
+        }
+        for(size_t i=index.base-1;i>0;--i)index.tree[i]=Combine(counter,index.tree[i*2],index.tree[i*2+1]);
+    }ranges_=std::move(prepared);
+}
+bool CounterModel::Indexed(size_t counter) const {return counter<ranges_.size()&&ranges_[counter].base&&ranges_[counter].samples==series[counter].samples.size();}
+bool CounterModel::SampleAvailable(size_t counter,size_t sample) const {return Indexed(counter)?ranges_[counter].valid[sample]!=0:series[counter].samples[sample].valid&&Available(counter,series[counter].samples[sample].time);}
+CounterStats CounterModel::Combine(size_t counter,const CounterStats& a,const CounterStats& b) const {
+    if(!a.count){auto result=b;result.unavailable+=a.unavailable;return result;}if(!b.count){auto result=a;result.unavailable+=b.unavailable;return result;}
+    auto result=a;result.count+=b.count;result.unavailable+=b.unavailable;result.last=b.last;
+    const auto& c=series[counter];auto less=[&](size_t x,size_t y){return c.floating?c.samples[x].real<c.samples[y].real:c.samples[x].integer<c.samples[y].integer;};
+    if(less(b.minimum_sample,a.minimum_sample))result.minimum_sample=b.minimum_sample;
+    if(less(a.maximum_sample,b.maximum_sample))result.maximum_sample=b.maximum_sample;
+    result.minimum=c.samples[result.minimum_sample].Value(c.floating);result.maximum=c.samples[result.maximum_sample].Value(c.floating);
+    const double weight=double(b.count)/double(result.count);result.mean=a.mean*(1-weight)+b.mean*weight;return result;
+}
+CounterStats CounterModel::Range(size_t counter,size_t begin,size_t end) const {
+    CounterStats result;if(begin>=end)return result;const auto& index=ranges_[counter];const auto& c=series[counter];
+    auto sample=[&](size_t i){CounterStats s;if(index.valid[i]){s.count=1;s.first=s.last=s.minimum_sample=s.maximum_sample=i;s.mean=s.minimum=s.maximum=c.samples[i].Value(c.floating);}else s.unavailable=1;result=Combine(counter,result,s);};
+    auto lead=std::min(end,((begin+range_block_samples-1)/range_block_samples)*range_block_samples);for(size_t i=begin;i<lead;++i)sample(i);
+    auto tail=std::max(lead,(end/range_block_samples)*range_block_samples);CounterStats left,right;
+    for(size_t l=index.base+lead/range_block_samples,r=index.base+tail/range_block_samples;l<r;l/=2,r/=2){if(l&1)left=Combine(counter,left,index.tree[l++]);if(r&1)right=Combine(counter,index.tree[--r],right);}
+    result=Combine(counter,result,Combine(counter,left,right));for(size_t i=tail;i<end;++i)sample(i);return result;
 }
 bool CounterModel::Available(size_t counter,double time) const {
     if(counter>=series.size())return false;const auto& c=series[counter];
@@ -154,6 +186,7 @@ const CounterSample* CounterModel::At(size_t counter,double time) const {
 }
 CounterStats CounterModel::Stats(size_t counter,double a,double b) const {
     CounterStats result;if(counter>=series.size()||!std::isfinite(a)||!std::isfinite(b)||a>b)return result;
+    if(Indexed(counter)){const auto& c=series[counter];auto end=std::upper_bound(c.samples.begin(),c.samples.end(),b,[](double t,const CounterSample& s){return t<s.time;})-c.samples.begin();return Range(counter,c.Lower(a),static_cast<size_t>(end));}
     const auto& c=series[counter];double mean=0;
     for(size_t i=c.Lower(a);i<c.samples.size()&&c.samples[i].time<=b;++i) {
         const auto& s=c.samples[i];if(!s.valid||!Available(counter,s.time)){++result.unavailable;continue;}
@@ -170,8 +203,15 @@ CounterStats CounterModel::Stats(size_t counter,double a,double b) const {
 std::vector<CounterBucket> CounterModel::Plot(size_t counter,double a,double b,int width) const {
     std::vector<CounterBucket> result;if(counter>=series.size()||width<=0||!std::isfinite(a)||!std::isfinite(b)||a>=b)return result;
     const auto& c=series[counter];
+    auto first=c.Lower(a),end=static_cast<size_t>(std::upper_bound(c.samples.begin(),c.samples.end(),b,[](double t,const CounterSample& s){return t<s.time;})-c.samples.begin());
+    if(Indexed(counter)&&end-first>static_cast<size_t>(width)*range_block_samples*2){
+        auto pixel=[&](double t){return std::clamp(static_cast<int>((t-a)/(b-a)*width),0,width-1);};
+        while(first<end){int x=pixel(c.samples[first].time);auto next=static_cast<size_t>(std::upper_bound(c.samples.begin()+first,c.samples.begin()+end,x,[&](int column,const CounterSample& sample){return column<pixel(sample.time);})-c.samples.begin());
+            auto summary=Range(counter,first,next);if(summary.count)result.push_back({summary.first,summary.last,summary.minimum_sample,summary.maximum_sample,x});first=next;
+        }return result;
+    }
     for(size_t i=c.Lower(a);i<c.samples.size()&&c.samples[i].time<=b;++i) {
-        const auto& s=c.samples[i];if(!s.valid||!Available(counter,s.time))continue;
+        const auto& s=c.samples[i];if(!SampleAvailable(counter,i))continue;
         int x=std::clamp(static_cast<int>((s.time-a)/(b-a)*width),0,width-1);
         if(result.empty()||result.back().pixel!=x)result.push_back({i,i,i,i,x});
         else {auto& bucket=result.back();bucket.last=i;

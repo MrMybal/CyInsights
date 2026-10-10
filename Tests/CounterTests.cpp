@@ -117,5 +117,30 @@ int main(int argc,char** argv) {
         while(worker.Busy()&&std::chrono::steady_clock::now()<deadline){worker.Poll(result,message);std::this_thread::sleep_for(std::chrono::milliseconds(1));}
         check(!worker.Busy()&&!result.error.empty(),"analyzer launch failure returns explicit error");
     }
+    {
+        CounterModel indexed,reference;CounterSeries c;c.name="Dense integer";
+        for(int i=0;i<20000;++i)c.samples.push_back({(i/3)*.001,0,9007199254740992ll+i%97,i%17!=0});
+        indexed.series.push_back(c);reference.series.push_back(c);indexed.Index();
+        bool stats_equal=true,plots_equal=true;
+        for(auto interval:{std::pair<double,double>{0,7},{.255,.512},{1.234,4.321},{3,3},{10,11}}){
+            auto a=indexed.Stats(0,interval.first,interval.second),b=reference.Stats(0,interval.first,interval.second);
+            stats_equal&=a.count==b.count&&a.unavailable==b.unavailable&&a.first==b.first&&a.last==b.last&&a.minimum_sample==b.minimum_sample&&a.maximum_sample==b.maximum_sample&&std::abs(a.mean-b.mean)<=std::max(1.,std::abs(b.mean))*1e-12;
+            for(int width:{1,17,127}){auto x=indexed.Plot(0,interval.first,interval.second,width),y=reference.Plot(0,interval.first,interval.second,width);plots_equal&=x.size()==y.size();if(x.size()==y.size())for(size_t i=0;i<x.size();++i)plots_equal&=x[i].pixel==y[i].pixel&&x[i].first==y[i].first&&x[i].last==y[i].last&&x[i].minimum==y[i].minimum&&x[i].maximum==y[i].maximum;}
+        }
+        check(stats_equal,"Indexed range statistics match a full scan across block edges, equal timestamps, exact integer extrema and invalid samples");
+        check(plots_equal,"Dense indexed counter plots match every first/last/min/max sample and pixel boundary of a full scan");
+        for(auto& s:indexed.series[0].samples)s.valid=false;indexed.Index();auto invalid=indexed.Stats(0,0,7);check(invalid.count==0&&invalid.unavailable==20000&&indexed.Plot(0,0,7,17).empty(),"Reindexing and fully unavailable dense intervals produce no fabricated observations");
+        std::atomic<bool> cancelled{true};bool stopped=false;try{indexed.Index(&cancelled);}catch(...){stopped=true;}check(stopped,"Counter range index preparation is cancellable");
+    }
+    {
+        CounterModel indexed,reference;CounterSeries values,flags;values.name="CyInsights/Meta/dense [ms]/float";values.meta=values.floating=true;
+        flags.name="CyInsights/Meta/dense/float/available";flags.meta=flags.availability=true;
+        for(int i=0;i<10000;++i)values.samples.push_back({.0005+i*.001,double(i%31)-12.5,0,i%13!=0});
+        for(int i=0;i<11;++i)flags.samples.push_back({double(i),0,i%2,true});indexed.series={values,flags};indexed.Index();reference.series=indexed.series;
+        auto a=indexed.Stats(0,.5,9.5),b=reference.Stats(0,.5,9.5);auto x=indexed.Plot(0,.5,9.5,11),y=reference.Plot(0,.5,9.5,11);
+        bool equal=a.count==b.count&&a.unavailable==b.unavailable&&a.minimum_sample==b.minimum_sample&&a.maximum_sample==b.maximum_sample&&std::abs(a.mean-b.mean)<1e-12&&x.size()==y.size();
+        if(x.size()==y.size())for(size_t i=0;i<x.size();++i)equal&=x[i].pixel==y[i].pixel&&x[i].first==y[i].first&&x[i].last==y[i].last&&x[i].minimum==y[i].minimum&&x[i].maximum==y[i].maximum;
+        check(equal,"Dense Meta counter index preserves per-type availability gaps, invalid float readings and exact plot extrema");
+    }
     std::error_code ec;fs::remove_all(dir,ec);std::cout<<checks<<" checks, "<<failures<<" failures\n";return failures?1:0;
 }
