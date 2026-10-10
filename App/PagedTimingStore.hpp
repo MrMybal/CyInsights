@@ -42,7 +42,7 @@ struct TimingWindow {
 class PagedTimingStore {
 public:
     static std::shared_ptr<PagedTimingStore> Build(const std::filesystem::path& csv,
-        const std::filesystem::path& binary,NativeReadProgress& progress,std::string& error);
+        const std::filesystem::path& binary,NativeReadProgress& progress,std::string& error,bool binary_source=false);
     TimingWindow Window(double a,double b,double stats_a,double stats_b,float pixels,
                          const std::atomic<bool>* cancel=nullptr,unsigned workers=0,const std::string& exact_name={}) const;
     void ApplyTotals(const TimingWindow& window,TimingModel& model) const;

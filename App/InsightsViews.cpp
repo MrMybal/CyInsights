@@ -946,13 +946,13 @@ void Application::LoadStatus() {
             if(!exe.empty()){std::snprintf(exe_,sizeof(exe_),"%s",exe.u8string().c_str());ImportNative();}
         }
     } else {
-        const char* phase=!pending_capture_.empty()?"Preparing capture":native_.Busy()?native_.Importing()?"Building the timing index on disk":"Analyzing Unreal trace / exporting timings":"Loading visible interval / calculating statistics";
+        const char* phase=!pending_capture_.empty()?"Preparing capture":native_.Busy()?native_.Importing()?"Building the timing index on disk":native_.DirectTiming()?"Decoding native Unreal timings":"Analyzing Unreal trace / exporting timings":"Loading visible interval / calculating statistics";
         ImGui::TextWrapped("%s",phase);ImGui::Text("Elapsed: %.1f s",ImGui::GetTime()-load_started_);
         const auto& progress=native_.Progress();uint64_t total=progress.total.load(),bytes=progress.bytes.load();
         float fraction=native_.Importing()&&total?static_cast<float>(double(bytes)/double(total)):-static_cast<float>(ImGui::GetTime());
         ImGui::ProgressBar(fraction,ImVec2(-1,18*UiScale()),native_.Importing()&&total?nullptr:"Working...");
         if(native_.Importing())ImGui::Text("%llu events indexed | %.1f / %.1f MiB",static_cast<unsigned long long>(progress.events.load()),double(bytes)/(1024*1024),double(total)/(1024*1024));
-        else if(native_.Busy())ImGui::Text("Intermediate export: %.1f MiB",double(native_.ExportBytes())/(1024*1024));
+        else if(native_.Busy())ImGui::Text("%s: %.1f MiB",native_.DirectTiming()?"Compact binary timings":"Intermediate CSV export",double(native_.ExportBytes())/(1024*1024));
         ImGui::TextWrapped("%s",pending_capture_.empty()?trace_.filename().u8string().c_str():pending_capture_.filename().u8string().c_str());
         if(ImGui::Button("Cancel")){pending_capture_.clear();native_.Cancel();model_cancel_.store(true);counter_reader_.Cancel();cancelled_load_=true;}
         pending_shown_=true;

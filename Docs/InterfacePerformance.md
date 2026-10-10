@@ -1,5 +1,8 @@
 # Fluidité de l'interface native
 
+L'ouverture des `.utrace` peut supprimer le CSV des timings grâce au lecteur
+binaire installé : voir [lecture directe et mesures](NativeTiming.md).
+
 Les graphes restent dans Dear ImGui, avec un axe temporel continu partagé par
 Frames, Timing, les compteurs et les activités natives. Le déplacement conserve
 le grab pendant les publications asynchrones ; les profondeurs des pistes suivent

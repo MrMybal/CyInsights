@@ -29,6 +29,9 @@ class NativeTrace {
     const std::filesystem::path& LogPath() const { return log_; }
     const NativeReadProgress& Progress() const { return progress_; }
     uint64_t ExportBytes() const;
+    bool DirectTiming() const {return binary_source_;}
+    double DecodeSeconds() const {return decode_seconds_;}
+    double IndexSeconds() const {return index_seconds_;}
     std::shared_ptr<PagedTimingStore> store;
     // Import an existing export without launching an analyzer process.
     bool ImportCsv(const std::filesystem::path &file, std::string &error);
@@ -40,6 +43,9 @@ class NativeTrace {
     static bool ReadCsv(const std::filesystem::path &file, std::vector<TimingEvent> &events,
                         std::string &error, NativeReadProgress* progress = nullptr);
     static bool ScanCsv(const std::filesystem::path& file,
+                        const std::function<void(TimingEvent&&)>& sink,std::string& error,
+                        NativeReadProgress* progress=nullptr);
+    static bool ScanBinary(const std::filesystem::path& file,
                         const std::function<void(TimingEvent&&)>& sink,std::string& error,
                         NativeReadProgress* progress=nullptr);
     static bool Launch(const std::filesystem::path &exe, const std::wstring &arguments, HANDLE *process,
@@ -54,6 +60,7 @@ class NativeTrace {
         std::shared_ptr<PagedTimingStore> store;
         std::string error;
         bool success = false;
+        double seconds = 0;
     };
     NativeReadProgress progress_;
     std::string error_;
@@ -64,5 +71,8 @@ class NativeTrace {
     std::filesystem::path csv_;
     bool read_counters_ = false;
     bool paged_ = false;
+    bool binary_source_ = false;
+    double decode_seconds_ = 0,index_seconds_ = 0;
+    bool ImportTiming(const std::filesystem::path& file,std::string& error);
 };
 } // namespace cyinsights

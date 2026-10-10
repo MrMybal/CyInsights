@@ -7,6 +7,9 @@
 #include <cmath>
 #include <fstream>
 #include <map>
+#include <set>
+#include <cstring>
+#include "../Tools/NativeTiming/Format.hpp"
 namespace cyinsights {
 std::wstring NativeTrace::Quote(const std::wstring &s) {
     std::wstring r = L"\"";
@@ -79,11 +82,26 @@ bool NativeTrace::Start(const std::filesystem::path &exe, const std::filesystem:
     progress_.bytes.store(0);progress_.total.store(0);progress_.events.store(0);
     started_=std::chrono::steady_clock::now();log_=cache/"analysis.log";
     csv_ = cache / "timing.csv";
+    binary_source_=false;
+    decode_seconds_=index_seconds_=0;
     read_counters_ = true;
     counters = CounterModel{};
     if (std::filesystem::exists(cache / "counters.csv")) std::filesystem::remove(cache / "counters.csv");
     if (std::filesystem::exists(csv_))
         std::filesystem::remove(csv_);
+    // The matching local adapter is optional; the existing bridge covers
+    // installations where no native reader has been built yet.
+    auto binaries=exe.parent_path();std::ifstream version(binaries.parent_path().parent_path()/"Build/Build.version");
+    std::string metadata((std::istreambuf_iterator<char>(version)),{});
+    auto number=[&](const char* key){auto p=metadata.find(key);if(p==std::string::npos)return -1;p=metadata.find(':',p);if(p==std::string::npos)return -1;try{return std::stoi(metadata.substr(p+1));}catch(...){return -1;}};
+    const int major=number("MajorVersion"),minor=number("MinorVersion");
+    wchar_t app[32768]{};GetModuleFileNameW(nullptr,app,32768);
+    auto helper=std::filesystem::path(app).parent_path()/"NativeTiming"/(std::to_string(major)+"."+std::to_string(minor))/"CyNativeTiming.exe";
+    wchar_t forceCsv[2]{};const bool forced=GetEnvironmentVariableW(L"CYINSIGHTS_TIMING_CSV",forceCsv,2)==1&&forceCsv[0]==L'1';
+    if(!forced&&major==5&&minor>=5&&minor<=8&&std::filesystem::is_regular_file(helper)) {
+        csv_=cache/"timing.cynt";log_=cache/"timing.cynt.log";std::error_code ec;std::filesystem::remove(csv_,ec);binary_source_=true;
+        return Launch(helper,Quote(trace.wstring())+L" "+Quote(csv_.wstring())+L" "+Quote(binaries.wstring()),&process_,error,binaries);
+    }
     auto cmds = cache / "export.txt";
     std::ofstream out(cmds);
     // Insights' command tokenizer treats backslashes as escapes inside quoted paths.
@@ -101,6 +119,10 @@ bool NativeTrace::Start(const std::filesystem::path &exe, const std::filesystem:
     return launched;
 }
 bool NativeTrace::ImportCsv(const std::filesystem::path &file, std::string &error) {
+    if(Busy()){error="Native analysis is already running";return false;}
+    binary_source_=false;return ImportTiming(file,error);
+}
+bool NativeTrace::ImportTiming(const std::filesystem::path &file, std::string &error) {
     if (Busy()) {
         error = "Native analysis is already running";
         return false;
@@ -110,13 +132,18 @@ bool NativeTrace::ImportCsv(const std::filesystem::path &file, std::string &erro
         progress_.bytes.store(0);progress_.total.store(0);progress_.events.store(0);
         const bool read_counters=read_counters_;read_counters_=false;
         csv_task_ = std::async(std::launch::async, [this,file,read_counters] {
-            CsvResult result;
+            CsvResult result;auto begin=std::chrono::steady_clock::now();
             if(paged_) {
-                result.store=PagedTimingStore::Build(file,file.parent_path()/"timing.cyindex",progress_,result.error);
+                result.store=PagedTimingStore::Build(file,file.parent_path()/"timing.cyindex",progress_,result.error,binary_source_);
                 result.success=result.store!=nullptr;
 
-            }else result.success = ReadCsv(file, result.events, result.error,&progress_);
+            }else if(binary_source_){result.success=ScanBinary(file,[&](TimingEvent&& e){result.events.push_back(std::move(e));},result.error,&progress_);
+                double last=0;for(const auto& e:result.events)last=std::max(last,e.open_ended?e.start:e.end);
+                for(auto& e:result.events)if(e.open_ended)e.end=last;
+            }
+            else result.success = ReadCsv(file, result.events, result.error,&progress_);
             if(read_counters&&result.success) CounterModel::ReadCatalog(file.parent_path()/"counters.csv",result.counters,result.counters.error);
+            result.seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-begin).count();
             return result;
         });
         return true;
@@ -131,6 +158,7 @@ bool NativeTrace::Poll(std::string &message) {
             return false;
         try {
             auto result = csv_task_.get();
+            index_seconds_=result.seconds;
             store=std::move(result.store);
             counters = std::move(result.counters);
             if (result.success) {
@@ -149,13 +177,14 @@ bool NativeTrace::Poll(std::string &message) {
     GetExitCodeProcess(process_, &code);
     CloseHandle(process_);
     process_ = nullptr;
+    decode_seconds_=std::chrono::duration<double>(std::chrono::steady_clock::now()-started_).count();
     if(progress_.cancel.load()){message=error_="Analysis cancelled";return true;}
     if (code != 0) {
-        if(error_.empty())error_=progress_.cancel.load()?"Analysis cancelled":"Native analyzer failed (exit code "+std::to_string(code)+"); see analysis.log";
+        if(error_.empty())error_=progress_.cancel.load()?"Analysis cancelled":"Native analyzer failed (exit code "+std::to_string(code)+"); "+(binary_source_?"see timing.cynt.log and check that NativeTiming matches the selected Unreal installation":"see analysis.log");
         message=error_;
         return true;
     }
-    if (!ImportCsv(csv_, message))
+    if (!ImportTiming(csv_, message))
         return true;
     message = "Loading native timing in background...";
     return false;
@@ -299,5 +328,43 @@ bool NativeTrace::ReadCsv(const std::filesystem::path& file,std::vector<TimingEv
             e.end = last;
     output = std::move(result);
     return true;
+}
+bool NativeTrace::ScanBinary(const std::filesystem::path& file,const std::function<void(TimingEvent&&)>& sink,
+                            std::string& error,NativeReadProgress* progress) {
+    try {
+        std::ifstream in(file,std::ios::binary);if(!in)throw std::runtime_error("Native timing binary missing");
+        const uint64_t bytes=std::filesystem::file_size(file);uint64_t consumed=0,count=0;
+        if(progress){progress->total.store(bytes);progress->bytes.store(0);progress->events.store(0);}
+        auto check=[&]{if(progress&&progress->cancel.load())throw std::runtime_error("Analysis cancelled");};
+        auto read=[&](void* data,size_t size){check();if(size>bytes-consumed)throw std::runtime_error("Truncated native timing binary");if(!in.read(static_cast<char*>(data),static_cast<std::streamsize>(size)))throw std::runtime_error("Native timing binary read failed");consumed+=size;};
+        auto u32=[&]{uint32_t v;read(&v,sizeof(v));return v;};
+        auto u64=[&]{uint64_t v;read(&v,sizeof(v));return v;};
+        auto string=[&]{const auto n=u32();if(n>bytes-consumed)throw std::runtime_error("Invalid native timing string length");std::string s(n,'\0');read(s.data(),n);return s;};
+        char magic[8];read(magic,8);if(std::memcmp(magic,cynt::magic,8))throw std::runtime_error("Unsupported native timing binary version");
+        struct Timer {uint64_t id;std::string name;};std::vector<Timer> timers;std::set<uint64_t> ids;
+        auto n=u32();if(n>(bytes-consumed)/12)throw std::runtime_error("Invalid native timing dictionary length");
+        for(uint32_t i=0;i<n;++i){auto id=u64();if(!ids.insert(id).second)throw std::runtime_error("Duplicate native timer identity");timers.push_back({id,string()});}
+        auto tracks=u32();if(tracks>(bytes-consumed)/20)throw std::runtime_error("Invalid native timing track count");ids.clear();
+        auto progressUpdate=[&]{if(progress){progress->bytes.store(consumed);progress->events.store(count);}};
+        auto valid=[&](const TimingEvent& e){if(!std::isfinite(e.start)||(!e.open_ended&&!std::isfinite(e.end))||e.end<e.start||e.depth<0||e.depth>4096)throw std::runtime_error("Invalid native timing values");};
+        std::vector<cynt::Event> buffer(8192);
+        for(uint32_t i=0;i<tracks;++i){
+            auto id=u64();if(!ids.insert(id).second)throw std::runtime_error("Duplicate native track identity");auto name=string();auto remaining=u64();
+            if(remaining>(bytes-consumed)/sizeof(cynt::Event))throw std::runtime_error("Invalid native timing event count");
+            while(remaining){auto used=static_cast<size_t>(std::min<uint64_t>(remaining,buffer.size()));read(buffer.data(),used*sizeof(cynt::Event));
+                for(size_t j=0;j<used;++j){const auto& r=buffer[j];if(r.timer>=timers.size()||r.flags>1||r.reserved||r.depth>4096)throw std::runtime_error("Invalid native timing event reference");
+                    TimingEvent e{name,timers[r.timer].name,r.start,r.end,static_cast<int>(r.depth)};e.thread_id=id;e.has_thread_id=true;e.timer_id=timers[r.timer].id;e.has_timer_id=true;
+                    e.open_ended=r.flags==1;if(e.open_ended&&!(std::isinf(e.end)&&e.end>0))throw std::runtime_error("Invalid unfinished native timing scope");valid(e);sink(std::move(e));++count;
+                }remaining-=used;check();progressUpdate();
+            }
+        }
+        auto frames=u64();if(frames>(bytes-consumed)/sizeof(cynt::Frame))throw std::runtime_error("Invalid native frame count");
+        for(uint64_t i=0;i<frames;++i){cynt::Frame r;read(&r,sizeof(r));if(r.type>1||r.reserved)throw std::runtime_error("Invalid native frame type");
+            TimingEvent e{r.type?"Rendering Frames":"Game Frames",(r.type?"Rendering Frame ":"Game Frame ")+std::to_string(r.index),r.start,r.end,1};
+            e.thread_id=(1ull<<24)+r.type;e.has_thread_id=true;e.frame_type=static_cast<int>(r.type);e.frame_index=r.index;e.open_ended=std::isinf(r.end)&&r.end>0;valid(e);sink(std::move(e));++count;
+        }
+        read(magic,8);if(std::memcmp(magic,cynt::footer,8)||u64()!=count||consumed!=bytes)throw std::runtime_error("Incomplete or inconsistent native timing binary");
+        check();progressUpdate();return true;
+    }catch(const std::exception& e){error=e.what();return false;}
 }
 } // namespace cyinsights

@@ -81,6 +81,9 @@ bool Application::InspectFirstTask() {
 void Application::WriteAnalysisReport(const fs::path& output) const {
     std::ofstream out(output);out<<std::setprecision(17)<<std::boolalpha;
     out<<"{\"timing_events\":"<<(native_.store?native_.store->count:0)
+       <<",\"native_timing_backend\":\""<<(native_.DirectTiming()?"direct_binary":"csv_bridge")<<"\""
+       <<",\"native_decode_seconds\":"<<native_.DecodeSeconds()<<",\"native_index_seconds\":"<<native_.IndexSeconds()
+       <<",\"native_timing_bytes\":"<<native_.ExportBytes()<<",\"native_counter_catalog\":"<<counters_.series.size()
        <<",\"selection_start\":"<<range_start_<<",\"selection_end\":"<<range_end_<<",\"view_start\":"<<view_start_<<",\"view_end\":"<<view_end_
        <<",\"activity_events\":"<<(activity_store_?activity_store_->count:0)
        <<",\"activity_lanes\":"<<(activity_store_?activity_store_->lanes.size():0)

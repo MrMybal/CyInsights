@@ -14,13 +14,15 @@ int main(int argc,char** argv) {
     auto binary=argc>2?std::filesystem::u8path(argv[2]):csv.parent_path()/("CyPaged_"+std::to_string(GetCurrentProcessId())+".bin");
     NativeReadProgress progress;std::string error;
     if(argc>1) {
-        auto begin=std::chrono::steady_clock::now();auto store=PagedTimingStore::Build(csv,binary,progress,error);
+        auto begin=std::chrono::steady_clock::now();auto store=PagedTimingStore::Build(csv,binary,progress,error,csv.extension()==".cynt");
         if(!store){std::cerr<<error;return 1;}
+        const double index_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-begin).count();
         double a=(store->start+store->end)/2,b=std::min(store->end,a+.05);
         if(!store->frames.empty()){auto frame=store->frames[store->frames.size()/2];a=frame.first;b=frame.second;}
         auto window=store->Window(a,b,a,b,2000);auto overview=store->Window(store->start,store->end,store->start,store->end,2000);
         uint64_t represented=0;for(const auto& e:overview.events)represented+=e.represented;
         std::cout<<"Indexed events: "<<store->count<<" / disk bytes: "<<std::filesystem::file_size(binary)<<"\n"
+            <<"Index seconds: "<<index_seconds<<"\n"
             <<"Window render records: "<<window.events.size()<<" / overview render records: "<<overview.events.size()<<" representing "<<represented<<" events\n"
             <<"Elapsed seconds: "<<std::chrono::duration<double>(std::chrono::steady_clock::now()-begin).count()<<"\n";
         return represented==store->count?0:1;

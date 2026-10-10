@@ -23,9 +23,10 @@ is written for CyInsights; it does not reuse the CyGPUInspector standalone UI.
 - Windows ReShade collector for commands, pipelines, shaders, resources and GPU timestamps.
 
 **This is a development build, not full Unreal Insights feature parity.** Native
-timing/counters currently use the matching locally installed Epic Unreal Insights
-export bridge. Initial analysis of large traces can take minutes and produces
-larger intermediate files. Original traces are read-only; there is no arbitrary
+timings use an optional matching installed-engine binary reader; without it,
+the Epic Unreal Insights CSV bridge remains available. Counter values still use
+the export bridge. See [direct timing reading](Docs/NativeTiming.md).
+Original traces are read-only; there is no arbitrary
 file-size/event-count rejection. Optional TaskTrace decoding uses a local adapter.
 Native activity providers use an optional installed-engine reader; memory callstack exploration, native log UI and other Insights providers remain incomplete.
 Incoming traces are analyzed after recording stops. The application targets
@@ -72,6 +73,11 @@ Unreal Insights executable. Decoding and indexing show progress; previously
 indexed files reuse their disk cache. Select an interval to constrain statistics,
 histograms and AI findings. Optional task adapters must be built locally for the
 engine version; see [NativeTasks](Tools/NativeTasks/README.md). Open **Activities** for network, storage, loading and memory tracks; build [NativeActivities](Tools/NativeActivities/README.md) locally for the selected analyzer. See [capture and timeline semantics](Docs/NativeActivities.md).
+
+Build [NativeTiming](Tools/NativeTiming/README.md) for the installed analyzer to
+avoid the timing CSV export. Detection is automatic from `NativeTiming/5.x`
+beside the application. Installed analyzer versions 5.5–5.8 are supported by
+this adapter; source compatibility remains that of the selected analyzer.
 
 Choose your installed analyzer in **Session > Select UnrealInsights.exe**, or
 set the local `CYINSIGHTS_UNREAL_INSIGHTS` environment variable to its executable

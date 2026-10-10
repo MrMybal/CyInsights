@@ -2,6 +2,8 @@ Current CyInsights inventory (2026-10-10):
 See ../THIRD-PARTY-CyGPUInspector.md and ../Docs/Licensing.md for actual scope.
 Application/analysis: AGPL; owned Unreal integrations/Core/collector: MIT.
 Full MIT grant: CyInsights-Integrations-MIT.txt. Third-party notices unchanged.
+Owned NativeTiming, NativeTasks and NativeActivities adapters are MIT;
+their installed Epic dependencies are not included or relicensed.
 The remainder below is a HISTORICAL UPSTREAM inventory followed by the AI update.
 Statements about components not being bundled refer to upstream CyGPUInspector.
 

@@ -87,7 +87,7 @@ std::shared_ptr<const std::vector<PagedTimingStore::Record>> PagedTimingStore::R
     return records;
 }
 std::shared_ptr<PagedTimingStore> PagedTimingStore::Build(const std::filesystem::path& csv,
-    const std::filesystem::path& binary,NativeReadProgress& progress,std::string& error) {
+    const std::filesystem::path& binary,NativeReadProgress& progress,std::string& error,bool binary_source) {
     auto result=std::make_shared<PagedTimingStore>();result->file_=binary;result->cache_=std::make_shared<Cache>();
     auto partial=binary;partial+=L".partial";
     try {
@@ -158,7 +158,7 @@ std::shared_ptr<PagedTimingStore> PagedTimingStore::Build(const std::filesystem:
             // Working-buffer size affects only flushing, never capture acceptance.
             if(buffer.size()>=2048||buffered>=65536)flush();
         };
-        if(!NativeTrace::ScanCsv(csv,consume,error,&progress))throw std::runtime_error(error);
+        if(!(binary_source?NativeTrace::ScanBinary(csv,consume,error,&progress):NativeTrace::ScanCsv(csv,consume,error,&progress)))throw std::runtime_error(error);
         flush();out.close();if(!out)throw std::runtime_error("Cannot finish timing cache");
         Check(&progress.cancel);
         if(result->end<=result->start)result->end=result->start+.001;
