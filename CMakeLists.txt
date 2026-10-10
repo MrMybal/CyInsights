@@ -18,7 +18,7 @@ add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
 add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/W4;/permissive-;/utf-8;/EHsc>")
 if(MSVC)
     add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/sdl;/guard:cf;/Zi>")
-    add_link_options(/DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA /guard:cf /DEBUG /INCREMENTAL:NO)
+    add_link_options(/DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA /guard:cf /DEBUG /INCREMENTAL:NO "/PDBALTPATH:%_PDB%")
 endif()
 set(CYGI_CORE "${CYGI_SOURCE}/CyGPUInspectorCore")
 add_library(CyGPUInspectorCore STATIC

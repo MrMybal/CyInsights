@@ -38,6 +38,9 @@ See [capability coverage](Docs/CapabilityCoverage.md),
 
 ## Build the application
 
+For GitHub release packages and local native-reader installation, see
+[release instructions](Docs/GitHubRelease.md).
+
 Requirements: Windows x64, Visual Studio 2022 C++ desktop workload with CMake/Ninja,
 and Python 3. Sources required by the build are versioned in this repository.
 No separate CyGPUInspector checkout is needed. From the repository root:
