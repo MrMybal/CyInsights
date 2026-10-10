@@ -12,6 +12,7 @@
 #include "PagedTimingStore.hpp"
 #include "Distribution.hpp"
 #include "TaskTrace.hpp"
+#include "ActivityTrace.hpp"
 #include "AiRpc.hpp"
 #include <imgui.h>
 #include <map>
@@ -46,13 +47,14 @@ class Application {
     bool FocusSlowFrame();
     void FocusDistribution(){show_distribution_=true;focus_distribution_=true;}
     void FocusTasks(){show_tasks_=true;focus_tasks_=true;}
+    void FocusActivities(){show_activities_=true;focus_activities_=true;activity_dock_pending_=true;}
     void FilterFunction(const std::string& name);
     void OpenFunctionHistogram(const std::string& name);
     bool InspectFirstTask();
     void EnableAi(bool control=false,bool capture=false);
     void FocusAi(){show_ai_=true;focus_ai_=true;session_view_=false;}
     void WriteAnalysisReport(const fs::path& output) const;
-    bool AnalysisBusy() const { return !pending_capture_.empty() || native_.Busy() || model_task_.valid() || counter_reader_.Busy() || comparison_reader_.Busy() || distribution_task_.valid() || distribution_pending_ || tasks_pending_ || task_reader_.Busy() || tasks_query_.valid() || links_query_.valid(); }
+    bool AnalysisBusy() const { return !pending_capture_.empty() || native_.Busy() || model_task_.valid() || counter_reader_.Busy() || comparison_reader_.Busy() || distribution_task_.valid() || distribution_pending_ || tasks_pending_ || task_reader_.Busy() || tasks_query_.valid() || links_query_.valid() || activity_reader_.Busy() || activity_query_.valid(); }
     void FocusGpu() {
         show_gpu_ = true;
         focus_gpu_ = true;
@@ -100,6 +102,18 @@ class Application {
     void PlatformMetrics();
     void Counters();
     void CounterTracks(float width);
+    void ActivitiesView();
+    void ActivityTracks(float width);
+    void ActivityTick();
+    void StartActivities();
+    void DockActivities();
+    ActivityTrace activity_reader_;std::shared_ptr<ActivityStore> activity_store_;
+    struct ActivityResult {ActivityWindow visible,details;};
+    std::future<ActivityResult> activity_query_;std::atomic<bool> activity_cancel_{false};
+    ActivityResult activity_result_;std::vector<uint8_t> activity_pinned_;
+    std::string activity_message_,activity_request_,activity_ready_;
+    char activity_search_[256]{};int activity_lane_=0;uint64_t activity_page_=0,activity_revision_=0;
+    bool show_activities_=false,activity_auto_started_=false,focus_activities_=false,activity_dock_pending_=false;float activity_width_=1200;
     void UpdateCounters();
     void FitCapture();
     void Comparison();

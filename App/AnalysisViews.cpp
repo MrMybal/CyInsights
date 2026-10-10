@@ -81,6 +81,10 @@ bool Application::InspectFirstTask() {
 void Application::WriteAnalysisReport(const fs::path& output) const {
     std::ofstream out(output);out<<std::setprecision(17)<<std::boolalpha;
     out<<"{\"timing_events\":"<<(native_.store?native_.store->count:0)
+       <<",\"activity_events\":"<<(activity_store_?activity_store_->count:0)
+       <<",\"activity_lanes\":"<<(activity_store_?activity_store_->lanes.size():0)
+       <<",\"activity_status\":"<<cygi::Json(activity_message_).Write(-1)
+       <<",\"activity_visible_lanes\":"<<activity_result_.visible.lanes.size()
        <<",\"exact_function_filter\":"<<cygi::Json(timing_exact_name_).Write(-1)<<",\"histogram_function\":"<<cygi::Json(distribution_result_function_).Write(-1)
        <<",\"histogram_range_start\":"<<distribution_a_<<",\"histogram_range_end\":"<<distribution_b_
        <<",\"distribution_count\":"<<distribution_.count<<",\"distribution_unavailable\":"<<distribution_.unavailable

@@ -9,7 +9,7 @@ public class CyInsights : ModuleRules
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
         PublicDependencyModuleNames.AddRange(new string[] { "Core", "CyInsightsTrace" });
         PrivateDependencyModuleNames.AddRange(new string[] {
-            "CoreUObject", "Engine", "Json", "Projects", "RHI", "TraceLog", "Sockets", "Networking"
+            "CoreUObject", "Engine", "Json", "Projects", "RHI", "TraceLog", "Sockets", "Networking", "NetCore"
         });
         bool Enabled = Target.Type != TargetType.Server &&
             (Target.Configuration == UnrealTargetConfiguration.Debug ||

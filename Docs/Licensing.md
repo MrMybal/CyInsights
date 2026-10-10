@@ -13,7 +13,7 @@ ne révoque pas les autorisations AGPL déjà accordées et ne couvre aucun code
 | Plugin chargeur `Plugins/CyGPUInspector` | MIT | `Plugins/CyGPUInspector/LICENSE` |
 | SDK C, IPC et formats `ThirdParty/CyGPUInspector/CyGPUInspectorCore` | MIT | `CyGPUInspectorCore/LICENSE` |
 | Collecteur ReShade `ThirdParty/CyGPUInspector/CyGPUInspectorRS` | MIT | `CyGPUInspectorRS/LICENSE` |
-| Adaptateur facultatif `Tools/NativeTasks` et build du collecteur `Tools/WindowsCollector` | MIT | `LICENSE` dans chaque dossier |
+| Adaptateur facultatif `Tools/NativeTasks`, `Tools/NativeActivities` et build du collecteur `Tools/WindowsCollector` | MIT | `LICENSE` dans chaque dossier |
 | Dear ImGui, API ReShade et dépendances Python | Licences tierces inchangées | `LICENCES/`, voir `THIRD-PARTY-CyGPUInspector.md` |
 
 La licence racine AGPL s'applique par défaut à notre code sans licence plus

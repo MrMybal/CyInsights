@@ -131,6 +131,7 @@ void Application::Toolbar() {
     Toggle("Counters", ViewIcon::Counters, show_counters_);
     Toggle("Distributions", ViewIcon::Counters, show_distribution_);
     Toggle("Tasks", ViewIcon::Callers, show_tasks_);
+    if(NativeButton("Activities",ViewIcon::Counters,show_activities_)){show_activities_=!show_activities_;if(show_activities_)FocusActivities();}ImGui::SameLine(0,5*UiScale());
     if(NativeButton("AI Inspector",ViewIcon::Session,show_ai_)){show_ai_=!show_ai_;if(show_ai_)FocusAi();}ImGui::SameLine(0,5*UiScale());
     Toggle("Compare", ViewIcon::Timers, show_comparison_);
     Unavailable("Log", ViewIcon::Log,
@@ -485,7 +486,7 @@ void Application::Timing() {
     ImGui::SameLine();
     if(ImGui::SmallButton("Next slow frame"))FocusSlowFrame();
     if(!timing_exact_name_.empty()){ImGui::TextWrapped("Exact function: %s",timing_exact_name_.c_str());ImGui::SameLine();if(ImGui::SmallButton("Clear function filter"))FilterFunction({});}
-    if (timing_model_.timers.size()!=native_.events.size()||(native_.events.empty() && counters_.series.empty())) {
+    if (timing_model_.timers.size()!=native_.events.size()||(native_.events.empty() && counters_.series.empty() && !activity_store_)) {
         ImGui::Spacing();
         ImGui::TextWrapped("  %s", AnalysisBusy() ? message_.c_str()
                                                   : load_error_.empty()?"Open a capture to display native CPU/GPU tracks.":load_error_.c_str());
@@ -745,6 +746,7 @@ void Application::Timing() {
         if(ImGui::MenuItem("Clear function filter",nullptr,false,!timing_exact_name_.empty()))FilterFunction({});
         ImGui::EndPopup();
     }
+    ActivityTracks(w);
     CounterTracks(w);
     if (ImGui::IsWindowHovered()) {
         auto &io = ImGui::GetIO();

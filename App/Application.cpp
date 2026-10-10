@@ -63,6 +63,7 @@ Application::Application() {
 Application::~Application() {
     ai_rpc_.Stop();ai_issues_cancel_=true;for(auto& work:ai_work_)if(work.request)work.request->cancelled=true;
     if(ai_issues_task_.valid())ai_issues_task_.wait();for(auto& work:ai_work_)if(work.result.valid())work.result.wait();
+    activity_cancel_=true;activity_reader_.Cancel();if(activity_query_.valid())activity_query_.wait();
     distribution_cancel_.store(true);task_reader_.Cancel();tasks_cancel_.store(true);links_cancel_.store(true);
     if(distribution_task_.valid())distribution_task_.wait();if(tasks_query_.valid())tasks_query_.wait();if(links_query_.valid())links_query_.wait();
     model_cancel_.store(true);native_.Cancel();counter_reader_.Cancel();comparison_reader_.Cancel();
@@ -83,6 +84,7 @@ bool Application::OpenNow(const fs::path &file) {
     }
     try {
         ++ai_generation_;ai_issues_cancel_=true;ai_findings_.clear();ai_issues_=cygi::Json::Object();ai_issues_a_=ai_issues_b_=NAN;
+        activity_store_.reset();activity_result_={};activity_pinned_.clear();activity_request_.clear();activity_ready_.clear();activity_message_.clear();activity_auto_started_=false;activity_search_[0]=0;activity_lane_=0;activity_page_=0;++activity_revision_;
         tasks_store_.reset();tasks_={};selected_task_.reset();task_links_.clear();tasks_message_.clear();distribution_={};distribution_message_.clear();
         analysis_a_=analysis_b_=NAN;analysis_whole_=true;distribution_label_.clear();distribution_dirty_=true;distribution_track_=0;distribution_task_thread_=-1;tasks_thread_=-1;tasks_page_=0;tasks_auto_started_=false;
         timing_exact_name_.clear();loaded_exact_name_.clear();timing_filter_key_.clear();timing_timer_matches_.clear();timing_name_matches_.clear();distribution_function_.clear();distribution_summary_.reset();distribution_summary_key_.clear();
@@ -237,6 +239,7 @@ void Application::Layout(unsigned id) {
     ImGui::DockBuilderDockWindow("Capture comparison", main);
     ImGui::DockBuilderDockWindow("Distributions", main);
     ImGui::DockBuilderDockWindow("Tasks", main);
+    ImGui::DockBuilderDockWindow("Activities", main);
     ImGui::DockBuilderDockWindow("AI Inspector", main);
     ImGui::DockBuilderDockWindow("Timers", timers);
     ImGui::DockBuilderDockWindow("Counters", timers);
@@ -283,6 +286,7 @@ void Application::Draw() {
     AiTick();
     PollTraceAnalysis();
     AdvanceTimingDrag();
+    ActivityTick();
     if(!pending_capture_.empty()&&pending_shown_) {
         auto file=std::move(pending_capture_);pending_capture_.clear();
         if(!OpenNow(file)&&load_error_.empty())load_error_=message_;
@@ -401,6 +405,7 @@ void Application::Draw() {
             ImGui::MenuItem("Capture comparison", nullptr, &show_comparison_);
             ImGui::MenuItem("Distributions", nullptr, &show_distribution_);
             ImGui::MenuItem("Tasks", nullptr, &show_tasks_);
+            if(ImGui::MenuItem("Network / storage / memory", nullptr, &show_activities_)&&show_activities_)FocusActivities();
             ImGui::MenuItem("AI Inspector", nullptr, &show_ai_);
             ImGui::MenuItem("Messages", nullptr, &show_messages_);
             if (ImGui::MenuItem("Reset Insights layout"))
@@ -490,6 +495,7 @@ void Application::Draw() {
     }
     UpdateTiming();
     DockFunctionHistogram();
+    DockActivities();
     if (show_frames_)
         Frames();
     if (show_timing_)
@@ -503,6 +509,7 @@ void Application::Draw() {
     if(show_comparison_)Comparison();
     if(show_distribution_)DistributionView();
     if(show_tasks_)TasksView();
+    if(show_activities_)ActivitiesView();
     if(show_ai_)AiView();
     if (show_callers_)
         Relations(true);

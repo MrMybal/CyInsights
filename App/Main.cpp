@@ -268,6 +268,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             else if(argument==L"--diagnostics-smoke")diagnostic_smoke=true;
             else if(argument==L"--distribution-view")app.FocusDistribution();
             else if(argument==L"--tasks-view")app.FocusTasks();
+            else if(argument==L"--activities-view")app.FocusActivities();
             else if(argument==L"--inspect-task"){app.FocusTasks();inspect_task=true;}
             else if(argument==L"--interaction-smoke")interaction_smoke=true;
             else if(argument==L"--ai-enable")app.EnableAi();

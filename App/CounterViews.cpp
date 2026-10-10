@@ -40,6 +40,7 @@ void Application::FitCapture() {
     if(std::any_of(counters_.series.begin(),counters_.series.end(),[](const CounterSeries& c){return !c.samples.empty();})) {
         a=have?std::min(a,counters_.start):counters_.start;b=have?std::max(b,counters_.end):counters_.end;have=true;
     }
+    if(activity_store_&&activity_store_->count){a=have?std::min(a,activity_store_->start):activity_store_->start;b=have?std::max(b,activity_store_->end):activity_store_->end;have=true;}
     view_start_=a;view_end_=std::max(b,a+.000001);range_start_=range_end_=0;
 }
 void Application::UpdateCounters() {

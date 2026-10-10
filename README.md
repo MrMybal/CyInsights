@@ -11,6 +11,7 @@ is written for CyInsights; it does not reuse the CyGPUInspector standalone UI.
 - Open `.utrace` and versioned `.cycapture` archives. Preserve the original trace.
 - Continuous tracks, synchronized frame overview, pan/zoom and range selection.
 - Timers, callers/callees, counters, task analysis, distributions and A/B comparison.
+- Network packets, Unreal file operations, asset loading and memory samples on the same timeline.
 - Double-click exact function filtering and right-click interval histograms.
 - Background workers, persistent disk indexes and visible loading/cancellation.
 - Frame diagnostics with recognized wait time and measured/derived distinctions.
@@ -24,7 +25,7 @@ timing/counters currently use the matching locally installed Epic Unreal Insight
 export bridge. Initial analysis of large traces can take minutes and produces
 larger intermediate files. Original traces are read-only; there is no arbitrary
 file-size/event-count rejection. Optional TaskTrace decoding uses a local adapter.
-Memory, loading, native log and other Insights providers still need implementation.
+Native activity providers use an optional installed-engine reader; memory callstack exploration, native log UI and other Insights providers remain incomplete.
 Incoming traces are analyzed after recording stops. The application targets
 Windows; it can analyze Android captures on the PC.
 
@@ -68,7 +69,7 @@ In **Session > Select UnrealInsights.exe**, select the matching licensed engine'
 Unreal Insights executable. Decoding and indexing show progress; previously
 indexed files reuse their disk cache. Select an interval to constrain statistics,
 histograms and AI findings. Optional task adapters must be built locally for the
-engine version; see [NativeTasks](Tools/NativeTasks/README.md).
+engine version; see [NativeTasks](Tools/NativeTasks/README.md). Open **Activities** for network, storage, loading and memory tracks; build [NativeActivities](Tools/NativeActivities/README.md) locally for the selected analyzer. See [capture and timeline semantics](Docs/NativeActivities.md).
 
 Choose your installed analyzer in **Session > Select UnrealInsights.exe**, or
 set the local `CYINSIGHTS_UNREAL_INSIGHTS` environment variable to its executable

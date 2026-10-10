@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Cyberalien. SPDX-License-Identifier: MIT
 #include "CyInsights.h"
 #include "CyInsightsRemoteControl.h"
+#include "Net/Core/Trace/NetTrace.h"
 #include "Async/Async.h"
 #include "Trace/Trace.h"
 #include "Trace/Trace.inl"
@@ -55,6 +56,7 @@ void FCyInsightsModule::StartupModule() {
 #if CYINSIGHTS_ENABLED
     if(IsRunningCommandlet()||IsRunningDedicatedServer())return;
     auto& C=IConsoleManager::Get();
+    Commands.Add(C.RegisterConsoleVariable(TEXT("CyInsights.NetworkTraceLevel"),1,TEXT("Native NetTrace verbosity during capture (0 disables automatic activation); compile-time availability still applies"),ECVF_Default));
     Commands.Add(C.RegisterConsoleCommand(TEXT("CyInsights.Start"),TEXT("Start a native trace and synchronization file"),FConsoleCommandDelegate::CreateLambda([this](){StartCapture();}),ECVF_Default));
     Commands.Add(C.RegisterConsoleCommand(TEXT("CyInsights.Stop"),TEXT("Stop this plugin's trace; preserve staging files"),FConsoleCommandDelegate::CreateLambda([this](){StopCapture();}),ECVF_Default));
     Commands.Add(C.RegisterConsoleCommand(TEXT("CyInsights.Gpu"),TEXT("Request 1..8 GPU frames from the Windows collector"),FConsoleCommandWithArgsDelegate::CreateLambda([this](const TArray<FString>& A){CaptureGpu(A.Num()?FCString::Atoi(*A[0]):1);}),ECVF_Default));
@@ -94,10 +96,11 @@ bool FCyInsightsModule::StartCapture(const FString& Host, uint16 Port) {
     NetworkHost=Host;NetworkPort=Port;NetworkError.Reset();bCancelNetwork=false;bNetworkQueued=false;
     StopAtSeconds=0;bStopRequested=false;StartCycles=FPlatformTime::Cycles64();
     // Config override for channels; startup-only memory/net channels still need launch flags.
-    FString Channels=TEXT("default,cpu,gpu,frame,bookmark,log,counters,task");
+    FString Channels=TEXT("default,cpu,gpu,frame,bookmark,log,counters,task,net,file,loadtime,memtag");
     FParse::Value(FCommandLine::Get(),TEXT("CyInsightsChannels="),Channels);
     Channels+=TEXT(",counters"); // Embedded session/frame anchors must follow the native stream.
     Channels+=TEXT(",cyinsightssync");
+    CaptureChannels=Channels;
 #if PLATFORM_ANDROID
     // Quest metrics are native Counters events in this very trace, even when
     // the user selects a custom subset of Unreal channels.
@@ -121,13 +124,36 @@ bool FCyInsightsModule::StartCapture(const FString& Host, uint16 Port) {
         UE_LOG(LogCyInsights,Error,TEXT("Cannot start native trace: %s"),*NetworkError);
         SyncWriter.Reset();WriteManifest();return false;
     }
-    bCapturing=true;
+    bCapturing=true;EnableCaptureNetwork();
     TRACE_BOOKMARK(TEXT("CyInsights.Session %s"),*SessionId);
     if(!WriteManifest()){StopCapture();return false;}
     UE_LOG(LogCyInsights,Display,TEXT("Capture started: %s"),*Directory);return true;
 #else
     return false;
 #endif
+}
+void FCyInsightsModule::EnableCaptureNetwork() {
+    CaptureNetworkTraceLevel=0;OwnedNetworkTraceLevel=0;
+#if UE_NET_TRACE_ENABLED
+    TArray<FString> Names;CaptureChannels.ParseIntoArray(Names,TEXT(","),true);
+    const bool Requested=Names.ContainsByPredicate([](const FString& Name){return Name.Equals(TEXT("net"),ESearchCase::IgnoreCase)||Name.Equals(TEXT("netchannel"),ESearchCase::IgnoreCase);});
+    if(!Requested)return;
+    auto* Option=IConsoleManager::Get().FindConsoleVariable(TEXT("CyInsights.NetworkTraceLevel"));
+    const uint32 Level=Option?static_cast<uint32>(FMath::Clamp(Option->GetInt(),0,4)):1;
+    if(Level&&!FNetTrace::GetTraceVerbosity()) {
+        // Enable after the output is attached, so the native Init event belongs
+        // to this capture, including an IP-triggered capture after game launch.
+        FNetTrace::SetTraceVerbosity(Level);OwnedNetworkTraceLevel=FNetTrace::GetTraceVerbosity();
+    }
+    CaptureNetworkTraceLevel=FNetTrace::GetTraceVerbosity();
+#endif
+}
+void FCyInsightsModule::RestoreCaptureNetwork() {
+#if UE_NET_TRACE_ENABLED
+    // Preserve a verbosity the user enabled before capture or changed during it.
+    if(OwnedNetworkTraceLevel&&FNetTrace::GetTraceVerbosity()==OwnedNetworkTraceLevel)FNetTrace::SetTraceVerbosity(0);
+#endif
+    OwnedNetworkTraceLevel=0;
 }
 void FCyInsightsModule::FinishNetworkStart() {
     if(!bNetworkPending)return;
@@ -148,7 +174,7 @@ void FCyInsightsModule::FinishNetworkStart() {
         NetworkError=TEXT("Capture cancelled before connection completed");WriteManifest();return;
     }
     if(CyInsightsTrace::IsConnected()) {
-        bNetworkPending=false;bCapturing=true;
+        bNetworkPending=false;bCapturing=true;EnableCaptureNetwork();
         TRACE_BOOKMARK(TEXT("CyInsights.Session %s"),*SessionId);
         WriteManifest();
     } else if(FPlatformTime::Seconds()-NetworkRequestedAt>10) {
@@ -170,6 +196,7 @@ void FCyInsightsModule::StopCapture() {
         NetworkError=CyInsightsTrace::GetError();
         UE_LOG(LogCyInsights,Error,TEXT("%s"),*NetworkError);
     }
+    RestoreCaptureNetwork();
     bStopRequested=false;bCapturing=false;StopAtSeconds=0;if(SyncWriter){SyncWriter->Close();SyncWriter.Reset();}
 #if PLATFORM_ANDROID
     auto& Features=IModularFeatures::Get();
@@ -266,6 +293,11 @@ TSharedPtr<FJsonObject> FCyInsightsModule::CaptureManifest() const {
 #endif
     Sources.Add(MakeShared<FJsonValueObject>(Source(TEXT("gpu.commands"),TEXT("unavailable"),FString(),TEXT("Attach an exported collector capture after GPU completion"))));
     Sources.Add(MakeShared<FJsonValueObject>(Source(TEXT("gpu.cpu_calibration"),TEXT("unavailable"),FString(),TEXT("Collector has no calibrated CPU/GPU clock pairs"))));
+    Root->SetStringField(TEXT("requested_native_channels"),CaptureChannels);
+    Root->SetStringField(TEXT("native_activity_clock"),TEXT("Unreal trace session time; packet contents have bit positions, not execution durations"));
+    Root->SetNumberField(TEXT("native_network_verbosity"),CaptureNetworkTraceLevel);
+    Root->SetStringField(TEXT("network_capture_requirement"),TEXT("Plugin requests native NetTrace at capture start when compiled and net is selected; -NetTrace=1 also allows startup tracing. No reconstruction of missing traffic"));
+    Root->SetStringField(TEXT("memory_capture_requirement"),TEXT("Full allocation tracing requires -trace=memory from startup; memtag requires active LLM"));
     Root->SetArrayField(TEXT("sources"),Sources);
     auto Clock=MakeShared<FJsonObject>();Clock->SetStringField(TEXT("id"),TEXT("unreal.cpu"));Clock->SetStringField(TEXT("origin_ticks"),LexToString(StartCycles));
     Clock->SetNumberField(TEXT("frequency_hz"),1.0/FPlatformTime::GetSecondsPerCycle64());Clock->SetStringField(TEXT("timeline_origin"),TEXT("plugin.start; native trace origin requires analyzer correlation"));

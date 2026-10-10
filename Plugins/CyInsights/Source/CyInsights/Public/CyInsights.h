@@ -23,6 +23,9 @@ private:
 	TSharedPtr<class FJsonObject> CaptureManifest() const;
 	TSharedPtr<class FJsonObject> FinalManifest;
 	void FinishNetworkStart();
+	void EnableCaptureNetwork();
+	void RestoreCaptureNetwork();
+	uint32 OwnedNetworkTraceLevel = 0, CaptureNetworkTraceLevel = 0;
 	void RecordFrame();
 	bool Tick(float Delta);
 	bool WriteManifest();
@@ -34,7 +37,7 @@ private:
 	double NetworkRequestedAt = 0;
 	TFuture<bool> NetworkStartTask;
 	TUniquePtr<class FCyInsightsRemoteControl> RemoteControl;
-	FString SessionId, Directory, CreatedUtc;
+	FString SessionId, Directory, CreatedUtc, CaptureChannels;
 	uint64 StartCycles = 0;
 	double StopAtSeconds = 0;
 	TUniquePtr<FArchive> SyncWriter;

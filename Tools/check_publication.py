@@ -100,7 +100,7 @@ def main():
         if name not in tracked or hashlib.sha256((ROOT / name).read_bytes()).hexdigest() != wheel['sha256']:
             errors.append('AI wheel missing or changed: ' + name)
     for scope in ('Plugins/CyInsights/Source', 'Plugins/CyGPUInspector/Source',
-                  'Tools/NativeTasks', 'ThirdParty/CyGPUInspector/CyGPUInspectorCore',
+                  'Tools/NativeTasks', 'Tools/NativeActivities', 'ThirdParty/CyGPUInspector/CyGPUInspectorCore',
                   'ThirdParty/CyGPUInspector/CyGPUInspectorRS'):
         for path in (ROOT / scope).rglob('*'):
             if path.is_file() and path.suffix in {'.cpp', '.h', '.hpp', '.cs', '.rc', '.inc'}:
