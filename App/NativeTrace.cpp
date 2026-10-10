@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
 #include "NativeTrace.hpp"
+#include "NativeReaders.hpp"
 #include "AnalysisWorkers.hpp"
 #include "PagedTimingStore.hpp"
 #include <algorithm>
@@ -95,8 +96,7 @@ bool NativeTrace::Start(const std::filesystem::path &exe, const std::filesystem:
     std::string metadata((std::istreambuf_iterator<char>(version)),{});
     auto number=[&](const char* key){auto p=metadata.find(key);if(p==std::string::npos)return -1;p=metadata.find(':',p);if(p==std::string::npos)return -1;try{return std::stoi(metadata.substr(p+1));}catch(...){return -1;}};
     const int major=number("MajorVersion"),minor=number("MinorVersion");
-    wchar_t app[32768]{};GetModuleFileNameW(nullptr,app,32768);
-    auto helper=std::filesystem::path(app).parent_path()/"NativeTiming"/(std::to_string(major)+"."+std::to_string(minor))/"CyNativeTiming.exe";
+    auto helper=FindNativeReader("Timing",exe);
     wchar_t forceCsv[2]{};const bool forced=GetEnvironmentVariableW(L"CYINSIGHTS_TIMING_CSV",forceCsv,2)==1&&forceCsv[0]==L'1';
     if(!forced&&major==5&&minor>=5&&minor<=8&&std::filesystem::is_regular_file(helper)) {
         csv_=cache/"timing.cynt";log_=cache/"timing.cynt.log";std::error_code ec;std::filesystem::remove(csv_,ec);binary_source_=true;

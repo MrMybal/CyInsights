@@ -74,13 +74,16 @@ Start the application, use **Open capture**, and select a `.utrace` or `.cycaptu
 In **Session > Select UnrealInsights.exe**, select the matching licensed engine's
 Unreal Insights executable. Decoding and indexing show progress; previously
 indexed files reuse their disk cache. Select an interval to constrain statistics,
-histograms and AI findings. Optional task adapters must be built locally for the
-engine version; see [NativeTasks](Tools/NativeTasks/README.md). Open **Activities** for network, storage, loading and memory tracks; build [NativeActivities](Tools/NativeActivities/README.md) locally for the selected analyzer. See [capture and timeline semantics](Docs/NativeActivities.md).
+histograms and AI findings. Open **Activities** for network, storage, loading and
+memory tracks. See [capture and timeline semantics](Docs/NativeActivities.md).
 
-Build [NativeTiming](Tools/NativeTiming/README.md) for the installed analyzer to
-avoid the timing CSV export. Detection is automatic from `NativeTiming/5.x`
-beside the application. Installed analyzer versions 5.5–5.8 are supported by
-this adapter; source compatibility remains that of the selected analyzer.
+At launch the app detects installed Unreal analyzers and automatically prepares
+the native timing/task/activity readers in the background, with visible progress,
+log and cancellation. Results are cached per engine installation for future launches.
+This first-time preparation needs a licensed installed UE 5.5–5.8 and Visual Studio
+C++/CMake tools (MSVC 14.44 for UE 5.8); it does not rebuild Unreal. No manual script
+is required. If dependencies are missing or preparation is cancelled, the CSV
+timing bridge remains available. See [first launch](Docs/GitHubRelease.md).
 
 Choose your installed analyzer in **Session > Select UnrealInsights.exe**, or
 set the local `CYINSIGHTS_UNREAL_INSIGHTS` environment variable to its executable

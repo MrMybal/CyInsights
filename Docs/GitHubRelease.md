@@ -6,16 +6,27 @@ wheels verrouillées. Extraire tout le ZIP avant de lancer l'application. Les
 paramètres et captures existants ne sont pas inclus dans ce paquet.
 
 Un Unreal Insights installé séparément est nécessaire pour analyser un `.utrace`.
-Le sélectionner dans **Session > Select UnrealInsights.exe**. Le pont CSV fonctionne
-sans compiler les lecteurs. Pour activer la lecture directe et les lecteurs de
-tâches/activités, avec les outils C++ Visual Studio installés :
+L'application détecte les installations au démarrage et mémorise celle choisie.
+Au premier lancement, elle prépare automatiquement les lecteurs de timings,
+tâches et activités en arrière-plan, avec progression, journal et annulation.
+Une capture ouverte pendant cette étape attend sa fin puis reprend automatiquement.
+Il n'est plus nécessaire de lancer un script manuellement.
+
+La préparation exige une installation Unreal licenciée UE 5.5–5.8 et les outils
+C++/CMake Visual Studio ; UE 5.8 nécessite le toolset MSVC 14.44. Ces dépendances
+ne sont pas installées automatiquement. Si elles manquent ou si la préparation
+est annulée, le pont CSV reste disponible. Les lecteurs prêts sont conservés
+dans `%LOCALAPPDATA%/CyInsights/NativeReaders`, par installation/version du moteur.
+Une mise à jour des sources ou du moteur déclenche une nouvelle préparation.
+Dans **Session**, on peut changer d'analyseur ou relancer la préparation.
+
+Pour un diagnostic ou une installation manuelle facultative :
 
 ```powershell
 powershell -File Tools/InstallNativeReaders.ps1 -Engine "C:/Example/UE_5.8/Engine"
 ```
 
-Donner le dossier `Engine` de l'installation licenciée correspondante, UE 5.5–5.8.
-UE 5.8 nécessite le toolset MSVC 14.44. Le script compile uniquement nos trois
+Donner le dossier `Engine` de l'installation licenciée correspondante. Le script compile uniquement nos trois
 adaptateurs ; il ne recompile pas Unreal et ne copie pas ses DLL. Les sources
 sont fournies dans la release ; les exécutables liés aux outils Unreal se
 construisent localement selon [le périmètre des licences](Licensing.md).
@@ -49,4 +60,5 @@ l'application, vérifie les archives et produit `SHA256SUMS.txt`. Il n'inclut ni
 les PDB, traces, paramètres locaux, runtimes virtuels, ni les adaptateurs Unreal
 compilés. Les binaires gardent un nom de PDB relatif à la place du chemin du poste
 de compilation. Le manifest du ZIP indique le commit et les empreintes des fichiers.
-Les binaires de cette preview ne sont pas signés.
+Les binaires de cette preview ne sont pas signés. La préparation automatique
+ne rend pas l'analyseur indépendant d'une installation Unreal.

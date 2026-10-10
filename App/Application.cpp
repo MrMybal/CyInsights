@@ -59,8 +59,10 @@ Application::Application() {
     std::error_code error;
     if (length > 0 && length < 32768 && fs::is_regular_file(configured, error))
         std::snprintf(exe_, sizeof(exe_), "%s", fs::path(configured).u8string().c_str());
+    native_setup_.Discover(fs::u8path(exe_));
 }
 Application::~Application() {
+    native_setup_.Cancel();
     ai_rpc_.Stop();ai_issues_cancel_=true;for(auto& work:ai_work_)if(work.request)work.request->cancelled=true;
     if(ai_issues_task_.valid())ai_issues_task_.wait();for(auto& work:ai_work_)if(work.result.valid())work.result.wait();
     activity_cancel_=true;activity_reader_.Cancel();if(activity_query_.valid())activity_query_.wait();
@@ -199,6 +201,10 @@ void Application::LoadGpu(const fs::path &directory) {
     selected_event_ = -1;
 }
 void Application::ImportNative() {
+    if(native_setup_.Busy()){native_import_pending_=true;message_="Waiting for native reader preparation...";return;}
+    if(exe_[0]&&fs::u8path(exe_)!=native_setup_.selected) {
+        native_setup_.Prepare(fs::u8path(exe_));setup_dismissed_=false;native_import_pending_=true;return;
+    }
     if (AnalysisBusy()) {
         message_ = "Native analysis is already running";
         return;
@@ -285,11 +291,12 @@ void Application::LoadWindow() {
     });
 }
 void Application::Draw() {
+    NativeSetupTick();
     AiTick();
     PollTraceAnalysis();
     AdvanceTimingDrag();
     ActivityTick();
-    if(!pending_capture_.empty()&&pending_shown_) {
+    if(!pending_capture_.empty()&&pending_shown_&&!native_setup_.Busy()) {
         auto file=std::move(pending_capture_);pending_capture_.clear();
         if(!OpenNow(file)&&load_error_.empty())load_error_=message_;
     }
@@ -497,6 +504,7 @@ void Application::Draw() {
         Session();
         if(show_ai_)AiView();
         LoadStatus();
+        NativeSetupView();
         return;
     }
     UpdateTiming();
@@ -528,6 +536,7 @@ void Application::Draw() {
     if (show_messages_)
         Messages();
     LoadStatus();
+    NativeSetupView();
 }
 void Application::Session() {
     ImGui::Begin("Session", nullptr,
@@ -608,12 +617,19 @@ void Application::Session() {
         ImGui::EndCombo();
     }
     if(ImGui::IsItemHovered())ImGui::SetTooltip("Automatic adapts concurrency to the visible workload.\nReduce workers to leave more CPU time for other applications.\nThis setting applies to this application session.");
-    ImGui::InputText("##insightsexe", exe_, sizeof(exe_));
+    ImGui::TextWrapped("%s",native_setup_.message.c_str());
+    ImGui::BeginDisabled(native_setup_.Busy()||AnalysisBusy());
+    if(ImGui::InputText("##insightsexe", exe_, sizeof(exe_),ImGuiInputTextFlags_EnterReturnsTrue))SelectAnalyzer(fs::u8path(exe_));
     if (ImGui::Button("Select UnrealInsights.exe")) {
         auto p = ChooseFile(L"Unreal Insights\0UnrealInsights.exe\0\0");
-        if (!p.empty())
-            std::snprintf(exe_, sizeof(exe_), "%s", p.u8string().c_str());
+        if (!p.empty())SelectAnalyzer(p);
     }
+    if(ImGui::BeginCombo("Installed Unreal analyzers",exe_[0]?fs::u8path(exe_).parent_path().parent_path().parent_path().parent_path().filename().u8string().c_str():"Select an installation")) {
+        for(const auto& path:native_setup_.installations)if(ImGui::Selectable(path.u8string().c_str(),path==fs::u8path(exe_)))SelectAnalyzer(path);
+        ImGui::EndCombo();
+    }
+    if(ImGui::Button("Prepare native readers"))SelectAnalyzer(fs::u8path(exe_));
+    ImGui::EndDisabled();
     ImGui::SeparatorText("Windows collector");
     if (ImGui::Button("Discover sessions")) {
         sessions_.Open();

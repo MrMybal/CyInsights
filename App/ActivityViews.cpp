@@ -15,7 +15,7 @@ void Application::StartActivities(){
   if(!cygi::Json::Parse(text,metadata))throw std::runtime_error("Select an installed Unreal Insights analyzer in Session first");
   int minor=static_cast<int>(metadata["MinorVersion"].AsNumber());
   if(metadata["MajorVersion"].AsNumber()!=5||minor<5||minor>8)throw std::runtime_error("Activity reader requires an installed UE 5.5-5.8 analyzer; older source traces remain readable when supported by that analyzer");
-  wchar_t exe[32768]{};GetModuleFileNameW(nullptr,exe,32768);auto helper=fs::path(exe).parent_path()/"NativeActivities"/("5."+std::to_string(minor))/"CyNativeActivities.exe";
+  auto helper=FindNativeReader("Activities",fs::u8path(exe_));
   if(activity_reader_.Start(helper,binaries,trace_,cache_/"Activities",activity_message_))activity_message_="Decoding network, file, loading and memory providers...";
  }catch(const std::exception& e){activity_message_=e.what();}
 }

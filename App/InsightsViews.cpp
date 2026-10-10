@@ -923,7 +923,8 @@ void Application::Relations(bool callers) {
     ImGui::End();
 }
 void Application::LoadStatus() {
-    bool busy=!pending_capture_.empty()||native_.Busy()||model_task_.valid();
+    if(native_setup_.Busy()){pending_shown_=true;return;}
+    bool busy=native_import_pending_||!pending_capture_.empty()||native_.Busy()||model_task_.valid();
     if(!busy&&load_error_.empty())return;
     const auto* viewport=ImGui::GetMainViewport();
     // Keep the timeline usable while a replacement visible interval is queried.
@@ -943,7 +944,7 @@ void Application::LoadStatus() {
         ImGui::SameLine();if(ImGui::Button("Close"))load_error_.clear();
         if(ImGui::Button("Choose Unreal analyzer and retry")) {
             auto exe=ChooseFile(L"Unreal Insights\0UnrealInsights.exe\0\0");
-            if(!exe.empty()){std::snprintf(exe_,sizeof(exe_),"%s",exe.u8string().c_str());ImportNative();}
+            if(!exe.empty()){SelectAnalyzer(exe);load_error_.clear();native_import_pending_=true;}
         }
     } else {
         const char* phase=!pending_capture_.empty()?"Preparing capture":native_.Busy()?native_.Importing()?"Building the timing index on disk":native_.DirectTiming()?"Decoding native Unreal timings":"Analyzing Unreal trace / exporting timings":"Loading visible interval / calculating statistics";

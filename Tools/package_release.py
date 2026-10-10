@@ -46,18 +46,20 @@ def main():
     app['README.txt'] = (
         'CyInsights '+args.version+' / Windows x64\n'
         'Extract the complete archive and run CyInsightsApp.exe.\n'
-        'Open a .utrace or .cycapture; select installed UnrealInsights.exe in Session.\n'
-        'The CSV bridge works without compiled native readers. For direct timing reading,\n'
-        'build our readers against your licensed installed UE 5.5-5.8, using VS C++ tools:\n'
-        'powershell -File Tools/InstallNativeReaders.ps1 -Engine "C:/Example/UE_5.8/Engine"\n'
-        'UE 5.8 needs the MSVC 14.44 toolset. No engine is rebuilt.\n'
+        'Installed Unreal analyzers are detected on launch; select yours in Session if needed.\n'
+        'On first launch, native readers are built automatically in the background, with\n'
+        'progress, log and cancellation. No script needs to be run manually. Results are\n'
+        'cached in local application data for subsequent launches.\n'
+        'This preparation requires licensed UE 5.5-5.8 and VS C++/CMake tools.\n'
+        'UE 5.8 needs MSVC 14.44. Unreal is not rebuilt. The CSV bridge remains available\n'
+        'if preparation is cancelled or dependencies are missing. Open a .utrace or .cycapture.\n'
         'Optional AI companion: Python 3.11 x64, then powershell -File AI/SetupRuntime.ps1.\n'
         'Native Unreal adapters are supplied as sources, not prebuilt Engine Tools.\n'
         'See Docs/Licensing.md, Docs/NativeTiming.md and the matching release sources.\n'
     ).encode()
     app['release-manifest.json'] = json.dumps({
         'version': args.version, 'source_commit': git('rev-parse', 'HEAD').decode().strip(),
-        'signed': False, 'native_readers': 'build locally with installed licensed Unreal',
+        'signed': False, 'native_readers': 'automatic local preparation at launch with licensed Unreal and VS C++ tools',
         'files': {name: hashlib.sha256(data).hexdigest() for name, data in sorted(app.items())},
     }, indent=2).encode()
     plugins = {name: (ROOT/name).read_bytes() for name in tracked if name.startswith('Plugins/')}

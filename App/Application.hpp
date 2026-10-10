@@ -4,6 +4,7 @@
 #include "Capture.hpp"
 #include "RemoteCapture.hpp"
 #include "NativeTrace.hpp"
+#include "NativeSetup.hpp"
 #include "CounterTrace.hpp"
 #include "ComparisonTrace.hpp"
 #include "Session/CaptureArchive.hpp"
@@ -56,7 +57,7 @@ class Application {
     void EnableAi(bool control=false,bool capture=false);
     void FocusAi(){show_ai_=true;focus_ai_=true;session_view_=false;}
     void WriteAnalysisReport(const fs::path& output) const;
-    bool AnalysisBusy() const { return !pending_capture_.empty() || native_.Busy() || model_task_.valid() || counter_reader_.Busy() || comparison_reader_.Busy() || distribution_task_.valid() || distribution_pending_ || tasks_pending_ || task_reader_.Busy() || tasks_query_.valid() || links_query_.valid() || activity_reader_.Busy() || activity_query_.valid() || activity_pending_; }
+    bool AnalysisBusy() const { return native_import_pending_ || !pending_capture_.empty() || native_.Busy() || model_task_.valid() || counter_reader_.Busy() || comparison_reader_.Busy() || distribution_task_.valid() || distribution_pending_ || tasks_pending_ || task_reader_.Busy() || tasks_query_.valid() || links_query_.valid() || activity_reader_.Busy() || activity_query_.valid() || activity_pending_; }
     void FocusGpu() {
         show_gpu_ = true;
         focus_gpu_ = true;
@@ -159,6 +160,11 @@ class Application {
     void OpenComparison(const fs::path& file);
     void Toolbar();
     void LoadStatus();
+    void NativeSetupTick();
+    void NativeSetupView();
+    void SelectAnalyzer(const fs::path& path);
+    NativeSetup native_setup_;
+    bool native_import_pending_=false,setup_dismissed_=false;
     bool OpenNow(const fs::path& file);
     void LoadWindow();
     enum class DragSurface {None,Frames,Ruler,Tracks};

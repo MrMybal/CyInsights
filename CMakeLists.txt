@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(CyInsights VERSION 0.1.0 LANGUAGES CXX)
+project(CyInsights VERSION 0.1.1 LANGUAGES CXX)
 enable_language(RC)
 # French MSVC emits UTF-8 NBSP in /showIncludes. CMake's OEM decoding can
 # corrupt it to "┬á", preventing Ninja from tracking header dependencies.
@@ -58,7 +58,7 @@ target_link_libraries(CyNativeStorage PUBLIC CyTimingModel CyCounterModel CyTimi
 target_link_libraries(CyTimingComparison PUBLIC CyTimingModel)
 target_include_directories(CyCounterModel PUBLIC App)
 target_include_directories(CyTimingModel PUBLIC App)
-add_library(CyInsightsUi OBJECT App/Main.cpp App/Branding.cpp App/Application.cpp App/InsightsViews.cpp App/NativeTrace.cpp App/CounterTrace.cpp App/CounterViews.cpp App/ComparisonTrace.cpp App/ComparisonViews.cpp App/AnalysisViews.cpp App/TaskTrace.cpp App/ActivityTrace.cpp App/ActivityViews.cpp App/AiViews.cpp)
+add_library(CyInsightsUi OBJECT App/Main.cpp App/Branding.cpp App/Application.cpp App/InsightsViews.cpp App/NativeTrace.cpp App/NativeSetup.cpp App/NativeSetupViews.cpp App/CounterTrace.cpp App/CounterViews.cpp App/ComparisonTrace.cpp App/ComparisonViews.cpp App/AnalysisViews.cpp App/TaskTrace.cpp App/ActivityTrace.cpp App/ActivityViews.cpp App/AiViews.cpp)
 target_link_libraries(CyInsightsUi PRIVATE CyCapture CyGpuAnalysis CyImGui CyTimingModel CyRemoteCapture CyCounterModel CyTimingComparison CyNativeStorage)
 target_link_libraries(CyInsightsUi PRIVATE CyAiAnalysis)
 add_executable(CyInsightsApp WIN32 $<TARGET_OBJECTS:CyInsightsUi> App/CyInsights.rc)
@@ -90,6 +90,10 @@ add_executable(CyNativeTraceTests Tests/NativeTraceTests.cpp App/NativeTrace.cpp
 target_include_directories(CyNativeTraceTests PRIVATE App)
 target_link_libraries(CyNativeTraceTests PRIVATE CyTimingModel CyCounterModel CyNativeStorage)
 add_test(NAME CyNativeTraceTests COMMAND CyNativeTraceTests)
+add_executable(CyNativeSetupTests Tests/NativeSetupTests.cpp App/NativeSetup.cpp App/NativeTrace.cpp)
+target_link_libraries(CyNativeSetupTests PRIVATE CyNativeStorage CyGPUInspectorCore advapi32)
+add_test(NAME CyNativeSetupTests COMMAND CyNativeSetupTests)
+set_tests_properties(CyNativeSetupTests PROPERTIES TIMEOUT 45)
 add_executable(CyNativeTimingTests Tests/NativeTimingTests.cpp App/NativeTrace.cpp)
 target_link_libraries(CyNativeTimingTests PRIVATE CyNativeStorage)
 add_test(NAME CyNativeTimingTests COMMAND CyNativeTimingTests)
@@ -128,6 +132,7 @@ target_link_libraries(CyHistogramBenchmark PRIVATE CyNativeStorage)
 add_custom_target(CyComponentTests DEPENDS CyCaptureTests CyNativeTraceTests CyTimingModelTests CyRemoteCaptureTests CyCounterTests CyComparisonTests CyPagedTimingTests CyAnalysisWorkerTests)
 add_dependencies(CyComponentTests CyLegacyTraceTests)
 add_dependencies(CyComponentTests CyNativeTimingTests)
+add_dependencies(CyComponentTests CyNativeSetupTests)
 add_dependencies(CyComponentTests CyFrameDiagnosticTests)
 add_dependencies(CyComponentTests CyDistributionTests CyTaskStoreTests)
 add_executable(CyAiAnalysisTests Tests/AiAnalysisTests.cpp App/NativeTrace.cpp)
@@ -147,6 +152,13 @@ if(CYINSIGHTS_OPENXR_INCLUDE)
 endif()
 add_custom_command(TARGET CyInsightsApp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/LICENCES" "$<TARGET_FILE_DIR:CyInsightsApp>/LICENCES")
+add_custom_command(TARGET CyInsightsApp POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:CyInsightsApp>/Tools"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/Tools/InstallNativeReaders.ps1" "$<TARGET_FILE_DIR:CyInsightsApp>/Tools/InstallNativeReaders.ps1")
+foreach(reader NativeTiming NativeTasks NativeActivities)
+    add_custom_command(TARGET CyInsightsApp POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/Tools/${reader}" "$<TARGET_FILE_DIR:CyInsightsApp>/Tools/${reader}")
+endforeach()
 
 add_executable(CyActivityTests Tests/ActivityTests.cpp App/ActivityTrace.cpp App/NativeTrace.cpp)
 target_link_libraries(CyActivityTests PRIVATE CyNativeStorage)

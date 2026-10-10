@@ -81,6 +81,8 @@ bool Application::InspectFirstTask() {
 void Application::WriteAnalysisReport(const fs::path& output) const {
     std::ofstream out(output);out<<std::setprecision(17)<<std::boolalpha;
     out<<"{\"timing_events\":"<<(native_.store?native_.store->count:0)
+       <<",\"native_setup_ready\":"<<(native_setup_.state==NativeSetup::State::Ready)
+       <<",\"native_setup_status\":"<<cygi::Json(native_setup_.message).Write(-1)
        <<",\"native_timing_backend\":\""<<(native_.DirectTiming()?"direct_binary":"csv_bridge")<<"\""
        <<",\"native_decode_seconds\":"<<native_.DecodeSeconds()<<",\"native_index_seconds\":"<<native_.IndexSeconds()
        <<",\"native_timing_bytes\":"<<native_.ExportBytes()<<",\"native_counter_catalog\":"<<counters_.series.size()
@@ -147,7 +149,7 @@ void Application::StartNativeTasks() {
         auto analyzer=fs::u8path(exe_);auto binaries=analyzer.parent_path();std::ifstream version(binaries.parent_path().parent_path()/"Build/Build.version");
         std::string text((std::istreambuf_iterator<char>(version)),{});cygi::Json metadata;if(!cygi::Json::Parse(text,metadata))throw std::runtime_error("Selected analyzer installation has no readable Build.version");
         int minor=static_cast<int>(metadata["MinorVersion"].AsNumber());if(metadata["MajorVersion"].AsNumber()!=5||minor<5||minor>8)throw std::runtime_error("Native task adapter requires an installed UE 5.5-5.8 analyzer");
-        wchar_t exe[32768]{};GetModuleFileNameW(nullptr,exe,32768);auto helper=fs::path(exe).parent_path()/"NativeTasks"/("5."+std::to_string(minor))/"CyNativeTasks.exe";
+        auto helper=FindNativeReader("Tasks",analyzer);
         if(task_reader_.Start(helper,binaries,trace_,cache_/"Tasks",native_.store->end,tasks_message_))tasks_message_="Decoding native task lifecycle...";
     }catch(const std::exception& e){tasks_message_=e.what();}
 }

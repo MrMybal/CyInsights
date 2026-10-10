@@ -7,6 +7,11 @@ et son parsing décimal. Le `.utrace` source reste intact et `.cycapture` inchan
 Cette optimisation ne crée aucun détail GPU absent de la trace.
 
 La détection de l'adaptateur correspondant à l'analyseur choisi est automatique.
+Au démarrage, l'application détecte Unreal et prépare les trois lecteurs natifs
+manquants en arrière-plan. La fenêtre de préparation montre le journal et permet
+d'annuler ; aucun script manuel n'est requis. Unreal licencié et les outils C++
+Visual Studio restent nécessaires pour cette compilation locale. Le cache par
+installation est réutilisé au prochain lancement, sans recompiler le moteur.
 Sans adaptateur, le pont CSV reste disponible. Si un adaptateur échoue, l'erreur
 et son journal sont affichés. Chargement et indexation restent en arrière-plan,
 avec phase visible, progression et annulation. Aucun index partiel n'est publié.
