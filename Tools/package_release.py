@@ -4,6 +4,8 @@ Copyright (C) 2026 Cyberalien. SPDX-License-Identifier: AGPL-3.0-or-later.
 import argparse
 import hashlib
 import json
+import os
+import shutil
 import subprocess
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
@@ -32,11 +34,20 @@ def plugin_sources():
 
 def windows_signatures(binaries, require_signed=False):
     """Read Authenticode afresh; never trust a stale hand-written manifest."""
-    command = ['powershell.exe', '-NoProfile', '-File', str(ROOT/'Tools/SignWindowsRelease.ps1'),
+    # Permit this local, reviewed script in this child process only. Keep
+    # downloaded scripts subject to signature checks; no machine policy changes.
+    host=shutil.which('pwsh.exe') or shutil.which('powershell.exe')
+    if not host:
+        raise SystemExit('PowerShell is required to verify Windows release signatures')
+    command = [host, '-NoProfile', '-ExecutionPolicy', 'RemoteSigned', '-File', str(ROOT/'Tools/SignWindowsRelease.ps1'),
                '-Directory', str(binaries), '-VerifyOnly']
     if require_signed:
         command.append('-RequireSigned')
-    subprocess.run(command, check=True, capture_output=True)
+    environment=os.environ.copy()
+    # Prefer the modern host when present. If only Windows PowerShell is
+    # available, let it initialize its own built-in module search path.
+    if Path(host).name.lower()=='powershell.exe':environment.pop('PSModulePath',None)
+    subprocess.run(command, check=True, capture_output=True, env=environment)
     report = json.loads((binaries/'windows-signatures.json').read_text(encoding='utf-8-sig'))
     for record in report['files']:
         path = (binaries/record['path']).resolve()
