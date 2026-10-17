@@ -1,6 +1,7 @@
 // CyInsights interface, independent of the CyGPUInspector UI.
 // Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
 #include "Application.hpp"
+#include <unordered_map>
 #include "AnalysisWorkers.hpp"
 #include "UiMetrics.hpp"
 #include <CyGPUInspectorCore/Format.hpp>
@@ -8,6 +9,7 @@
 #include <chrono>
 #include <cmath>
 #include <commdlg.h>
+#include <shobjidl.h>
 #include <cstdio>
 #include <fstream>
 #include <imgui.h>
@@ -23,6 +25,22 @@ fs::path ChooseFile(const wchar_t *filter, bool save) {
     of.nMaxFile = 32768;
     of.Flags = OFN_EXPLORER | OFN_NOCHANGEDIR | (save ? OFN_OVERWRITEPROMPT : OFN_FILEMUSTEXIST);
     return (save ? GetSaveFileNameW(&of) : GetOpenFileNameW(&of)) ? fs::path(name) : fs::path();
+}
+fs::path ChooseFolder() {
+    const auto initialized=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED|COINIT_DISABLE_OLE1DDE);
+    fs::path result;IFileOpenDialog* dialog=nullptr;
+    if(SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&dialog)))) {
+        DWORD options=0;dialog->GetOptions(&options);dialog->SetOptions(options|FOS_PICKFOLDERS|FOS_FORCEFILESYSTEM|FOS_PATHMUSTEXIST);
+        dialog->SetTitle(L"Select your Unreal engine root folder");
+        if(SUCCEEDED(dialog->Show(GetActiveWindow()))) {
+            IShellItem* item=nullptr;
+            if(SUCCEEDED(dialog->GetResult(&item))) {
+                PWSTR path=nullptr;if(SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH,&path))){result=path;CoTaskMemFree(path);}item->Release();
+            }
+        }
+        dialog->Release();
+    }
+    if(SUCCEEDED(initialized))CoUninitialize();return result;
 }
 namespace {
 const wchar_t *CaptureFilter = L"Unreal / CyInsights captures\0*.cycapture;*.utrace\0All files\0*.*\0\0";
@@ -59,7 +77,8 @@ Application::Application() {
     std::error_code error;
     if (length > 0 && length < 32768 && fs::is_regular_file(configured, error))
         std::snprintf(exe_, sizeof(exe_), "%s", fs::path(configured).u8string().c_str());
-    native_setup_.Discover(fs::u8path(exe_));
+    native_setup_.LoadRegistered(fs::u8path(exe_));
+    if(native_setup_.installations.empty())session_view_=true;
 }
 Application::~Application() {
     native_setup_.Cancel();
@@ -74,6 +93,7 @@ Application::~Application() {
 bool Application::Open(const fs::path &file) {
     drag_surface_=DragSurface::None;
     if(AnalysisBusy()){message_="Wait for the active analysis to finish, or cancel it";return false;}
+    document_path_=fs::absolute(file);
     pending_capture_=file;pending_shown_=false;load_error_.clear();load_started_=ImGui::GetTime();cancelled_load_=false;
     session_view_=false;show_timing_=true;show_frames_=true;
     return true;
@@ -149,20 +169,19 @@ bool Application::OpenNow(const fs::path &file) {
                 const auto minor = version.substr(0, version.find('.', 2));
                 const bool supported = minor == "4.27" ||
                     (minor.size() == 3 && minor[0] == '5' && minor[1] == '.' && minor[2] >= '0' && minor[2] <= '8');
-                auto root = fs::u8path(exe_).parent_path().parent_path().parent_path().parent_path().parent_path();
-                auto candidate = root / ("UE_" + minor) /
-                                 "Engine/Binaries/Win64/UnrealInsights.exe";
-                if (supported && fs::is_regular_file(candidate))
-                    std::snprintf(exe_, sizeof(exe_), "%s", candidate.u8string().c_str());
+                if(supported&&AnalyzerVersion(fs::u8path(exe_))!=minor)
+                    for(const auto& candidate:native_setup_.installations)
+                        if(AnalyzerVersion(candidate)==minor){SelectAnalyzer(candidate);break;}
             }
         }
         native_.events.clear();
         native_.store.reset();loaded_start_=loaded_end_=NAN;overview_width_=0;
         window_aggregated_=false;counter_samples_requested_=false;
+        frame_stat_samples_requested_=false;
         capture_file_=file;comparison_index_=TimingComparisonIndex{};
         comparison_b_.reset();comparison_rows_.clear();comparison_message_.clear();comparison_a_start_=comparison_a_end_=-1;
-        native_.counters=CounterModel{};
-        counters_=CounterModel{};counter_stats_.clear();counter_plots_.clear();selected_counter_=-1;
+        native_.counters=CounterModel{};native_.vulkan_contents.reset();native_.vulkan_contents_error.clear();
+        counters_=std::make_shared<CounterModel>();counter_stats_.clear();counter_plots_.clear();selected_counter_=-1;
         counter_stats_start_=counter_stats_end_=-1;counter_message_.clear();
         cpu_frames_.clear();
         timing_search_matches_.clear();
@@ -231,30 +250,30 @@ void Application::ImportNative() {
 void Application::Layout(unsigned id) {
     ImGui::DockBuilderRemoveNode(id);
     ImGui::DockBuilderAddNode(id, ImGuiDockNodeFlags_DockSpace);
-    ImGui::DockBuilderSetNodeSize(id, ImGui::GetMainViewport()->WorkSize);
+    ImGui::DockBuilderSetNodeSize(id, WorkspaceViewport()->WorkSize);
     unsigned main = id, right, overview, messages, callers, callees, timers;
     ImGui::DockBuilderSplitNode(
         main, ImGuiDir_Right,
-        std::clamp(300.f * UiScale() / ImGui::GetMainViewport()->WorkSize.x, .10f, .30f), &right, &main);
+        std::clamp(300.f * UiScale() / WorkspaceViewport()->WorkSize.x, .10f, .30f), &right, &main);
     ImGui::DockBuilderSplitNode(main, ImGuiDir_Up, .12f, &overview, &main);
     ImGui::DockBuilderSplitNode(main, ImGuiDir_Down, .075f, &messages, &main);
     ImGui::DockBuilderSplitNode(right, ImGuiDir_Up, .25f, &timers, &right);
     ImGui::DockBuilderSplitNode(right, ImGuiDir_Up, .5f, &callers, &callees);
-    ImGui::DockBuilderDockWindow("Frames", overview);
-    ImGui::DockBuilderDockWindow("Timing", main);
-    ImGui::DockBuilderDockWindow("GPU frame", main);
-    ImGui::DockBuilderDockWindow("Capture comparison", main);
-    ImGui::DockBuilderDockWindow("Distributions", main);
-    ImGui::DockBuilderDockWindow("Tasks", main);
-    ImGui::DockBuilderDockWindow("Activities", main);
-    ImGui::DockBuilderDockWindow("AI Inspector", main);
-    ImGui::DockBuilderDockWindow("Timers", timers);
-    ImGui::DockBuilderDockWindow("Counters", timers);
-    ImGui::DockBuilderDockWindow("Selection", timers);
-    ImGui::DockBuilderDockWindow("Platform metrics", timers);
-    ImGui::DockBuilderDockWindow("Callers", callers);
-    ImGui::DockBuilderDockWindow("Callees", callees);
-    ImGui::DockBuilderDockWindow("Messages", messages);
+    ImGui::DockBuilderDockWindow(WindowName("Frames").c_str(), overview);
+    ImGui::DockBuilderDockWindow(WindowName("Timing").c_str(), main);
+    ImGui::DockBuilderDockWindow(WindowName("GPU frame").c_str(), main);
+    ImGui::DockBuilderDockWindow(WindowName("Capture comparison").c_str(), main);
+    ImGui::DockBuilderDockWindow(WindowName("Distributions").c_str(), main);
+    ImGui::DockBuilderDockWindow(WindowName("Tasks").c_str(), main);
+    ImGui::DockBuilderDockWindow(WindowName("Activities").c_str(), main);
+    ImGui::DockBuilderDockWindow(WindowName("AI Inspector").c_str(), main);
+    ImGui::DockBuilderDockWindow(WindowName("Timers").c_str(), timers);
+    ImGui::DockBuilderDockWindow(WindowName("Counters").c_str(), timers);
+    ImGui::DockBuilderDockWindow(WindowName("Selection").c_str(), timers);
+    ImGui::DockBuilderDockWindow(WindowName("Platform metrics").c_str(), timers);
+    ImGui::DockBuilderDockWindow(WindowName("Callers").c_str(), callers);
+    ImGui::DockBuilderDockWindow(WindowName("Callees").c_str(), callees);
+    ImGui::DockBuilderDockWindow(WindowName("Messages").c_str(), messages);
     ImGui::DockBuilderFinish(id);
 }
 void Application::LoadWindow() {
@@ -269,7 +288,7 @@ void Application::LoadWindow() {
     if(drag_surface_!=DragSurface::None&&ImGui::GetTime()-model_request_time_<1./60.)return;
     model_request_time_=ImGui::GetTime();
     requested_start_=view_start_;requested_end_=view_end_;requested_stats_start_=a;requested_stats_end_=b;model_cancel_.store(false);
-    float pixels=std::max(1.f,ImGui::GetMainViewport()->WorkSize.x-300*UiScale());
+    float pixels=std::max(1.f,WorkspaceViewport()->WorkSize.x-300*UiScale());
     auto store=native_.store;double start=view_start_,end=view_end_;
     model_task_=std::async(std::launch::async,[this,store,start,end,a,b,pixels,name=timing_exact_name_,retired=std::move(retired_timing_)]() mutable {
         retired.reset();
@@ -290,7 +309,7 @@ void Application::LoadWindow() {
         return result;
     });
 }
-void Application::Draw() {
+void Application::Tick() {
     NativeSetupTick();
     AiTick();
     PollTraceAnalysis();
@@ -304,9 +323,9 @@ void Application::Draw() {
     const bool imported=native_.Poll(message_);
     if(imported&&!native_.Error().empty()&&native_.Error()!="Analysis cancelled")load_error_=native_.Error();
     if(imported) {
-        counters_=std::move(native_.counters);
+        counters_=std::make_shared<CounterModel>(std::move(native_.counters));
         ++counter_catalog_revision_;
-        counter_message_=counters_.error;
+        counter_message_=counters_->error;
         if(native_.store&&native_.store->count) {
             // The disk index is ready before the window model. Publish events
             // and their matching model together, never a half-built UI state.
@@ -333,10 +352,18 @@ void Application::Draw() {
             message_ = "Cannot index native timing: " + std::string(e.what());
         }
     }
-    if(counter_reader_.Poll(counters_,counter_message_)) {
+    CounterModel incoming_counters;
+    if(counter_reader_.Poll(incoming_counters,counter_message_)) {
+        // Pin/unpin actions made while a background import runs belong to the
+        // UI, and must survive publication of its earlier catalogue snapshot.
+        std::unordered_map<uint64_t,bool> pinned_by_id;
+        auto identity=[](const CounterSeries& c){return (uint64_t(c.frame_stats)<<32)|(c.frame_stats?c.frame_stat_id:c.id);};
+        for(const auto& current:counters_->series)pinned_by_id.emplace(identity(current),current.pinned);
+        for(auto& next:incoming_counters.series){auto pin=pinned_by_id.find(identity(next));if(pin!=pinned_by_id.end())next.pinned=pin->second;}
+        counters_=std::make_shared<CounterModel>(std::move(incoming_counters));
         ++counter_catalog_revision_;
         counter_stats_start_=counter_stats_end_=-1;counter_stats_.clear();counter_plots_.clear();
-        size_t pins=0;for(auto& counter:counters_.series)
+        size_t pins=0;for(auto& counter:counters_->series)
             if(counter.meta&&!counter.availability&&counter.reason.empty()&&pins<4){counter.pinned=true;++pins;}
         if(native_.events.empty()&&!model_task_.valid())FitCapture();
     }
@@ -381,15 +408,15 @@ void Application::Draw() {
         messages_.push_back(message_);
         previous_message_ = message_;
     }
+}
+void Application::DrawMenuBar() {
     if (ImGui::BeginMainMenuBar()) {
         if(brand_logo_)ImGui::Image(brand_logo_,ImVec2(ImGui::GetFontSize(),ImGui::GetFontSize()));
         else ImGui::TextColored(ImVec4(.75f, .85f, .93f, 1), "Cy");
         ImGui::SameLine();
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Open capture...", "Ctrl+O")) {
-                auto path = ChooseFile(CaptureFilter);
-                if (!path.empty())
-                    Open(path);
+                ChooseAndOpenCaptures();
             }
             if (ImGui::MenuItem("Pack staging manifest...")) {
                 auto m = ChooseFile(L"Capture manifest\0manifest.json\0\0");
@@ -414,6 +441,7 @@ void Application::Draw() {
             ImGui::MenuItem("GPU frame", nullptr, &show_gpu_);
             ImGui::MenuItem("Selection", nullptr, &show_details_);
             ImGui::MenuItem("Platform metrics", nullptr, &show_metrics_);
+            if(ImGui::MenuItem("Frame stats",nullptr,&show_frame_stats_)&&show_frame_stats_)frame_stats_dock_pending_=true;
             ImGui::MenuItem("Counters", nullptr, &show_counters_);
             ImGui::MenuItem("Capture comparison", nullptr, &show_comparison_);
             ImGui::MenuItem("Distributions", nullptr, &show_distribution_);
@@ -471,16 +499,20 @@ void Application::Draw() {
         ImGui::TextDisabled("  %s  —  CyInsights", project.empty() ? "Unreal capture" : project.c_str());
         ImGui::EndMainMenuBar();
     }
+}
+void Application::Draw() {
+    Tick();
+    DrawMenuBar();
     Toolbar();
     float navigation_height = NavigationHeight();
-    const auto *viewport = ImGui::GetMainViewport();
+    const auto *viewport = WorkspaceViewport();
     ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x, viewport->WorkPos.y + navigation_height));
     ImGui::SetNextWindowSize(
         ImVec2(viewport->WorkSize.x, std::max(1.f, viewport->WorkSize.y - navigation_height)));
     ImGui::SetNextWindowViewport(viewport->ID);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
-    ImGui::Begin("##InsightsWorkspace", nullptr,
+    BeginView("##InsightsWorkspace", nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                      ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoDocking);
     unsigned dock = ImGui::GetID("InsightsLayoutV2");
@@ -492,9 +524,7 @@ void Application::Draw() {
     ImGui::End();
     ImGui::PopStyleVar(2);
     if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O)) {
-        auto p = ChooseFile(CaptureFilter);
-        if (!p.empty())
-            Open(p);
+        ChooseAndOpenCaptures();
     }
     if (session_view_) {
         FollowTimelineSelection();
@@ -507,6 +537,9 @@ void Application::Draw() {
         NativeSetupView();
         return;
     }
+    DrawPanels();
+}
+void Application::DrawPanels() {
     UpdateTiming();
     DockFunctionHistogram();
     DockActivities();
@@ -520,6 +553,7 @@ void Application::Draw() {
     if (show_timers_)
         Statistics();
     if(show_counters_)Counters();
+    if(show_frame_stats_)FrameStatsView();
     if(show_comparison_)Comparison();
     if(show_distribution_)DistributionView();
     if(show_tasks_)TasksView();
@@ -535,11 +569,11 @@ void Application::Draw() {
         PlatformMetrics();
     if (show_messages_)
         Messages();
-    LoadStatus();
-    NativeSetupView();
+    if(document_visible_){LoadStatus();NativeSetupView();}
 }
 void Application::Session() {
-    ImGui::Begin("Session", nullptr,
+    if(hosted_)ImGui::BeginChild("Session",ImVec2(0,0));
+    else BeginView("Session", nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDocking);
     if(brand_logo_){ImGui::Image(brand_logo_,ImVec2(80*UiScale(),80*UiScale()));ImGui::SameLine();}
     ImGui::BeginGroup();
@@ -560,13 +594,62 @@ void Application::Session() {
     options.ipv4 = remote_ip_;
     options.control_port = static_cast<uint16_t>(remote_port_);
     options.seconds = remote_seconds_;
+    options.override_capture_options=!remote_use_defaults_;
+    options.capture=remote_capture_;
+    options.meta_gpu=remote_meta_;options.meta_gpu.adb=fs::u8path(remote_adb_);options.meta_gpu.device=remote_adb_device_;options.meta_gpu.package=remote_android_package_;
     wchar_t app_path[32768]{};
     GetModuleFileNameW(nullptr, app_path, 32768);
     options.output_directory = fs::path(app_path).parent_path() / "Captures";
     if (ImGui::Button("Connect to device")) remote_.Probe(options);
     ImGui::SameLine();
     if (ImGui::Button("Start remote trace")) remote_.Start(options);
+    if(focus_capture_options_){ImGui::SetNextItemOpen(true);focus_capture_options_=false;}
     if (ImGui::TreeNode("Capture options")) {
+        ImGui::Checkbox("Use plugin project defaults",&remote_use_defaults_);
+        if(remote_use_defaults_&&!remote.capture_defaults.IsNull()){
+            std::string error;if(ReadCaptureOptions(remote.capture_defaults,remote_capture_,error))std::snprintf(remote_stat_groups_,sizeof(remote_stat_groups_),"%s",remote_capture_.stat_groups.c_str());
+        }
+        if(!remote.capture_defaults.IsNull()&&ImGui::Button("Copy plugin defaults for this capture")){
+            std::string error;if(ReadCaptureOptions(remote.capture_defaults,remote_capture_,error)){
+                remote_use_defaults_=false;std::snprintf(remote_stat_groups_,sizeof(remote_stat_groups_),"%s",remote_capture_.stat_groups.c_str());
+            }
+        }
+        ImGui::BeginDisabled(remote_use_defaults_);
+        if(ImGui::Button("Basic profile")){remote_capture_=CaptureOptions{};std::snprintf(remote_stat_groups_,sizeof(remote_stat_groups_),"%s",remote_capture_.stat_groups.c_str());}
+        ImGui::Checkbox("CPU timing",&remote_capture_.cpu);ImGui::SameLine();ImGui::Checkbox("GPU groups each frame (default)",&remote_capture_.gpu);
+        if(!remote_capture_.gpu)remote_capture_.gpu_passes=false;
+        ImGui::BeginDisabled(!remote_capture_.gpu);ImGui::Checkbox("Extra individual GPU passes (each frame)",&remote_capture_.gpu_passes);ImGui::EndDisabled();
+        ImGui::Checkbox("Basic frame statistics",&remote_capture_.frame_stats);ImGui::SameLine();ImGui::Checkbox("UObject counts",&remote_capture_.object_counts);
+        if(!remote_capture_.frame_stats)remote_capture_.stat_groups_enabled=false;
+        ImGui::Checkbox("Process memory each frame",&remote_capture_.memory_stats);
+        ImGui::BeginDisabled(!remote_capture_.frame_stats);ImGui::Checkbox("Additional Unreal stat groups",&remote_capture_.stat_groups_enabled);
+        ImGui::BeginDisabled(!remote_capture_.stat_groups_enabled);ImGui::SetNextItemWidth(300);
+        if(ImGui::InputText("Groups (* = all active)",remote_stat_groups_,sizeof(remote_stat_groups_)))remote_capture_.stat_groups=remote_stat_groups_;
+        ImGui::EndDisabled();ImGui::EndDisabled();
+        ImGui::Checkbox("Tasks",&remote_capture_.tasks);ImGui::SameLine();ImGui::Checkbox("Network",&remote_capture_.network);
+        ImGui::Checkbox("File I/O",&remote_capture_.file_io);ImGui::SameLine();ImGui::Checkbox("Asset loading",&remote_capture_.loadtime);
+        ImGui::Checkbox("Native logs",&remote_capture_.logs);ImGui::SameLine();ImGui::Checkbox("Memory tags (LLM)",&remote_capture_.memtags);
+        ImGui::Checkbox("Quest GPU completion / Vulkan passes",&remote_capture_.quest_gpu_completion);
+        ImGui::TextDisabled("Two extra queries per Vulkan render pass; may affect scheduling. No pass splitting or resource readbacks.");
+        ImGui::Checkbox("Quest runtime metrics",&remote_capture_.quest_metrics);ImGui::SameLine();ImGui::SetNextItemWidth(110);ImGui::InputInt("Meta Hz (0 = each frame)",&remote_capture_.quest_hz);remote_capture_.quest_hz=std::clamp(remote_capture_.quest_hz,0,120);
+        ImGui::TextWrapped("Default GPU: native rendering groups each render frame. Quest completion mode also measures Vulkan render-pass boundaries; native subgroups inside tile passes may remain unresolved. Individual RDG names are optional. Meta execution-frame identity is unknown. No image/buffer copies.");
+        ImGui::Checkbox("Detailed GPU snapshot on start",&remote_capture_.gpu_details);
+        ImGui::BeginDisabled(!remote_capture_.gpu_details);
+        ImGui::SetNextItemWidth(110);ImGui::InputInt("GPU snapshot frames",&remote_capture_.gpu_frames);remote_capture_.gpu_frames=std::clamp(remote_capture_.gpu_frames,1,8);
+        ImGui::Checkbox("GPU descriptors",&remote_capture_.gpu_bindings);ImGui::SameLine();ImGui::Checkbox("GPU barriers",&remote_capture_.gpu_barriers);
+        ImGui::Checkbox("Timestamp every GPU command",&remote_capture_.gpu_per_command);
+        ImGui::Checkbox("Copy GPU images / textures (expensive)",&remote_capture_.gpu_readbacks);
+        ImGui::EndDisabled();ImGui::EndDisabled();
+        ImGui::TextWrapped("Basic: CPU/GPU scopes, frame times and object counts. Extra groups and readbacks are off. GPU snapshots require a Windows collector and connected recorder; detailed payloads still use the collector export workflow.");
+        ImGui::SeparatorText("Meta hardware GPU capture (Quest)");
+        ImGui::Checkbox("Record Meta render stages and counters (test default)",&remote_meta_.enabled);
+        ImGui::BeginDisabled(!remote_meta_.enabled);
+        ImGui::Checkbox("Restart the Quest game before capture (optional)",&remote_meta_.restart_game);
+        ImGui::SetNextItemWidth(430);ImGui::InputTextWithHint("ADB executable","Automatic, or path to adb.exe",remote_adb_,sizeof(remote_adb_));
+        ImGui::SetNextItemWidth(300);ImGui::InputTextWithHint("ADB device","Automatic match by game IP",remote_adb_device_,sizeof(remote_adb_device_));
+        ImGui::SetNextItemWidth(300);ImGui::InputTextWithHint("Android package","Automatic from updated plugin",remote_android_package_,sizeof(remote_android_package_));
+        ImGui::TextWrapped("Detailed Meta GPU profiling is enabled before launching the game. Restart resets the current game session. An authorized ADB connection is required; USB or ADB over Wi-Fi. Meta hardware events are saved in the same .cycapture. No texture or buffer copies.");
+        ImGui::EndDisabled();
         ImGui::SetNextItemWidth(150);
         ImGui::InputInt("Control port", &remote_port_);
         remote_port_ = std::clamp(remote_port_, 1, 65535);
@@ -581,12 +664,46 @@ void Application::Session() {
     if (remote.state == RemoteState::starting || remote.state == RemoteState::recording) {
         if (ImGui::Button("Stop remote trace")) remote_.Stop();
     }
+    if(remote.state==RemoteState::recording&&ImGui::TreeNode("Request extra GPU snapshot")){
+        ImGui::SetNextItemWidth(110);ImGui::InputInt("Snapshot frames",&remote_gpu_options_.gpu_frames);remote_gpu_options_.gpu_frames=std::clamp(remote_gpu_options_.gpu_frames,1,8);
+        ImGui::Checkbox("Descriptors",&remote_gpu_options_.gpu_bindings);ImGui::SameLine();ImGui::Checkbox("Barriers",&remote_gpu_options_.gpu_barriers);
+        ImGui::Checkbox("Per-command GPU timestamps",&remote_gpu_options_.gpu_per_command);
+        ImGui::Checkbox("Include GPU image / texture readbacks",&remote_gpu_options_.gpu_readbacks);
+        ImGui::BeginDisabled(!remote.capture_capabilities["gpu_request"].AsBool());
+        if(ImGui::Button("Capture GPU snapshot now"))remote_.RequestGpu(remote_gpu_options_);
+        ImGui::EndDisabled();
+        ImGui::TextWrapped("Windows collector + connected recorder required. Exported GPU files are not transferred by the native trace receiver. Quest provides runtime metrics; detailed Vulkan commands remain unavailable.");
+        ImGui::TreePop();
+    }
+    if(!remote.gpu_message.empty())ImGui::TextWrapped("GPU: %s",remote.gpu_message.c_str());
+    if(!remote.meta_message.empty())ImGui::TextWrapped("Meta GPU: %s",remote.meta_message.c_str());
+    for(const auto& source:remote.manifest["sources"].Items())if(source["id"].AsString()=="unreal.gpu.scopes"&&source.Has("timestamp_queries_available")) {
+        const bool ready=source["trace_compiled"].AsBool()&&source["timestamp_queries_available"].AsBool();
+        ImGui::TextColored(ready?ImVec4(.45f,.85f,.6f,1):ImVec4(1,.65f,.3f,1),"Native GPU groups: %s",ready?"timestamps supported (events verified after analysis)":"unavailable on this running target");
+        if(source.Has("vulkan_timestamp_stage")) {
+            ImGui::TextWrapped("GPU timestamp mode: %s",source["vulkan_timestamp_stage_meaning"].AsString().c_str());
+            if(source["completion_timestamps_requested"].AsBool()&&source["vulkan_timestamp_stage"].AsNumber()!=1)
+                ImGui::TextWrapped("GPU completion mode was not applied: %s",source["completion_timestamp_path"].AsString().c_str());
+        } else if(remote.manifest["metadata"]["platform"].AsString()=="Android")
+            ImGui::TextWrapped("This Quest capture does not report its timestamp stage. Update the target plugin to record GPU completion timestamps.");
+        if(!ready||(source["groups_requested"].AsBool()&&!source["group_recording_enabled"].AsBool()))ImGui::TextWrapped("%s",source["reason"].AsString().c_str());
+        if(source["groups_requested"].AsBool()&&source["applied_rdg_event_level"].AsNumber()<source["requested_rdg_event_level"].AsNumber())
+            ImGui::TextWrapped("Nested RDG group level not applied: engine instrumentation or an explicit console override limits coverage.");
+        const auto preparation=source["timestamp_preparation"].AsString();
+        if(!preparation.empty())ImGui::TextWrapped("%s",preparation.c_str());
+    }
+    for(const auto& source:remote.manifest["sources"].Items())if(source["id"].AsString()=="cyinsights.vulkan.passes") {
+        ImGui::TextWrapped("Vulkan passes: %s resolved, %s pending, %s unavailable",source["resolved_pass_count"].AsString().c_str(),source["pending_pass_count"].AsString().c_str(),source["unresolved_pass_count"].AsString().c_str());
+        ImGui::TextWrapped("%s",source["reason"].AsString().c_str());
+    }
     ImGui::Text("%s | %.1f MiB | %.1f s", RemoteStateName(remote.state),
-                double(remote.bytes) / (1024 * 1024), remote.elapsed);
+                double(remote.bytes) / (1024 * 1024), remote.state==RemoteState::starting||remote.state==RemoteState::probing?remote.startup_elapsed:remote.elapsed);
+    if((remote.state==RemoteState::starting||remote.state==RemoteState::probing)&&remote.session_id.empty())ImGui::TextWrapped("Waiting for capture startup; no trace data has been received yet.");
     if (!remote.message.empty()) ImGui::TextWrapped("%s", remote.message.c_str());
+    if(!remote.diagnostic_log.empty())ImGui::TextWrapped("Capture diagnostics: %s",remote.diagnostic_log.u8string().c_str());
     if (!remote.archive.empty()) {
         ImGui::BeginDisabled(AnalysisBusy());
-        if (ImGui::Button("Open received capture")) Open(remote.archive);
+        if (ImGui::Button("Open received capture")) RequestOpen(remote.archive);
         ImGui::EndDisabled();
         ImGui::TextWrapped("%s", remote.archive.u8string().c_str());
     }
@@ -595,7 +712,8 @@ void Application::Session() {
     ImGui::TextWrapped("Launch the game with the plugin in Development/Debug. Enter its LAN IPv4 address; "
                        "Unreal and available Quest GPU metrics travel in the same trace. Analyze after stop.");
     ImGui::SeparatorText("Capture");
-    for (const auto &kv : capture_.manifest["metadata"].Members())
+    if(capture_.file.empty())ImGui::TextDisabled("No capture loaded.");
+    if(!capture_.file.empty())for (const auto &kv : capture_.manifest["metadata"].Members())
         ImGui::TextWrapped("%s: %s", kv.first.c_str(), kv.second.Write().c_str());
     ImGui::SeparatorText("Sources");
     for (const auto &s : capture_.manifest["sources"].Items()) {
@@ -619,18 +737,34 @@ void Application::Session() {
     if(ImGui::IsItemHovered())ImGui::SetTooltip("Automatic adapts concurrency to the visible workload.\nReduce workers to leave more CPU time for other applications.\nThis setting applies to this application session.");
     ImGui::TextWrapped("%s",native_setup_.message.c_str());
     ImGui::BeginDisabled(native_setup_.Busy()||AnalysisBusy());
-    if(ImGui::InputText("##insightsexe", exe_, sizeof(exe_),ImGuiInputTextFlags_EnterReturnsTrue))SelectAnalyzer(fs::u8path(exe_));
-    if (ImGui::Button("Select UnrealInsights.exe")) {
-        auto p = ChooseFile(L"Unreal Insights\0UnrealInsights.exe\0\0");
-        if (!p.empty())SelectAnalyzer(p);
+    ImGui::TextWrapped("Add the root of your Unreal installation (or its Engine folder). Registered engines are saved and their readers are prepared automatically.");
+    bool add_engine=ImGui::InputTextWithHint("Engine root","C:/Unreal/UE_5.8",engine_root_input_,sizeof(engine_root_input_),ImGuiInputTextFlags_EnterReturnsTrue);
+    if(ImGui::Button("Browse engine folder")) {
+        auto p=ChooseFolder();if(!p.empty()){std::snprintf(engine_root_input_,sizeof(engine_root_input_),"%s",p.u8string().c_str());add_engine=true;}
     }
-    if(ImGui::BeginCombo("Installed Unreal analyzers",exe_[0]?fs::u8path(exe_).parent_path().parent_path().parent_path().parent_path().filename().u8string().c_str():"Select an installation")) {
-        for(const auto& path:native_setup_.installations)if(ImGui::Selectable(path.u8string().c_str(),path==fs::u8path(exe_)))SelectAnalyzer(path);
+    ImGui::SameLine();add_engine|=ImGui::Button("Add engine");
+    if(add_engine)AddEngineRoot(fs::u8path(engine_root_input_));
+    if(ImGui::BeginCombo("Registered Unreal engines",exe_[0]?NativeSetup::EngineRoot(fs::u8path(exe_)).u8string().c_str():"Add an engine")) {
+        for(const auto& path:native_setup_.installations) {
+            const auto label=NativeSetup::EngineRoot(path).u8string();
+            if(ImGui::Selectable(label.c_str(),path==fs::u8path(exe_)))SelectAnalyzer(path);
+        }
         ImGui::EndCombo();
     }
+    ImGui::BeginDisabled(!exe_[0]||native_setup_.Busy());
     if(ImGui::Button("Prepare native readers"))SelectAnalyzer(fs::u8path(exe_));
+    ImGui::SameLine();if(ImGui::Button("Remove selected engine")) {
+        if(native_setup_.RemoveEngine(fs::u8path(exe_),engine_registration_error_)) {
+            std::snprintf(exe_,sizeof(exe_),"%s",native_setup_.selected.u8string().c_str());
+            if(exe_[0])SelectAnalyzer(native_setup_.selected);
+        }
+    }
     ImGui::EndDisabled();
+    ImGui::EndDisabled();
+    if(!engine_registration_error_.empty())ImGui::TextColored(ImVec4(1,.45f,.4f,1),"%s",engine_registration_error_.c_str());
+    if(exe_[0])ImGui::TextWrapped("Analyzer: %s",exe_);
     ImGui::SeparatorText("Windows collector");
+    ImGui::TextWrapped("Optional CyInsights collector for extra command detail. Native .utrace GPU groups do not require it.");
     if (ImGui::Button("Discover sessions")) {
         sessions_.Open();
     }
@@ -643,16 +777,21 @@ void Application::Session() {
                     client_->WriterAlive() ? "connected" : "disconnected");
         if (ImGui::Button("Capture detailed GPU frame")) {
             client_->SetLevel(cygi::TrackingLevel::pass_timing);
-            client_->StartDeepCapture(1, true, true, true, false, message_);
+            client_->StartDeepCapture(remote_gpu_options_.gpu_frames, remote_gpu_options_.gpu_bindings,
+                remote_gpu_options_.gpu_barriers, remote_gpu_options_.gpu_per_command, remote_gpu_options_.gpu_readbacks, message_);
         }
         ImGui::TextWrapped("Export directory: %s", live_root_.u8string().c_str());
+        ImGui::Checkbox("Extra GPU bindings",&remote_gpu_options_.gpu_bindings);
+        ImGui::SameLine();ImGui::Checkbox("Extra GPU barriers",&remote_gpu_options_.gpu_barriers);
+        ImGui::Checkbox("Extra per-command timestamps",&remote_gpu_options_.gpu_per_command);
+        ImGui::Checkbox("Extra texture / buffer readbacks",&remote_gpu_options_.gpu_readbacks);
     }
     ImGui::Separator();
     ImGui::TextWrapped("Search applies to timing events, shaders and resources.");
     ImGui::InputTextWithHint("##search", "Search...", search_, sizeof(search_));
     ImGui::TextWrapped("Measured: solid bars. Derived: reconstructed passes/frame candidates. Unavailable: "
                        "missing channel, collector or calibration.");
-    ImGui::End();
+    if(hosted_)ImGui::EndChild();else ImGui::End();
 }
 bool Application::Connect(uint32_t pid) {
     if (!sessions_.Open()) {
@@ -778,7 +917,7 @@ void Application::Live() {
     }
 }
 void Application::Gpu() {
-    bool visible = ImGui::Begin("GPU frame");
+    bool visible = BeginView("GPU frame");
     if (focus_gpu_) {
         auto *window = ImGui::GetCurrentWindow();
         if (window->DockNode && window->DockNode->TabBar) {
@@ -948,8 +1087,13 @@ void Application::Gpu() {
     }
     ImGui::End();
 }
+bool Application::FocusVulkanPassContents(){
+    if(!native_.vulkan_contents)return false;
+    for(size_t i=0;i<native_.events.size();++i){const auto& e=native_.events[i];if(e.thread!="GPU / Vulkan render passes (approximate alignment)")continue;bool ambiguous=false;if(native_.vulkan_contents->Find(e,ambiguous).empty())continue;selected_cpu_=int(i);show_details_=true;session_view_=false;ImGui::SetWindowFocus(WindowName("Selection").c_str());return true;}
+    return false;
+}
 void Application::Details() {
-    ImGui::Begin("Selection");
+    BeginView("Selection");
     if (selected_cpu_ >= 0 && selected_cpu_ < static_cast<int>(native_.events.size())) {
         auto &e = native_.events[selected_cpu_];
         ImGui::TextWrapped("%s", e.name.c_str());
@@ -962,6 +1106,23 @@ void Application::Details() {
         else
             ImGui::Text("End: %.6f ms\nInclusive: %.6f ms (measured)", e.end * 1000,
                         (e.end - e.start) * 1000);
+        if(e.thread=="GPU / Vulkan render passes (approximate alignment)"){
+            ImGui::SeparatorText("Vulkan subpass contents");bool ambiguous=false;
+            auto rows=native_.vulkan_contents?native_.vulkan_contents->Find(e,ambiguous):std::vector<cyvpd::Record>{};
+            if(rows.empty())ImGui::TextWrapped("%s",ambiguous?"Pass association ambiguous; no unique contents.":native_.vulkan_contents_error.empty()?"Contents unavailable in this capture. Record a new trace with the updated plugin and native reader.":native_.vulkan_contents_error.c_str());
+            else{ImGui::Text("Capture-local pass: %llu",rows[0].pass);ImGui::Text("Submission: %llu",rows[0].submission);
+                for(const auto& r:rows){ImGui::PushID(int(r.subpass));if(ImGui::TreeNodeEx("subpass",ImGuiTreeNodeFlags_DefaultOpen,"Subpass %u",r.subpass)){
+                    ImGui::Text("Direct draws: %llu",r.direct);ImGui::Text("Indexed draws: %llu",r.indexed);
+                    ImGui::Text("Indirect calls: %llu",r.indirect);ImGui::Text("Requested indirect commands: %llu",r.indirect_commands);
+                    ImGui::Text("Requested vertices: %llu",r.vertices);ImGui::Text("Requested indices: %llu",r.indices);
+                    ImGui::Text("Direct instance arguments: %llu",r.instances);
+                    if(r.flags&1)ImGui::TextWrapped("Partial coverage: some secondary command buffers were recorded before capture.");
+                    if(r.flags&2)ImGui::TextWrapped("Indirect vertex, index and instance arguments unavailable; GPU buffers were not read.");
+                    ImGui::TreePop();}ImGui::PopID();}
+                ImGui::TextWrapped("Observed Vulkan command arguments. Requested vertices/indices are not measured shader invocations. Only intercepted draw APIs are counted.");
+            }
+            ImGui::TextWrapped("Individual subpass GPU costs and Unreal group names unavailable. The parent pass duration is measured; no duration is assigned to its subpasses.");
+        }
     } else if (gpu_ && selected_event_ >= 0 &&
                selected_event_ < static_cast<int>(gpu_->LastFrame().events.size())) {
         const auto &f = gpu_->LastFrame();
@@ -993,7 +1154,7 @@ void Application::Details() {
     ImGui::End();
 }
 void Application::PlatformMetrics() {
-    ImGui::Begin("Platform metrics");
+    BeginView("Platform metrics");
     ImGui::TextWrapped("Raw Meta report values. Column names are retained from the report; units and clock "
                        "alignment have not been normalized. Up to 100,000 records are displayed; the "
                        "complete report remains in the archive.");

@@ -3,6 +3,7 @@
 #pragma once
 #include "TimingEvent.hpp"
 #include "TimingViewport.hpp"
+#include "GpuTimingDetail.hpp"
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -26,6 +27,8 @@ struct TimingTrack {
     int visible_levels = -1;
     int visible_rows = 0;
     bool visible_events_valid=false;
+    GpuTimingDetail gpu_detail;
+    GpuTimingDetail gpu_detail_source; // Raw loaded window, before pixel aggregation.
     std::vector<TimingGlyph> glyphs;
     float glyph_width = 0;
     int glyph_selected = -2;
@@ -35,6 +38,8 @@ struct TimingTrack {
     void Query(const std::vector<TimingEvent> &source, double start, double end, int levels,
                std::vector<size_t> &result) const;
 };
+// Shared display order for in-memory and paged native traces.
+int TimingTrackRank(const TimingTrack& track);
 struct TimerTotal {
     uint32_t timer = 0;
     size_t count = 0;

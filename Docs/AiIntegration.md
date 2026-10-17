@@ -1,5 +1,21 @@
 # IA, MCP et SDK dans CyInsights
 
+Révision locale du 17 octobre 2026 : **39 opérations** communes au SDK,
+au MCP et à l’onglet Tools natif. Les nouveaux outils couvrent compteurs et
+statistiques par frame, activités réseau/stockage/chargement/mémoire,
+comparaison A/B, scopes individuels, relations appelants/appelés, dépendances
+natives de tâches et détails du collecteur GPU optionnel.
+
+Lire la [méthode d’analyse](AiAnalysisMethod.md), la [couverture actuelle](CapabilityCoverage.md)
+et le [contrat exécutable](../AI/app/CyTool.json). `get_analysis_guide` fournit la méthode
+aux IA ; **AI Inspector > AI method** permet de la lire/copier dans l’application.
+`get_capabilities` annonce les providers chargés et les limites natives.
+Les nouvelles requêtes suivent par défaut la plage sélectionnée/visible ;
+les int64 et identités gardent leur précision, les absences restent `null`.
+
+Le détail ci-dessous documente également l’intégration initiale ; ses anciens
+comptages de tests et d’opérations ne décrivent pas la révision actuelle.
+
 La release `bin/Release-20261009.6` intègre **CyToolsCore 0.10.1**, son ordonnanceur de jobs et le SDK MCP officiel **1.30.0**. La fenêtre **AI Inspector**, les calculs et la timeline restent en C++/Dear ImGui. Un compagnon Python expose les outils ; il ne dépend pas du checkout de CyToolsCore à l'exécution.
 
 ## Utilisation
@@ -11,9 +27,16 @@ La release `bin/Release-20261009.6` intègre **CyToolsCore 0.10.1**, son ordonna
 
 Les deux autorisations sont désactivées au démarrage normal. `--ai-enable`, `--ai-control` et `--ai-capture` sont des options explicites de lancement ; `--ai-view` affiche la fenêtre. Aucune configuration de client IA existante n'est modifiée automatiquement.
 
+Avec plusieurs captures, copier la connexion depuis le document concerné :
+`CYINSIGHTS_DOCUMENT_ID` identifie son endpoint indépendamment de l'onglet
+visible. Les permissions sont propres à ce document. Voir
+[Plusieurs captures](MultipleCaptures.md). `--ai-control-all` est une option
+explicite de lancement pour autoriser le contrôle de tous les documents passés
+en arguments ; les documents ouverts ultérieurement restent désactivés.
+
 **Tools** présente les opérations et leurs contrats JSON, permet de les lancer localement et de copier le résultat. Save/Load parameters conserve les paramètres versionnés ; charger ne lance pas l'opération. **Options** propose anglais/français, l'analyse automatique, le budget FPS et les notices. Le modèle conversationnel s'exécute dans le client MCP choisi ; aucun fournisseur ou modèle n'est embarqué.
 
-## Les 17 opérations
+## Opérations de l’intégration initiale
 
 Les entrées exactes, valeurs par défaut et bornes proviennent de [CyTool.json](../AI/app/CyTool.json). Les paramètres inconnus sont refusés.
 
@@ -36,6 +59,7 @@ Les entrées exactes, valeurs par défaut et bornes proviennent de [CyTool.json]
 | `capture_start` | Démarrer réception/capture ; durée 0 = arrêt explicite, maximum 3600 s | Capture réseau |
 | `capture_status` | État, octets reçus et archive disponible | Lecture |
 | `capture_stop` | Arrêter uniquement l'enregistrement détenu par cette application | Capture réseau |
+| `capture_gpu` | Demander un snapshot GPU optionnel au recorder Windows connecté ; aucun transfert du payload GPU par le récepteur natif | Capture réseau |
 
 Les permissions SDK `appControl`, `annotations` et `remoteCapture` s'ajoutent aux contrôles natifs correspondants. Les annotations ont leur permission SDK propre ; le contrôle Application natif autorise leur publication.
 
@@ -75,3 +99,10 @@ L'aide réactive fonctionne sur la trace chargée et l'intervalle visible/sélec
 La révision passe 483 vérifications natives sur 13 suites et cinq tests Python du compagnon. Les tests MCP officiels couvrent lecture seule, ouverture réelle, histogramme/recherche/diagnostic, sélection/filtre, rejet de génération, annulation, tâches candidates, isolation de rapports et commandes réseau. La source `.utrace` reste inchangée. La capture MCP réseau de cette révision utilise un endpoint de test local et un payload synthétique ; aucune nouvelle capture matérielle Quest n'a été validée.
 
 CyToolsCore provient du dépôt [MrMybal/CyToolsCore](https://github.com/MrMybal/CyToolsCore), commit `a8d200f2d0baaade1633e0683663b4506c595f74`, wheel officielle 0.10.1 MIT. Les notices intégrales Core/MCP/dépendances accompagnent les licences existantes dans `LICENCES`. Le moteur et ses DLLs ne sont pas redistribués. Les preuves et empreintes de la release sont dans `release-manifest.json` et `build/release-20261009.6-audit`.
+
+
+`query_vulkan_passes` reads captured subpass draw arguments in the selected
+range (`start`, `end`, optional capture-local `passId`, bounded `limit`). It
+uses the immutable read-only detail cache in a worker, never copies a trace
+into an SDK job, and returns null individual GPU costs/Unreal names. Requires
+new `CyInsightsVulkan.Contents` events. See [subpass contents](QuestSubpassContents.md).

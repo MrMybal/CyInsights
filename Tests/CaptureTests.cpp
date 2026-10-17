@@ -23,6 +23,9 @@ int main(){
     test(!cyinsights::Inspect(dir/"corrupt.cycapture",capture,error),"checksum catches corruption");
     fs::copy_file(dir/"a.cycapture",dir/"truncated.cycapture");fs::resize_file(dir/"truncated.cycapture",32);
     test(!cyinsights::Inspect(dir/"truncated.cycapture",capture,error),"truncated header");
+    fs::create_directory(dir/"invalid");
+    std::ofstream(dir/"invalid/manifest.json")<<R"({"format":"cycapture","version":1,"session_id":"test","sources":[{"id":"meta.quest.gpu","status":"invalid"}]})";
+    test(!cyinsights::Pack(dir/"invalid",dir/"invalid.cycapture",error)&&error=="Every source needs an id and measured/derived/unavailable status","Packaging retains the manifest validation reason without a dangling error pointer");
     cygi::Json manifest;cygi::Json::Parse(R"({"format":"cycapture","version":2,"session_id":"test","sources":[]})",manifest);
     test(!cyinsights::ValidateManifest(manifest,error),"reject unsupported major version");
     cygi::Json::Parse(R"({"format":"cycapture","version":1,"session_id":"test","sources":[{"id":"gpu","status":"measured","path":"../escape"}]})",manifest);

@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <atomic>
+#include "../Tools/NativeTiming/FrameStatsFormat.hpp"
 
 namespace cyinsights {
 struct CounterSample {
@@ -15,10 +16,15 @@ struct CounterSample {
 };
 struct CounterSeries {
     uint32_t id = 0;
-    std::string name, unit, reason;
+    std::string name, unit, reason, group;
     bool floating = false, reset_per_frame = false, meta = false, availability = false, pinned = false;
     int companion = -1;
     std::vector<CounterSample> samples;
+    bool frame_stats=false;
+    uint32_t frame_stat_id=0;
+    // Parallel only for plugin snapshots; ordinary counters incur no per-sample
+    // frame metadata allocation. Values retain exact int64 representation.
+    std::vector<cyfs::Sample> frame_samples;
     size_t Lower(double time) const;
     std::string Text(const CounterSample&) const;
 };
@@ -38,6 +44,10 @@ public:
     std::string error;
     double start = 0, end = 0;
     static bool ReadCatalog(const std::filesystem::path&, CounterModel&, std::string& error);
+    bool ReadFrameStats(const std::filesystem::path&,bool catalog_only,std::string& error,const std::atomic<bool>* cancel=nullptr);
+    // Last available observation recorded INSIDE this frame. Never carry a
+    // previous frame's gauge or a delayed GPU result across a missing frame.
+    const CounterSample* InFrame(size_t counter,double begin,double end,size_t* index=nullptr) const;
     // Fixed numeric filenames avoid path/name collisions from trace metadata.
     static bool CanExport(const std::string& name);
     void LoadValues(const std::filesystem::path& directory,const std::atomic<bool>* cancel=nullptr);

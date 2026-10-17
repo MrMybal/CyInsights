@@ -7,8 +7,12 @@ et son parsing décimal. Le `.utrace` source reste intact et `.cycapture` inchan
 Cette optimisation ne crée aucun détail GPU absent de la trace.
 
 La détection de l'adaptateur correspondant à l'analyseur choisi est automatique.
-Au démarrage, l'application détecte Unreal et prépare les trois lecteurs natifs
-manquants en arrière-plan. La fenêtre de préparation montre le journal et permet
+Dans **Session**, ajouter manuellement le dossier racine de l'installation Unreal,
+ou son sous-dossier `Engine`, puis sélectionner ce moteur dans la liste enregistrée.
+L'application retrouve Unreal Insights et prépare les trois lecteurs natifs
+manquants en arrière-plan. Les lancements suivants réutilisent la sélection et le cache.
+Aucune recherche des installations dans le registre, le Launcher ou les dossiers
+voisins n'est effectuée. La fenêtre de préparation montre le journal et permet
 d'annuler ; aucun script manuel n'est requis. Unreal licencié et les outils C++
 Visual Studio restent nécessaires pour cette compilation locale. Le cache par
 installation est réutilisé au prochain lancement, sans recompiler le moteur.
@@ -64,3 +68,7 @@ build/Local/CyNativeTimingValidation.exe timing.cynt timing.csv
 Pour comparer les backends, `CYINSIGHTS_TIMING_CSV=1` force le pont CSV. Retirer
 la variable réactive la détection automatique. Les rapports de snapshot indiquent
 le backend, les temps de décodage/indexation et le volume des timings.
+
+Les scopes GPU `RDGEvent` dont la métadonnée contient une chaîne CBOR unique sont décodés sous leur nom réel. La table de noms supplémentaires regroupe les libellés identiques ; aucun second tableau d'événements ni cache croissant par frame n'est conservé. Les chaînes invalides gardent le nom statique. Les autres formats dynamiques ne sont pas évalués.
+
+La vue Timing dispose de deux règles : la règle supérieure conserve la navigation ; la règle inférieure, plus graduée, sélectionne un intervalle avec un glisser gauche sans modificateur. Les bornes et la durée sont affichées, dans les deux sens de sélection. La mesure utilise le même axe temporel que les pistes et conserve le glisser en dehors de la règle. La vue ne se déplace pas pendant la mesure. Les statistiques et histogrammes utilisent le range existant ; Échap l'efface. Les graduations sont bornées par la largeur de la fenêtre, pas par le nombre d'événements de la capture.

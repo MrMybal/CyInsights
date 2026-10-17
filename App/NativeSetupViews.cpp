@@ -3,8 +3,15 @@
 #include "UiMetrics.hpp"
 namespace cyinsights {
 void Application::SelectAnalyzer(const fs::path& path) {
+    if(!native_setup_.SelectEngine(path,engine_registration_error_))return;
     std::snprintf(exe_,sizeof(exe_),"%s",path.u8string().c_str());
     native_setup_.Prepare(path);setup_dismissed_=false;
+}
+bool Application::AddEngineRoot(const fs::path& root) {
+    if(!native_setup_.AddEngineRoot(root,engine_registration_error_))return false;
+    SelectAnalyzer(native_setup_.selected);
+    if(!load_error_.empty()&&!trace_.empty()){load_error_.clear();native_import_pending_=true;}
+    return true;
 }
 void Application::NativeSetupTick() {
     native_setup_.Poll();
@@ -15,10 +22,11 @@ void Application::NativeSetupView() {
     const bool busy=native_setup_.Busy();
     const bool failed=native_setup_.state==NativeSetup::State::Failed;
     if((!busy&&!failed)||setup_dismissed_)return;
-    const auto* viewport=ImGui::GetMainViewport();
+    const auto* viewport=WorkspaceViewport();
+    ImGui::SetNextWindowViewport(viewport->ID);
     ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x+viewport->WorkSize.x*.5f,viewport->WorkPos.y+viewport->WorkSize.y*.25f),ImGuiCond_Appearing,ImVec2(.5f,.5f));
     ImGui::SetNextWindowSize(ImVec2(640*UiScale(),0),ImGuiCond_Always);
-    ImGui::Begin("Native trace reader setup",nullptr,ImGuiWindowFlags_NoDocking|ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoCollapse|ImGuiWindowFlags_AlwaysAutoResize|ImGuiWindowFlags_NoFocusOnAppearing);
+    BeginView("Native trace reader setup",nullptr,ImGuiWindowFlags_NoDocking|ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoCollapse|ImGuiWindowFlags_AlwaysAutoResize|ImGuiWindowFlags_NoFocusOnAppearing);
     ImGui::TextWrapped("%s",native_setup_.message.c_str());
     if(!native_setup_.selected.empty())ImGui::TextWrapped("Unreal analyzer: %s",native_setup_.selected.u8string().c_str());
     if(busy) {
@@ -28,8 +36,9 @@ void Application::NativeSetupView() {
         if(!pending_capture_.empty())ImGui::TextWrapped("Queued capture: %s",pending_capture_.filename().u8string().c_str());
         if(ImGui::Button("Cancel preparation / use CSV")){native_setup_.Cancel();setup_dismissed_=true;}
     }else {
-        if(ImGui::Button("Retry preparation"))SelectAnalyzer(fs::u8path(exe_));
+        ImGui::BeginDisabled(!exe_[0]);if(ImGui::Button("Retry preparation"))SelectAnalyzer(fs::u8path(exe_));ImGui::EndDisabled();
         ImGui::SameLine();if(ImGui::Button("Continue with CSV"))setup_dismissed_=true;
+        if(ImGui::Button("Manage registered engines")){FocusSession();setup_dismissed_=true;}
     }
     if(!native_setup_.log.empty()) {
         ImGui::TextWrapped("Log: %s",native_setup_.log.u8string().c_str());

@@ -5,6 +5,8 @@ Release de test : `bin/Release-20261009.5/CyInsightsApp.exe`, interface native C
 ## Depuis la timeline
 
 - **Double-clic sur un scope natif** : filtre par son nom complet exact, sensible à la casse, sur tous les threads et tous les TimerId portant ce nom. Les occurrences conservent leur couleur, les autres scopes sont atténués pour garder le contexte. Le geste ne change pas le zoom. La table Timers suit ce filtre ; Callers et Callees conservent les autres noms nécessaires à l'inspection des relations.
+- **Double-clic dans le vide ou sur la règle temporelle** : retire le filtre exact et la recherche textuelle, en conservant le zoom et la plage d'analyse sélectionnée.
+- **Maintenir le clic droit et glisser** : déplace le temps horizontalement et les pistes verticalement, sans zoom. Le déplacement reste actif pendant les chargements en arrière-plan et lorsque le pointeur quitte la piste. Un clic droit sans déplacement ouvre le menu du scope au relâchement.
 - **Clic droit sur un scope natif** : menu de filtrage, **Histogram of this function**, ou suppression du filtre. Le même accès à l'histogramme existe dans les tables de timers. Le panneau Distributions s'ouvre sous Timing si les deux partageaient le même emplacement ; un panneau déjà placé séparément conserve sa position.
 - **Shift + glissement gauche sur la règle temporelle** : sélection d'un intervalle. Avec **Follow timeline selection**, activé par défaut, Distributions et Tasks ouverts prennent cette plage après relâchement, avec un délai de regroupement de 120 ms. Une navigation ou un zoom seuls ne changent pas la plage d'analyse.
 

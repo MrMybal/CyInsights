@@ -2,6 +2,8 @@
 
 The format is independent of the collector and Unreal version. Native traces and collector-native payloads are opaque entries: do not rewrite a `.utrace`, translate a GPU frame number into an Unreal frame number without evidence, or silently remove unavailable capabilities.
 
+The optional manifest field `capture_options` records the applied, versioned capture policy (v1): native channels, basic observations, selected stat groups, Meta per-frame observation/optional polling, native GPU pass detail and GPU snapshot options. Old captures may omit it. A policy describes requested collection, not proof of availability; source/sample statuses remain authoritative. Remote GPU requests do not imply that detailed collector payloads were transferred. See [CaptureProfiles](CaptureProfiles.md).
+
 ## Container
 
 Uncompressed, streaming archive. Every integer in the container header is unsigned little endian. All paths are relative UTF-8 paths using `/`.
@@ -68,6 +70,12 @@ Wall-clock UTC is descriptive metadata, not a CPU/GPU synchronization clock. GPU
 
 ## Frames and delayed results
 
+### Embedded Unreal frame statistics, schema 1
+
+`CyInsightsStats.Spec` identifies a metric by a capture-local uint32 ID, floating/integer type, group, name and unit. `CyInsightsStats.Sample` preserves this ID, raw uint64 `BeginCycles`, `EndCycles`, `ObservedCycles`, uint64 `GameFrame`, int64 `StatsFrame`, uint32 `Flags`, int64 `Integer` and double `Real`. Flags are: source-frame bounds available (1), delayed result (2), execution identity unknown (4), derived aggregate (8), valid reading (16). Game and stats frame identities are separate; neither is substituted for a GPU execution-frame identity. Missing game identity uses UINT64_MAX; missing stats identity uses -1. Samples without known bounds retain observation time only.
+
+The source `unreal.frame_stats` refers to the same `unreal.utrace`, with its sample count as a decimal string. A standard Counters mirror exposes values at observation time for other tools. The local custom analyzer converts the three cycle timestamps with the native trace clock and writes a disposable little-endian `CYFS0001` cache. Records are tag 1 + metric definition (ID/type/three uint32-length UTF-8 strings), tag 2 + 64-byte sample, or tag 255 + uint64 total sample count. The sample layout is defined in `Tools/NativeTiming/FrameStatsFormat.hpp`; the original native events remain authoritative. This cache is not an additional required capture payload. See [FrameStats.md](FrameStats.md).
+
 ### Embedded Quest metrics, schema 1
 
 The Android plugin writes both standard Unreal `Counters` events and `CyInsightsQuest.Source`/`CyInsightsQuest.Sample` events into the existing `.utrace`. No separate Meta CSV is required. The source manifest entry `meta.openxr.metrics` refers to `unreal.utrace` once a valid reading has been observed in the current trace; before that it remains unavailable with a reason. It retains the valid sample count as a decimal string and reports unknown measurement interval/execution-frame association explicitly. Standard counter names use `CyInsights/Meta<OpenXR metric path> [<unit>]/uint` or `/float`, with `<metric>/available`, `<metric>/uint/available` and `<metric>/float/available` emitted independently on every poll. Per-type flags prevent a valid integer from making an invalid float appear usable. Their observation time is emitted by the native Counters provider, on Unreal's CPU clock.
@@ -89,3 +97,26 @@ The current plugin records measured game-thread frame IDs and CPU ticks; sampled
 An object link should include session ID, source object ID, lifetime/generation, package/soft object path, object kind and exact/candidate/unavailable relation. Multiple candidates are valid. Actor names alone are not persistent keys; raw pointers are not persistent IDs. Instancing, Nanite and shared materials prevent unique associations in many captures. The Unreal/CyEE bridge should resolve only an explicit known identity and report stale or ambiguous mappings.
 
 Measured event intervals can be aggregated within an interval. Pass names, inferred dependencies and shader/resource cost attribution require separate provenance from the underlying measurements. A missing timestamp is unavailable, not zero. An unfinished native scope has measured start and unavailable end/duration; any visual clipping is a display estimate.
+
+
+## Optional Meta Quest system GPU source
+
+Desktop-coordinated Quest recordings can add `meta-gpu.pftrace`, the effective
+`meta-gpu.cfg` and `meta-gpu.info.json` to the same archive. Source id
+`meta.quest.gpu` retains independent stage and counter availability/counts,
+selected Android package/processes, native capture session id and declared
+Unreal CPU cycle frequency. The `.utrace` remains intact. Raw Perfetto clocks
+map through snapshots to Android MONOTONIC, then the same native Sync session;
+missing relations remain unavailable. Hardware stage-to-Unreal-frame identity
+is unknown. See [Meta GPU capture and validation](MetaQuestGpu.md).
+
+
+## Vulkan subpass contents
+
+`CyInsightsVulkan.Contents` adds capture-local pass/submission identities and
+per-subpass counts for intercepted direct/indexed/indirect commands. Parent
+GPU bounds are retained; no per-subpass duration or Unreal group identity is
+implied. Indirect buffer values and pre-capture secondary recording coverage
+remain explicitly unavailable/partial. The disposable `CYVP0001` detail cache
+uses fixed 112-byte records, a completion footer and a uint64 count. See
+[contents, UI/SDK and validation](QuestSubpassContents.md).

@@ -23,6 +23,7 @@ namespace CyInsightsTrace
     CYINSIGHTSTRACE_API bool GetIdentity(FGuid& Session, FGuid& Trace);
     CYINSIGHTSTRACE_API bool StartFile(const FString& Path, const FString& Channels);
     CYINSIGHTSTRACE_API void ConfigureChannels(const FString& Channels);
+    CYINSIGHTSTRACE_API void RestoreChannels();
     CYINSIGHTSTRACE_API bool SendTo(const FString& Host, uint16 Port);
     CYINSIGHTSTRACE_API bool Stop();
     CYINSIGHTSTRACE_API FString GetError();

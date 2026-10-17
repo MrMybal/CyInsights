@@ -16,6 +16,7 @@ struct FrameDiagnostic {std::array<FrameWork,3> work{};};
 FrameDomain DiagnosticDomain(const std::string& thread);
 bool DiagnosticWait(const std::string& name);
 FrameCause DiagnoseFrame(const FrameDiagnostic& frame,double duration,double budget);
+bool FrameCauseHighlights(const FrameDiagnostic& frame,double duration,double budget,FrameDomain domain);
 const char* FrameCauseName(FrameCause cause);
 // Streaming unions retain compact coverage, never inclusive sums of nested scopes.
 // One instance per native track: concurrent GPU queues/duplicate named threads

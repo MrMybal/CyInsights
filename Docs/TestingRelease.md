@@ -1,12 +1,16 @@
-# Release de test — 10 octobre 2026
+# Release de test — 11 octobre 2026
 
-L'application actuelle est dans [bin/Release-20261010.1/CyInsightsApp.exe](../bin/Release-20261010.1/CyInsightsApp.exe). Elle intègre le [logo bleu cyan](Branding.md) et conserve [AI Inspector et 17 outils CyToolsCore/MCP](AiIntegration.md), avec analyses compactes, observations dans la timeline et commandes de capture réseau. [Filtrage exact et histogrammes](TimelineFunctionAnalysis.md), [Distributions et Tasks](TraceAnalysis.md) restent disponibles. L'ancien fichier dans `bin/Release` reste verrouillé par Kaspersky et son alerte n'est pas résolue.
+L'application actuelle est dans [bin/Release-20261011/CyInsightsApp.exe](../bin/Release-20261011/CyInsightsApp.exe). Elle ajoute l'enregistrement manuel des moteurs et [Frame stats](FrameStats.md), avec snapshots, courbes et tableau par frame dans la même trace. Elle intègre le [logo bleu cyan](Branding.md) et conserve [AI Inspector et 17 outils CyToolsCore/MCP](AiIntegration.md), avec analyses compactes, observations dans la timeline et commandes de capture réseau. [Filtrage exact et histogrammes](TimelineFunctionAnalysis.md), [Distributions et Tasks](TraceAnalysis.md) restent disponibles. Les anciennes alertes antivirus ne sont pas déclarées résolues par cette mise à jour.
 
 ## Ouvrir une capture
 
+Le collecteur Windows détaillé est désormais interne au seul plugin CyInsights,
+désactivé par défaut. Voir [Windows GPU collector](WindowsGpuCollector.md) pour
+l'activer explicitement. Aucune installation de CyGPUInspector n'est nécessaire.
+
 1. Lancer le nouvel exécutable et cliquer sur **Open capture**.
 2. Sélectionner une `.utrace` ou une `.cycapture`. Le panneau de chargement affiche la phase, le temps écoulé, la progression de l'indexation et **Cancel**. Une erreur éventuelle reste visible avec son journal.
-3. Si l'analyseur n'est pas trouvé, ouvrir **Session**, puis **Select UnrealInsights.exe** et choisir celui de l'installation Unreal correspondant à la capture. Revenir sur **Timing Insights** et lancer **Analysis > Analyze native timing**. L'analyseur Epic reste une dépendance locale et n'est pas redistribué avec cette application.
+3. Dans la version avec enregistrement manuel, ouvrir **Session**, saisir le dossier racine du moteur Unreal dans **Engine root**, puis cliquer **Add engine** ou utiliser **Browse engine folder**. La sélection et la préparation sont mémorisées. Revenir sur **Timing Insights** et lancer **Analysis > Analyze native timing** si nécessaire. L'analyseur Epic reste une dépendance locale et n'est pas redistribué avec cette application.
 4. Zoomer avec la molette. Sur l'aperçu supérieur ou la règle, maintenir le bouton gauche : gauche/droite déplace le temps, haut/bas zoome. Shift + glissement gauche sur la règle sélectionne l'intervalle ; `F` le cadre. Le bouton du milieu déplace aussi l'axe des pistes. Les scopes traversent les frames sans être découpés par frame.
 
 **Double-cliquer un scope** filtre tous les scopes portant le même nom exact et atténue les autres. **Clic droit > Histogram of this function** ouvre sa distribution sous Timing. **Shift + glissement sur la règle** choisit une plage ; avec **Follow timeline selection**, les analyses ouvertes se mettent à jour après le relâchement. **Whole capture** désactive ce suivi ; **Use selected interval** le réactive.

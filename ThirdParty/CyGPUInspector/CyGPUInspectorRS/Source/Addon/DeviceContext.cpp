@@ -657,7 +657,7 @@ namespace cygi
 						capture.State().barriers_recorded);
 					// The image of the frame that was just captured, kept for the standalone to show
 					// and save: the preview copies it below, in this same present, and then holds it.
-					preview.KeepThisFrame();
+					if (wants_buffers) preview.KeepThisFrame();
 				}
 				ipc.PublishCaptureState(capture.State());
 			}

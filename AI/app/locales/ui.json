@@ -1,0 +1,470 @@
+{
+  "Restart the Quest game before capture (optional)": {
+    "en": "Restart the Quest game before capture (optional)",
+    "fr": "Relancer le jeu Quest avant la capture (facultatif)"
+  },
+  "Existing Meta GPU profiling preserved; capturing the running game without restart": {
+    "en": "Existing Meta GPU profiling preserved; capturing the running game without restart",
+    "fr": "Profiling GPU Meta existant conservé ; capture du jeu ouvert sans relance"
+  },
+  "Meta GPU profiling state unverified; capturing the running game without restart": {
+    "en": "Meta GPU profiling state unverified; capturing the running game without restart",
+    "fr": "État du profiling GPU Meta non vérifié ; capture du jeu ouvert sans relance"
+  },
+  "Waiting for capture startup; no trace data has been received yet.": {
+    "en": "Waiting for capture startup; no trace data has been received yet.",
+    "fr": "Démarrage de la capture en cours ; aucune donnée de trace n'a encore été reçue."
+  },
+  "No capture loaded.": {
+    "en": "No capture loaded.",
+    "fr": "Aucune capture ouverte."
+  },
+  "Capture diagnostics: %s": {
+    "en": "Capture diagnostics: %s",
+    "fr": "Diagnostic de capture : %s"
+  },
+  "Waiting for the game's capture service to respond": {
+    "en": "Waiting for the game's capture service to respond",
+    "fr": "Attente de la réponse du service de capture du jeu"
+  },
+  "Capture port connected; waiting for the restarted game's response": {
+    "en": "Capture port connected; waiting for the restarted game's response",
+    "fr": "Port de capture connecté ; attente de la réponse du jeu relancé"
+  },
+  "Capture plugin connected; waiting for the first game frame": {
+    "en": "Capture plugin connected; waiting for the first game frame",
+    "fr": "Plugin de capture connecté ; attente de la première frame du jeu"
+  },
+  "Restarted game capture service ready": {
+    "en": "Restarted game capture service ready",
+    "fr": "Service de capture du jeu relancé prêt"
+  },
+  "Requesting native trace recording": {
+    "en": "Requesting native trace recording",
+    "fr": "Demande d'enregistrement de la trace native"
+  },
+  "Meta detailed profiling remains disabled after activation; check the Quest driver response": {
+    "en": "Meta detailed profiling remains disabled after activation; check the Quest driver response",
+    "fr": "Le profiling détaillé Meta reste désactivé après activation ; vérifier la réponse du pilote Quest"
+  },
+  "Stage packets received but unavailable after clock/dictionary validation; raw trace retained": {
+    "en": "Stage packets received but unavailable after clock/dictionary validation; raw trace retained",
+    "fr": "Des paquets d'étapes ont été reçus mais restent indisponibles après validation des horloges et dictionnaires ; trace brute conservée"
+  },
+  "No timed hardware-stage packets received. Detailed profiling must precede game launch; source availability does not prove recording": {
+    "en": "No timed hardware-stage packets received. Detailed profiling must precede game launch; source availability does not prove recording",
+    "fr": "Aucun paquet d'étape matérielle avec durée reçu. Le profiling détaillé doit précéder le lancement du jeu ; une source disponible ne prouve pas l'enregistrement"
+  },
+  "Quest GPU completion timestamps": {
+    "en": "Quest GPU completion timestamps",
+    "fr": "Timestamps GPU de fin de pipeline Quest"
+  },
+  "Completed pipeline stage; may affect GPU scheduling. Tile subpass costs can remain unresolved.": {
+    "en": "Completed pipeline stage; may affect GPU scheduling. Tile subpass costs can remain unresolved.",
+    "fr": "Fin du pipeline ; peut affecter l’ordonnancement GPU. Les coûts des sous-passes par tuile peuvent rester indéterminés."
+  },
+  "GPU group costs unresolved": {
+    "en": "GPU group costs unresolved",
+    "fr": "Coûts des groupes GPU indéterminés"
+  },
+  "Derived diagnostic in the loaded timing interval": {
+    "en": "Derived diagnostic in the loaded timing interval",
+    "fr": "Diagnostic déduit sur l’intervalle visible"
+  },
+  "Near-zero timestamp differences do not prove negligible GPU cost.": {
+    "en": "Near-zero timestamp differences do not prove negligible GPU cost.",
+    "fr": "Des différences de timestamps proches de zéro ne prouvent pas un coût GPU négligeable."
+  },
+  "Tile render passes can prevent meaningful per-group timing. Recorded values are preserved.": {
+    "en": "Tile render passes can prevent meaningful per-group timing. Recorded values are preserved.",
+    "fr": "Les passes de rendu par tuile peuvent empêcher des durées exploitables par groupe. Les valeurs enregistrées sont conservées."
+  },
+  "Quest GPU completion / Vulkan passes": {
+    "en": "Quest GPU completion / Vulkan passes",
+    "fr": "Fin de pipeline GPU Quest / passes Vulkan"
+  },
+  "Two extra queries per Vulkan render pass; may affect scheduling. No pass splitting or resource readbacks.": {
+    "en": "Two extra queries per Vulkan render pass; may affect scheduling. No pass splitting or resource readbacks.",
+    "fr": "Deux requêtes supplémentaires par passe Vulkan ; peut affecter l’ordonnancement. Aucun découpage de passe ni lecture de ressources."
+  },
+  "Default GPU: native rendering groups each render frame. Quest completion mode also measures Vulkan render-pass boundaries; native subgroups inside tile passes may remain unresolved. Individual RDG names are optional. Meta execution-frame identity is unknown. No image/buffer copies.": {
+    "en": "Default GPU: native rendering groups each render frame. Quest completion mode also measures Vulkan render-pass boundaries; native subgroups inside tile passes may remain unresolved. Individual RDG names are optional. Meta execution-frame identity is unknown. No image/buffer copies.",
+    "fr": "GPU par défaut : groupes de rendu natifs à chaque frame rendue. Sur Quest, le mode fin de pipeline mesure aussi les frontières des passes Vulkan ; les sous-groupes des passes par tuile peuvent rester indéterminés. Les noms RDG individuels sont optionnels. La frame d’exécution des valeurs Meta est inconnue. Aucune copie d’image ou de buffer."
+  },
+  "Vulkan passes: %s resolved, %s pending, %s unavailable": {
+    "en": "Vulkan passes: %s resolved, %s pending, %s unavailable",
+    "fr": "Passes Vulkan : %s résolues, %s en attente, %s indisponibles"
+  },
+  "The updated Quest plugin can add measured Vulkan render-pass boundaries in a new capture. Shared tile subpass costs remain unresolved.": {
+    "en": "The updated Quest plugin can add measured Vulkan render-pass boundaries in a new capture. Shared tile subpass costs remain unresolved.",
+    "fr": "Le plugin Quest mis à jour peut mesurer les frontières des passes Vulkan dans une nouvelle capture. Les coûts des sous-passes partageant une tuile restent indéterminés."
+  },
+  "\nPass boundary interval measured on GPU; CPU alignment is approximate (device clock sample or engine clock relation). Not per-subpass rasterization timing.": {
+    "en": "\nPass boundary interval measured on GPU; CPU alignment is approximate (device clock sample or engine clock relation). Not per-subpass rasterization timing.",
+    "fr": "\nIntervalle entre frontières de passe mesuré sur le GPU ; alignement CPU approximatif (échantillon de l’horloge du périphérique ou correspondance du moteur). Ne mesure pas chaque sous-passe de rasterisation."
+  },
+  "Measure interval: drag here with the left mouse button": {
+    "en": "Measure interval: drag here with the left mouse button",
+    "fr": "Mesurer un intervalle : glisser ici avec le bouton gauche de la souris"
+  },
+  "Range: %.6f - %.6f s  |  %.3f ms": {
+    "en": "Range: %.6f - %.6f s  |  %.3f ms",
+    "fr": "Intervalle : %.6f - %.6f s  |  %.3f ms"
+  },
+  "Drag to measure a time range. The view stays fixed; statistics and histograms use this selection. Escape clears the range.": {
+    "en": "Drag to measure a time range. The view stays fixed; statistics and histograms use this selection. Escape clears the range.",
+    "fr": "Glisser pour mesurer un intervalle. La vue reste fixe ; les statistiques et histogrammes utilisent cette sélection. Échap efface l’intervalle."
+  },
+  "Meta hardware GPU capture (Quest)": {
+    "en": "Meta hardware GPU capture (Quest)",
+    "fr": "Capture GPU matérielle Meta (Quest)"
+  },
+  "Record Meta render stages and counters (test default)": {
+    "en": "Record Meta render stages and counters (test default)",
+    "fr": "Enregistrer les étapes GPU et compteurs Meta (activé pour les tests)"
+  },
+  "Restart the Quest game before capture (test default)": {
+    "en": "Restart the Quest game before capture (test default)",
+    "fr": "Relancer le jeu Quest avant la capture (activé pour les tests)"
+  },
+  "ADB executable": {
+    "en": "ADB executable",
+    "fr": "Exécutable ADB"
+  },
+  "Automatic, or path to adb.exe": {
+    "en": "Automatic, or path to adb.exe",
+    "fr": "Automatique ou chemin vers adb.exe"
+  },
+  "ADB device": {
+    "en": "ADB device",
+    "fr": "Appareil ADB"
+  },
+  "Automatic match by game IP": {
+    "en": "Automatic match by game IP",
+    "fr": "Identification automatique par IP du jeu"
+  },
+  "Android package": {
+    "en": "Android package",
+    "fr": "Package Android"
+  },
+  "Automatic from updated plugin": {
+    "en": "Automatic from updated plugin",
+    "fr": "Automatique avec le plugin mis à jour"
+  },
+  "Meta GPU: %s": {
+    "en": "Meta GPU: %s",
+    "fr": "GPU Meta : %s"
+  },
+  "Detailed Meta GPU profiling is enabled before launching the game. Restart resets the current game session. An authorized ADB connection is required; USB or ADB over Wi-Fi. Meta hardware events are saved in the same .cycapture. No texture or buffer copies.": {
+    "en": "Detailed Meta GPU profiling is enabled before launching the game. Restart resets the current game session. An authorized ADB connection is required; USB or ADB over Wi-Fi. Meta hardware events are saved in the same .cycapture. No texture or buffer copies.",
+    "fr": "Le profiling GPU détaillé Meta est activé avant le lancement du jeu. La relance réinitialise la session de jeu. Une connexion ADB autorisée est nécessaire, en USB ou Wi-Fi. Les événements matériels Meta sont intégrés à la même .cycapture. Aucune copie de texture ou buffer."
+  },
+  "Measured hardware stage; aligned through Perfetto clock snapshots and native Sync. Unreal pass and execution-frame identity unavailable.": {
+    "en": "Measured hardware stage; aligned through Perfetto clock snapshots and native Sync. Unreal pass and execution-frame identity unavailable.",
+    "fr": "Stage matériel mesuré ; aligné par les horloges Perfetto et le Sync natif. Identités de passe Unreal et de frame d’exécution indisponibles."
+  },
+  "Vulkan subpass contents": {
+    "en": "Vulkan subpass contents",
+    "fr": "Contenu des sous-passes Vulkan"
+  },
+  "Pass association ambiguous; no unique contents.": {
+    "en": "Pass association ambiguous; no unique contents.",
+    "fr": "Association de passe ambiguë ; contenu unique indisponible."
+  },
+  "Contents unavailable in this capture. Record a new trace with the updated plugin and native reader.": {
+    "en": "Contents unavailable in this capture. Record a new trace with the updated plugin and native reader.",
+    "fr": "Contenu indisponible dans cette capture. Enregistrer une nouvelle trace avec le plugin et le lecteur natif actualisés."
+  },
+  "Capture-local pass: %llu": {
+    "en": "Capture-local pass: %llu",
+    "fr": "Passe locale à la capture : %llu"
+  },
+  "Submission: %llu": {
+    "en": "Submission: %llu",
+    "fr": "Soumission : %llu"
+  },
+  "Subpass %u": {
+    "en": "Subpass %u",
+    "fr": "Sous-passe %u"
+  },
+  "Direct draws: %llu": {
+    "en": "Direct draws: %llu",
+    "fr": "Draws directs : %llu"
+  },
+  "Indexed draws: %llu": {
+    "en": "Indexed draws: %llu",
+    "fr": "Draws indexés : %llu"
+  },
+  "Indirect calls: %llu": {
+    "en": "Indirect calls: %llu",
+    "fr": "Appels indirects : %llu"
+  },
+  "Requested indirect commands: %llu": {
+    "en": "Requested indirect commands: %llu",
+    "fr": "Commandes indirectes demandées : %llu"
+  },
+  "Requested vertices: %llu": {
+    "en": "Requested vertices: %llu",
+    "fr": "Sommets demandés : %llu"
+  },
+  "Requested indices: %llu": {
+    "en": "Requested indices: %llu",
+    "fr": "Indices demandés : %llu"
+  },
+  "Direct instance arguments: %llu": {
+    "en": "Direct instance arguments: %llu",
+    "fr": "Arguments d’instances des draws directs : %llu"
+  },
+  "Partial coverage: some secondary command buffers were recorded before capture.": {
+    "en": "Partial coverage: some secondary command buffers were recorded before capture.",
+    "fr": "Couverture partielle : certains buffers de commandes secondaires ont été enregistrés avant la capture."
+  },
+  "Indirect vertex, index and instance arguments unavailable; GPU buffers were not read.": {
+    "en": "Indirect vertex, index and instance arguments unavailable; GPU buffers were not read.",
+    "fr": "Arguments indirects de sommets, indices et instances indisponibles ; les buffers GPU n’ont pas été lus."
+  },
+  "Observed Vulkan command arguments. Requested vertices/indices are not measured shader invocations. Only intercepted draw APIs are counted.": {
+    "en": "Observed Vulkan command arguments. Requested vertices/indices are not measured shader invocations. Only intercepted draw APIs are counted.",
+    "fr": "Arguments Vulkan observés. Les sommets et indices demandés ne sont pas des invocations de shaders mesurées. Seules les API de draw interceptées sont comptées."
+  },
+  "Individual subpass GPU costs and Unreal group names unavailable. The parent pass duration is measured; no duration is assigned to its subpasses.": {
+    "en": "Individual subpass GPU costs and Unreal group names unavailable. The parent pass duration is measured; no duration is assigned to its subpasses.",
+    "fr": "Coûts GPU individuels et noms des groupes Unreal indisponibles. La durée de la passe parente est mesurée ; aucune durée n’est attribuée aux sous-passes."
+  },
+  "Vulkan pass contents unavailable": {
+    "en": "Vulkan pass contents unavailable",
+    "fr": "Contenu de passe Vulkan indisponible"
+  },
+  "Truncated Vulkan pass contents": {
+    "en": "Truncated Vulkan pass contents",
+    "fr": "Contenu de passe Vulkan tronqué"
+  },
+  "Invalid Vulkan content record size": {
+    "en": "Invalid Vulkan content record size",
+    "fr": "Taille d’enregistrement Vulkan invalide"
+  },
+  "Cannot map Vulkan pass contents": {
+    "en": "Cannot map Vulkan pass contents",
+    "fr": "Impossible de mapper le contenu des passes Vulkan"
+  },
+  "Unknown or incomplete Vulkan pass content format": {
+    "en": "Unknown or incomplete Vulkan pass content format",
+    "fr": "Format de contenu Vulkan inconnu ou incomplet"
+  },
+  "Incomplete Vulkan pass content count": {
+    "en": "Incomplete Vulkan pass content count",
+    "fr": "Nombre d’enregistrements Vulkan incomplet"
+  },
+  "Invalid Vulkan pass content record": {
+    "en": "Invalid Vulkan pass content record",
+    "fr": "Enregistrement de contenu Vulkan invalide"
+  },
+  "No subpass contents recorded; update the plugin and make a new capture": {
+    "en": "No subpass contents recorded; update the plugin and make a new capture",
+    "fr": "Aucun contenu de sous-passe enregistré ; actualiser le plugin et effectuer une nouvelle capture"
+  },
+  "Capture session": {
+    "en": "Capture session",
+    "fr": "Session de capture"
+  },
+  "Open captures...": {
+    "en": "Open captures...",
+    "fr": "Ouvrir des captures…"
+  },
+  "New capture session": {
+    "en": "New capture session",
+    "fr": "Nouvelle session de capture"
+  },
+  "Detach capture": {
+    "en": "Detach capture",
+    "fr": "Détacher la capture"
+  },
+  "Detach capture to a native window": {
+    "en": "Detach capture to a native window",
+    "fr": "Détacher la capture dans une fenêtre native"
+  },
+  "Close capture": {
+    "en": "Close capture",
+    "fr": "Fermer la capture"
+  },
+  "Return to main window": {
+    "en": "Return to main window",
+    "fr": "Revenir dans la fenêtre principale"
+  },
+  "Captures are open in separate windows. Use Return to main window to restore a tab.": {
+    "en": "Captures are open in separate windows. Use Return to main window to restore a tab.",
+    "fr": "Les captures sont ouvertes dans des fenêtres séparées. Revenir dans la fenêtre principale restaure un onglet."
+  },
+  "Open captures in separate tabs": {
+    "en": "Open captures in separate tabs",
+    "fr": "Ouvrir des captures dans des onglets séparés"
+  },
+  "Document: %llu": {
+    "en": "Document: %llu",
+    "fr": "Document : %llu"
+  },
+  "AI method": {
+    "en": "AI method",
+    "fr": "Methode IA"
+  },
+  "Copy analysis method": {
+    "en": "Copy analysis method",
+    "fr": "Copier la methode d'analyse"
+  },
+  "The same versioned analysis method is available to AI clients through get_analysis_guide.": {
+    "en": "The same versioned analysis method is available to AI clients through get_analysis_guide.",
+    "fr": "La meme methode d’analyse versionnee est accessible aux clients IA via get_analysis_guide."
+  },
+  "Guided trace analysis": {
+    "en": "Guided trace analysis",
+    "fr": "Analyse guidée de trace"
+  },
+  "Methods and tools run inside CyInsights. CyAiCodex, Python and an MCP connection are not required for local analysis.": {
+    "en": "Methods and tools run inside CyInsights. CyAiCodex, Python and an MCP connection are not required for local analysis.",
+    "fr": "Les méthodes et outils fonctionnent dans CyInsights. CyAiCodex, Python et une connexion MCP ne sont pas nécessaires à l’analyse locale."
+  },
+  "Choose a step, then prepare a tool or open its native panel. Preparing a tool does not start a capture or execute a command.": {
+    "en": "Choose a step, then prepare a tool or open its native panel. Preparing a tool does not start a capture or execute a command.",
+    "fr": "Choisir une étape, puis préparer un outil ou ouvrir son panneau natif. Préparer un outil ne lance aucune capture ni commande."
+  },
+  "Open native panel": {
+    "en": "Open native panel",
+    "fr": "Ouvrir le panneau natif"
+  },
+  "Prepare tool": {
+    "en": "Prepare tool",
+    "fr": "Préparer un outil"
+  },
+  "Capture procedure": {
+    "en": "Capture procedure",
+    "fr": "Procédure de capture"
+  },
+  "Evidence and unavailable data": {
+    "en": "Evidence and unavailable data",
+    "fr": "Preuves et données indisponibles"
+  },
+  "Missing data stays unavailable. Probable causes and reconstructed GPU passes remain hypotheses or derived results.": {
+    "en": "Missing data stays unavailable. Probable causes and reconstructed GPU passes remain hypotheses or derived results.",
+    "fr": "Les données absentes restent indisponibles. Les causes probables et passes GPU reconstruites restent des hypothèses ou résultats déduits."
+  },
+  "Advanced method JSON": {
+    "en": "Advanced method JSON",
+    "fr": "JSON avancé de la méthode"
+  },
+  "Discover": {
+    "en": "Discover",
+    "fr": "Découvrir"
+  },
+  "Locate": {
+    "en": "Locate",
+    "fr": "Localiser"
+  },
+  "Inspect": {
+    "en": "Inspect",
+    "fr": "Examiner"
+  },
+  "GPU": {
+    "en": "GPU",
+    "fr": "GPU"
+  },
+  "Counters": {
+    "en": "Counters",
+    "fr": "Compteurs"
+  },
+  "Activities": {
+    "en": "Activities",
+    "fr": "Activités"
+  },
+  "Tasks": {
+    "en": "Tasks",
+    "fr": "Tâches"
+  },
+  "Compare": {
+    "en": "Compare",
+    "fr": "Comparer"
+  },
+  "Explain": {
+    "en": "Explain",
+    "fr": "Expliquer"
+  },
+  "Check generation, readiness, providers, platform and available GPU evidence. Unsupported or absent does not mean zero cost.": {
+    "en": "Check generation, readiness, providers, platform and available GPU evidence. Unsupported or absent does not mean zero cost.",
+    "fr": "Vérifier la génération, le chargement, les sources, la plateforme et les mesures GPU disponibles. Non pris en charge ou absent ne signifie pas un coût nul."
+  },
+  "Start with limit=5, targetFps supplied by the user or project. Report waits separately from active work. Probable cause is a hypothesis.": {
+    "en": "Start with limit=5, targetFps supplied by the user or project. Report waits separately from active work. Probable cause is a hypothesis.",
+    "fr": "Commencer avec limit=5 et le budget FPS du projet. Séparer les attentes du travail actif. Une cause probable reste une hypothèse."
+  },
+  "Use a short suspect interval. Rank exclusive costs, then investigate a specific full function name. Request individual events or bins only when needed. Nested inclusive costs are not utilization.": {
+    "en": "Use a short suspect interval. Rank exclusive costs, then investigate a specific full function name. Request individual events or bins only when needed. Nested inclusive costs are not utilization.",
+    "fr": "Choisir un intervalle suspect court. Classer les coûts exclusifs, puis examiner le nom complet d’une fonction. Demander les événements individuels ou courbes si nécessaire. Les coûts inclusifs imbriqués ne sont pas un taux d’utilisation."
+  },
+  "Use measured native GPU groups first. Quest Vulkan pass draw arguments are not per-subpass hardware costs; parent alignment can be approximate. Optional Windows collector command timestamps are frame-local. Never invent shader/raster start times.": {
+    "en": "Use measured native GPU groups first. Quest Vulkan pass draw arguments are not per-subpass hardware costs; parent alignment can be approximate. Optional Windows collector command timestamps are frame-local. Never invent shader/raster start times.",
+    "fr": "Examiner d’abord les groupes GPU natifs mesurés. Les arguments Vulkan Quest ne sont pas des coûts matériels par sous-passe ; l’alignement parent peut être approximatif. Les timestamps du collecteur Windows sont locaux à sa frame. Ne pas inventer de début de shader ou rasterisation."
+  },
+  "Load only needed providers; frameOnly=true is cheaper for plugin stats. Poll get_state.counters.loading. Preserve units, int64 strings, delayed results and missing-frame nulls. Curves are opt-in bins.": {
+    "en": "Load only needed providers; frameOnly=true is cheaper for plugin stats. Poll get_state.counters.loading. Preserve units, int64 strings, delayed results and missing-frame nulls. Curves are opt-in bins.",
+    "fr": "Charger uniquement les sources nécessaires ; frameOnly=true est plus léger pour les statistiques du plugin. Attendre get_state.counters.loading=false. Préserver unités, int64 exacts, résultats retardés et valeurs nulles des frames absentes. Les courbes sont facultatives."
+  },
+  "Poll get_state.activities.loading. Filter kind=network/storage/loading/memory and a specific lane. Start with summaries, includeEvents only for evidence. Gauges and content bits are not traffic-byte totals.": {
+    "en": "Poll get_state.activities.loading. Filter kind=network/storage/loading/memory and a specific lane. Start with summaries, includeEvents only for evidence. Gauges and content bits are not traffic-byte totals.",
+    "fr": "Attendre la fin de get_state.activities.loading. Filtrer kind=network/storage/loading/memory et une piste précise. Commencer par les résumés, puis includeEvents pour les preuves. Jauges et positions de bits ne sont pas des totaux d’octets transférés."
+  },
+  "Poll get_state.tasks.loading. Native task phases and dependencies require TaskTrace. CPU candidates are an explicit fallback and have no native task ID or measured queue delay.": {
+    "en": "Poll get_state.tasks.loading. Native task phases and dependencies require TaskTrace. CPU candidates are an explicit fallback and have no native task ID or measured queue delay.",
+    "fr": "Attendre la fin de get_state.tasks.loading. Les phases et dépendances natives nécessitent TaskTrace. Les candidats CPU sont un repli explicite, sans ID natif de tâche ni délai de file mesuré."
+  },
+  "Poll get_state.comparison.loading. Choose independent A/B intervals, compare metadata and use per_second/per_occurrence normalization when durations/counts differ. Names/domain are derived correspondences, not common object IDs.": {
+    "en": "Poll get_state.comparison.loading. Choose independent A/B intervals, compare metadata and use per_second/per_occurrence normalization when durations/counts differ. Names/domain are derived correspondences, not common object IDs.",
+    "fr": "Attendre la fin de get_state.comparison.loading. Choisir des intervalles A/B indépendants, comparer les métadonnées et normaliser par seconde ou occurrence si durées ou nombres diffèrent. Les correspondances par nom/domaine sont déduites, sans ID d’objet commun."
+  },
+  "Cite generation, interval, measured evidence, derived result, uncertainty and a concrete next check. A finding must match the current generation. Do not represent an AI hypothesis as a measured fact.": {
+    "en": "Cite generation, interval, measured evidence, derived result, uncertainty and a concrete next check. A finding must match the current generation. Do not represent an AI hypothesis as a measured fact.",
+    "fr": "Indiquer génération, intervalle, preuve mesurée, résultat déduit, incertitude et prochain contrôle concret. L’observation doit correspondre à la génération actuelle. Une hypothèse IA n’est pas un fait mesuré."
+  },
+  "Obtain the user's target IP and capture authorization; inspect capture_probe and capture_status before starting.": {
+    "en": "Obtain the user's target IP and capture authorization; inspect capture_probe and capture_status before starting.",
+    "fr": "Obtenir l’IP cible et l’autorisation de capture ; vérifier capture_probe et capture_status avant de démarrer."
+  },
+  "Use capture_start with project defaults unless a specific optional provider is needed. Texture/buffer readbacks stay off by default. Quest restart_game=false preserves a running game.": {
+    "en": "Use capture_start with project defaults unless a specific optional provider is needed. Texture/buffer readbacks stay off by default. Quest restart_game=false preserves a running game.",
+    "fr": "Utiliser capture_start avec les réglages du projet sauf besoin précis. Les lectures de textures/buffers restent désactivées par défaut. restart_game=false préserve le jeu Quest ouvert."
+  },
+  "Poll capture_status for received bytes, startup errors and packaging. SDK cancellation does not stop recording: call capture_stop explicitly.": {
+    "en": "Poll capture_status for received bytes, startup errors and packaging. SDK cancellation does not stop recording: call capture_stop explicitly.",
+    "fr": "Suivre les octets reçus, erreurs et assemblage avec capture_status. Annuler un job SDK n’arrête pas l’enregistrement : appeler capture_stop explicitement."
+  },
+  "Wait for a completed archive, then open_trace and poll get_state. Incoming .utrace decoding during recording is currently unavailable; never claim live frame analysis from receiver status.": {
+    "en": "Wait for a completed archive, then open_trace and poll get_state. Incoming .utrace decoding during recording is currently unavailable; never claim live frame analysis from receiver status.",
+    "fr": "Attendre l’archive terminée, puis open_trace et get_state. Le décodage du flux pendant l’enregistrement est indisponible ; l’état du récepteur n’est pas une analyse live des frames."
+  },
+  "No native Logs reader yet": {
+    "en": "No native Logs reader yet",
+    "fr": "Lecteur Logs natif non implémenté"
+  },
+  "No unique Unreal object/CyEE bridge without identity data": {
+    "en": "No unique Unreal object/CyEE bridge without identity data",
+    "fr": "Pas de pont unique vers les objets Unreal/CyEE sans identité enregistrée"
+  },
+  "No individual Quest subpass GPU cost": {
+    "en": "No individual Quest subpass GPU cost",
+    "fr": "Coûts GPU individuels des sous-passes Quest indisponibles"
+  },
+  "No optional remote Windows GPU payload transfer yet": {
+    "en": "No optional remote Windows GPU payload transfer yet",
+    "fr": "Transfert réseau des données GPU Windows détaillées non implémenté"
+  },
+  "No decoding of incoming .utrace while recording": {
+    "en": "No decoding of incoming .utrace while recording",
+    "fr": "Pas de décodage de la trace entrante pendant l’enregistrement"
+  },
+  "The optional Python companion is needed only for external MCP clients. Local tools and methods remain available.": {
+    "en": "The optional Python companion is needed only for external MCP clients. Local tools and methods remain available.",
+    "fr": "Le compagnon Python facultatif sert uniquement aux clients MCP externes. Les outils et méthodes locaux restent disponibles."
+  },
+  "Embedded tool catalogue unavailable": {
+    "en": "Embedded tool catalogue unavailable",
+    "fr": "Catalogue embarqué des outils indisponible"
+  }
+}

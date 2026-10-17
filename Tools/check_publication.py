@@ -63,12 +63,19 @@ def history_issues():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--staged', action='store_true')
+    mode=parser.add_mutually_exclusive_group()
+    mode.add_argument('--staged', action='store_true')
+    mode.add_argument('--worktree', action='store_true', help='Also inspect new non-ignored source files before staging')
     parser.add_argument('--history', action='store_true', help='Check all available refs and commit identities too')
     args = parser.parse_args()
-    command = ['git', 'diff', '--cached', '--name-only', '--diff-filter=ACMR', '-z'] if args.staged else ['git', 'ls-files', '-z']
+    command = ['git', 'diff', '--cached', '--name-only', '--diff-filter=ACMR', '-z'] if args.staged else (
+        ['git','ls-files','--cached','--others','--exclude-standard','-z'] if args.worktree else ['git', 'ls-files', '-z'])
     files = subprocess.check_output(command, cwd=ROOT).decode('utf-8').split('\0')
     files = [name for name in files if name]
+    # A source migration can remove a formerly tracked plugin. Scan the remaining
+    # worktree contents; --staged still scans the exact proposed index bytes.
+    if not args.staged:
+        files = [name for name in files if (ROOT/name).is_file()]
     tracked = set(subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode('utf-8').split('\0'))
     if not files:
         raise SystemExit('No publication files to audit')
@@ -99,7 +106,7 @@ def main():
         name = 'AI/wheels/' + wheel['file']
         if name not in tracked or hashlib.sha256((ROOT / name).read_bytes()).hexdigest() != wheel['sha256']:
             errors.append('AI wheel missing or changed: ' + name)
-    for scope in ('Plugins/CyInsights/Source', 'Plugins/CyGPUInspector/Source',
+    for scope in ('Plugins/CyInsights/Source',
                   'Tools/NativeTasks', 'Tools/NativeActivities', 'ThirdParty/CyGPUInspector/CyGPUInspectorCore',
                   'ThirdParty/CyGPUInspector/CyGPUInspectorRS'):
         for path in (ROOT / scope).rglob('*'):

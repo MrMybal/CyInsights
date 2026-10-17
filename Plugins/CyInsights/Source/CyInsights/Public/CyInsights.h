@@ -7,17 +7,22 @@
 #include "CoreMinimal.h"
 #include "Async/Future.h"
 #include "CyInsightsTrace.h"
+#include "CyInsightsCapturePolicy.h"
 
 class CYINSIGHTS_API FCyInsightsModule : public IModuleInterface
 {
 public:
+    FCyInsightsModule();
+    virtual ~FCyInsightsModule() override;
 
 	/** IModuleInterface implementation */
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
-	bool StartCapture(const FString& NetworkHost = FString(), uint16 NetworkPort = 0);
+	bool StartCapture(const FString& NetworkHost = FString(), uint16 NetworkPort = 0,const cycapture::Options* Override = nullptr);
 	void StopCapture();
 	bool CaptureGpu(int32 Frames);
+	bool CaptureGpu(const cycapture::Options& Options);
+	bool CanCaptureGpu() const;
 private:
 	friend class FCyInsightsRemoteControl;
 	TSharedPtr<class FJsonObject> CaptureManifest() const;
@@ -37,6 +42,12 @@ private:
 	double NetworkRequestedAt = 0;
 	TFuture<bool> NetworkStartTask;
 	TUniquePtr<class FCyInsightsRemoteControl> RemoteControl;
+	TUniquePtr<class FCyInsightsStatsCapture> StatsCapture;
+	TUniquePtr<class FCyInsightsGpuCapture> GpuCapture;
+	cycapture::Options CaptureOptions;
+	FString GpuCaptureMessage;
+	void BeginCaptureCollectors();
+	void ConfigureQuestCapture(bool Apply);
 	FString SessionId, Directory, CreatedUtc, CaptureChannels;
 	uint64 StartCycles = 0;
 	double StopAtSeconds = 0;

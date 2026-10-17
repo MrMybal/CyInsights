@@ -78,7 +78,7 @@ bool NativeTrace::Start(const std::filesystem::path &exe, const std::filesystem:
         return false;
     }
     std::filesystem::create_directories(cache);
-    paged_=paged;store.reset();
+    paged_=paged;store.reset();vulkan_contents.reset();vulkan_contents_error.clear();
     error_.clear();progress_.cancel.store(false);
     progress_.bytes.store(0);progress_.total.store(0);progress_.events.store(0);
     started_=std::chrono::steady_clock::now();log_=cache/"analysis.log";
@@ -87,7 +87,9 @@ bool NativeTrace::Start(const std::filesystem::path &exe, const std::filesystem:
     decode_seconds_=index_seconds_=0;
     read_counters_ = true;
     counters = CounterModel{};
+    if(std::filesystem::exists(cache/"vulkan-pass-details.cyvp"))std::filesystem::remove(cache/"vulkan-pass-details.cyvp");
     if (std::filesystem::exists(cache / "counters.csv")) std::filesystem::remove(cache / "counters.csv");
+    if (std::filesystem::exists(cache / "frame-stats.cystats")) std::filesystem::remove(cache / "frame-stats.cystats");
     if (std::filesystem::exists(csv_))
         std::filesystem::remove(csv_);
     // The matching local adapter is optional; the existing bridge covers
@@ -142,7 +144,11 @@ bool NativeTrace::ImportTiming(const std::filesystem::path &file, std::string &e
                 for(auto& e:result.events)if(e.open_ended)e.end=last;
             }
             else result.success = ReadCsv(file, result.events, result.error,&progress_);
-            if(read_counters&&result.success) CounterModel::ReadCatalog(file.parent_path()/"counters.csv",result.counters,result.counters.error);
+            if(read_counters&&result.success){
+                CounterModel::ReadCatalog(file.parent_path()/"counters.csv",result.counters,result.counters.error);
+                if(result.counters.error.empty())result.counters.ReadFrameStats(file.parent_path()/"frame-stats.cystats",true,result.counters.error,&progress_.cancel);
+            }
+            if(result.success)result.vulkan_contents=VulkanPassDetails::Open(file.parent_path()/"vulkan-pass-details.cyvp",result.vulkan_contents_error,&progress_.cancel);
             result.seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-begin).count();
             return result;
         });
@@ -161,6 +167,7 @@ bool NativeTrace::Poll(std::string &message) {
             index_seconds_=result.seconds;
             store=std::move(result.store);
             counters = std::move(result.counters);
+            vulkan_contents=std::move(result.vulkan_contents);vulkan_contents_error=std::move(result.vulkan_contents_error);
             if (result.success) {
                 events = std::move(result.events);
                 message = "Native timing indexed: " + std::to_string(store?store->count:events.size()) + " recorded events";

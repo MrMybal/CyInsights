@@ -18,7 +18,7 @@ struct AiRequest {
 class AiRpc {
 public:
     ~AiRpc();
-    bool Start(std::string& error);
+    bool Start(std::string& error,uint64_t document=0);
     void Stop();
     std::vector<std::shared_ptr<AiRequest>> Take();
     std::string Name() const;

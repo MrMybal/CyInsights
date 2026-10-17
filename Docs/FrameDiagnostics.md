@@ -4,7 +4,7 @@ Application : [CyInsightsApp.exe](../bin/Release-20261009.3/CyInsightsApp.exe). 
 
 ## Lecture des couleurs
 
-Le fond de chaque intervalle de frame est teinté dans **Frames** et dans les pistes **Timing**, sur le même axe continu. Les scopes traversant une frame restent continus. Les couleurs signalent un dépassement du budget : **rose = GameThread**, **bleu = RenderThread**, **vert = GPU**, **violet = plusieurs candidats proches**, **ambre = attentes/pacing**, **gris = cause indéterminée ou données incomplètes**. Les frames dans le budget conservent une barre neutre. La légende reste visible dans Frames.
+Dans **Timing**, seul le fond des pistes du domaine candidat est teinté pour les frames lentes : **rose = GameThread**, **bleu = RenderThread**, **vert = GPU**. Les autres pistes restent neutres. Plusieurs candidats proches et dépassant chacun le budget gardent leur couleur propre sur leurs pistes ; la barre récapitulative dans **Frames** devient violette. Les attentes/pacing, les causes indéterminées, les données incomplètes et les frames dans le budget restent neutres, avec leur diagnostic détaillé au survol. Le graphe Frames n'applique plus de teinte à tout son fond. Les scopes traversant une frame restent continus.
 
 **Timing > View Mode > Target fps** règle le budget (60 par défaut, soit 16,67 ms ; 72/90/120 sont possibles). Le même menu permet de désactiver les fonds. **Next slow frame** cherche le prochain dépassement, en donnant priorité aux candidats avec du travail observé supérieur au budget. Le survol d'une barre affiche la durée, l'identité native ou le tick candidat, la cible, la cause probable et les coûts de chaque domaine.
 

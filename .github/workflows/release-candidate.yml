@@ -1,0 +1,57 @@
+name: Windows release candidate provenance
+on:
+  workflow_dispatch:
+    inputs:
+      attest:
+        description: 'Generate a GitHub attestation (private repositories require Enterprise Cloud)'
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  candidate:
+    runs-on: windows-2022
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Audit sources and dependency provenance
+        run: |
+          python Tools/prepare_dependencies.py
+          python Tools/check_publication.py --history
+      - name: Build and test in the hosted Windows environment
+        shell: cmd
+        run: |
+          call build.cmd Release
+          if errorlevel 1 exit /b 1
+          call build.cmd Release --tests-only
+          if errorlevel 1 exit /b 1
+      - name: Record actual Windows signature state
+        shell: powershell
+        run: ./Tools/SignWindowsRelease.ps1 -Directory ./bin/Release -VerifyOnly
+      - name: Package candidate and checksums
+        run: python Tools/package_release.py --binaries bin/Release --output build/release-candidate --version candidate-${{ github.run_number }}
+      - name: Attest candidate provenance when supported
+        if: inputs.attest
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            bin/Release/CyInsightsApp.exe
+            bin/Release/CyCaptureTool.exe
+            build/release-candidate/*.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CyInsights-candidate-${{ github.run_number }}
+          path: |
+            build/release-candidate/*.zip
+            build/release-candidate/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7

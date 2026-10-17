@@ -1,5 +1,13 @@
 # CyInsights AI companion
 
+Current local adapter: **39 native operations**, contract version **0.2.0**.
+Use `get_capabilities` and `get_analysis_guide` before analysis. The versioned
+method, catalogue and translations are embedded in the native executable.
+AI Inspector > AI method provides guided steps and native tool actions.
+All local tools work without Python, MCP or CyAiCodex. Python is needed only
+for the optional external MCP companion. `app/analysis-method.json` is the build source.
+See [AI method](../Docs/AiAnalysisMethod.md) and [coverage](../Docs/CapabilityCoverage.md).
+
 The UI and analysis engine remain native C++/Dear ImGui. CyToolsCore **0.10.1 MIT**
 owns CLI, JSONL, local authenticated HTTP, official **MCP SDK 1.30.0**, private jobs,
 sessions, reports, cancellation and resource scheduling. There is no dependency

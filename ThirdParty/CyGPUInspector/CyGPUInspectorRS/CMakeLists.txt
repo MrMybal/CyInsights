@@ -40,8 +40,12 @@ set(CYGI_RS_SOURCES
     Source/Profiling/GpuTimer.cpp
     Source/Ipc/IpcServer.hpp
     Source/Ipc/IpcServer.cpp
-    Source/UI/Overlay.hpp
-    Source/UI/Overlay.cpp)
+    Source/UI/Overlay.hpp)
+if(CYINSIGHTS_WINDOWS_GPU)
+    list(APPEND CYGI_RS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../../../Tools/WindowsCollector/OverlayStub.cpp")
+else()
+    list(APPEND CYGI_RS_SOURCES Source/UI/Overlay.cpp)
+endif()
 
 set_source_files_properties(${CYGI_RS_SOURCES} PROPERTIES COMPILE_DEFINITIONS "WIN32_LEAN_AND_MEAN")
 
@@ -52,7 +56,7 @@ set_source_files_properties(Source/Addon/CyGPUInspectorRS.rc PROPERTIES OBJECT_D
 
 add_library(CyGPUInspectorRS SHARED ${CYGI_RS_SOURCES})
 
-source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/Source PREFIX "Source" FILES ${CYGI_RS_SOURCES})
+# The CyInsights build supplies a capture-only overlay stub outside this source tree.
 
 target_include_directories(CyGPUInspectorRS PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Source
@@ -61,8 +65,12 @@ target_include_directories(CyGPUInspectorRS PRIVATE
     ${CYGI_THIRDPARTY}/reshade_imgui)
 
 target_compile_definitions(CyGPUInspectorRS PRIVATE
-    ImTextureID=ImU64              # required by reshade_overlay.hpp (resource_view handle == 64-bit)
-    CYGI_ADDON_NAME="CyGPUInspectorRS")
+    ImTextureID=ImU64)             # required by reshade_overlay.hpp (resource_view handle == 64-bit)
+if(CYINSIGHTS_WINDOWS_GPU)
+    target_compile_definitions(CyGPUInspectorRS PRIVATE CYGI_ADDON_NAME="CyInsightsGpu" CYGI_CONFIG_SECTION="CYINSIGHTS_GPU")
+else()
+    target_compile_definitions(CyGPUInspectorRS PRIVATE CYGI_ADDON_NAME="CyGPUInspectorRS")
+endif()
 
 target_link_libraries(CyGPUInspectorRS PRIVATE CyGPUInspectorCore
     advapi32 shell32 user32 version psapi)

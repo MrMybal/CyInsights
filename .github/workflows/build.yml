@@ -27,7 +27,7 @@ jobs:
       - name: Compile native interface
         shell: cmd
         run: build.cmd Release --compile-only
-      - name: Build isolated MIT collector
+      - name: Build optional internal CyInsights Windows collector
         shell: cmd
         run: |
           cmake -S Tools/WindowsCollector -B build/WindowsCollector -G "Visual Studio 17 2022" -A x64

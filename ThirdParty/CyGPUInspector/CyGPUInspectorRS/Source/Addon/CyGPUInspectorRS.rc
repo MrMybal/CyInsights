@@ -14,13 +14,21 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
+#if CYINSIGHTS_WINDOWS_GPU
+            VALUE "CompanyName",      "Cyberalien"
+            VALUE "FileDescription",  "CyInsights optional Windows GPU collector"
+            VALUE "InternalName",     "CyInsightsGpu"
+            VALUE "OriginalFilename", "CyInsightsGpu.addon64"
+            VALUE "ProductName",      "CyInsights"
+#else
             VALUE "CompanyName",      "CyGPUInspector"
             VALUE "FileDescription",  "CyGPUInspectorRS - ReShade capture agent for CyGPUInspector"
-            VALUE "FileVersion",      CYGI_VERSION_STRING
             VALUE "InternalName",     "CyGPUInspectorRS"
-            VALUE "LegalCopyright",   "Copyright (C) 2026 Cyberalien - MIT License (CyInsights integration)"
             VALUE "OriginalFilename", "CyGPUInspectorRS.addon64"
             VALUE "ProductName",      "CyGPUInspector"
+#endif
+            VALUE "FileVersion",      CYGI_VERSION_STRING
+            VALUE "LegalCopyright",   "Copyright (C) 2026 Cyberalien - MIT License (CyInsights integration)"
             VALUE "ProductVersion",   CYGI_VERSION_STRING
         END
     END

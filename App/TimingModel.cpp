@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
 #include "TimingModel.hpp"
 #include "AnalysisWorkers.hpp"
+#include "FrameDiagnostics.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -9,6 +10,13 @@
 #include <unordered_map>
 #include <stdexcept>
 namespace cyinsights {
+int TimingTrackRank(const TimingTrack& t) {
+    if(t.gpu)return 0;
+    if(t.name=="GameThread"||t.name.rfind("GameThread [#",0)==0)return 1;
+    if(TimingMatches(t.name,"RenderThread")||TimingMatches(t.name,"RenderingThread"))return 2;
+    if(TimingMatches(t.name,"RHI"))return 3;
+    return 4;
+}
 int TimingTrack::RowCount(int limit) const {
     int count = static_cast<int>(depths.size());
     return std::max(1, limit > 0 ? std::min(count, limit) : count);
@@ -117,7 +125,7 @@ void TimingModel::Build(const std::vector<TimingEvent> &events, bool aggregate_a
             track.name = e.thread;
             track.id = e.thread_id;
             track.has_id = e.has_thread_id;
-            track.gpu = TimingMatches(e.thread, "gpu");
+            track.gpu = DiagnosticDomain(e.thread)==FrameDomain::Gpu;
             tracks.push_back(std::move(track));
         }
         tracks[track_index].events.push_back(i);
@@ -192,15 +200,8 @@ void TimingModel::Build(const std::vector<TimingEvent> &events, bool aggregate_a
             stack.push_back(i);
         }
     },cancel);
-    auto rank = [](const TimingTrack &t) {
-        return t.name == "GameThread"                  ? 0
-               : TimingMatches(t.name, "RenderThread") ? 1
-               : TimingMatches(t.name, "RHI")          ? 2
-               : t.gpu                                 ? 3
-                                                       : 4;
-    };
     std::stable_sort(tracks.begin(), tracks.end(),
-                     [&](const auto &a, const auto &b) { return rank(a) < rank(b); });
+                     [&](const auto &a, const auto &b) { return TimingTrackRank(a) < TimingTrackRank(b); });
     std::unordered_map<std::string, size_t> name_counts;
     for (const auto &track : tracks)
         ++name_counts[track.name];

@@ -154,6 +154,28 @@ TUniquePtr<FLegacyTraceSink> LegacySink;
 #endif
 
 namespace CyInsightsTrace {
+namespace {
+// Only called after the coordinator has refused an existing native recording.
+const TCHAR* ManagedChannels[]={TEXT("cpu"),TEXT("gpu"),TEXT("frame"),TEXT("bookmark"),TEXT("counters"),TEXT("cyinsightssync"),TEXT("cyinsightsstats"),TEXT("cyinsightsvulkan"),TEXT("stats"),TEXT("task"),TEXT("net"),TEXT("file"),TEXT("loadtime"),TEXT("log"),TEXT("memtag")};
+TMap<FString,bool> PreviousChannels;
+bool ChannelsOwned=false;
+void PrepareChannels() {
+    if(ChannelsOwned)return;
+    ChannelsOwned=true;PreviousChannels.Reset();
+#if CYINSIGHTS_TRACE_HAS_ENUM_CHANNELS
+    CyInsightsNativeTrace::EnumerateChannels([](const ANSICHAR* Name,bool Enabled,void*){
+        FString Channel(ANSI_TO_TCHAR(Name));Channel.RemoveFromEnd(TEXT("Channel"));
+        for(const TCHAR* Managed:ManagedChannels)if(Channel.Equals(Managed,ESearchCase::IgnoreCase))PreviousChannels.Add(Managed,Enabled);
+    },nullptr);
+#endif
+    for(const TCHAR* Name:ManagedChannels)CyInsightsNativeTrace::ToggleChannel(Name,false);
+}
+}
+void RestoreChannels() {
+    if(!ChannelsOwned)return;
+    for(const TCHAR* Name:ManagedChannels){const bool* Previous=PreviousChannels.Find(Name);CyInsightsNativeTrace::ToggleChannel(Name,Previous&&*Previous);}
+    PreviousChannels.Reset();ChannelsOwned=false;
+}
 bool IsConnected()
 {
 #if CYINSIGHTS_TRACE_HAS_AUX_CAPTURE
@@ -177,6 +199,7 @@ bool GetIdentity(FGuid& Session, FGuid& TraceGuid)
 }
 void ConfigureChannels(const FString& Channels)
 {
+    PrepareChannels();
 #if CYINSIGHTS_TRACE_HAS_AUX_CAPTURE
     FTraceAuxiliary::FOptions Options;
 #if CYINSIGHTS_TRACE_HAS_EXCLUDE_TAIL
@@ -197,6 +220,7 @@ void ConfigureChannels(const FString& Channels)
 }
 bool StartFile(const FString& Path, const FString& Channels)
 {
+    PrepareChannels();
 #if CYINSIGHTS_TRACE_HAS_AUX_CAPTURE
     FTraceAuxiliary::FOptions Options;
 #if CYINSIGHTS_TRACE_HAS_EXCLUDE_TAIL
@@ -210,6 +234,7 @@ bool StartFile(const FString& Path, const FString& Channels)
 #if !CYINSIGHTS_TRACE_HAS_GUID
     if (Started) ResetObservedIdentity();
 #endif
+    if(!Started)RestoreChannels();
     return Started;
 }
 bool SendTo(const FString& Host, uint16 Port)
@@ -231,10 +256,12 @@ bool SendTo(const FString& Host, uint16 Port)
 bool Stop()
 {
 #if CYINSIGHTS_TRACE_HAS_AUX_CAPTURE
-    return FTraceAuxiliary::Stop() || !FTraceAuxiliary::IsConnected();
+    const bool Stopped=FTraceAuxiliary::Stop() || !FTraceAuxiliary::IsConnected();
 #else
-    return LegacySink && LegacySink->Stop();
+    const bool Stopped=LegacySink && LegacySink->Stop();
 #endif
+    if(Stopped)RestoreChannels();
+    return Stopped;
 }
 FString GetError()
 {

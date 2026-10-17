@@ -10,7 +10,7 @@ ne révoque pas les autorisations AGPL déjà accordées et ne couvre aucun code
 | Application `App/`, `Core/`, tests et outils généraux | AGPL-3.0-or-later | `LICENSE` |
 | Analyse/session reprises de CyGPUInspector | AGPL-3.0-or-later | `ThirdParty/CyGPUInspector/LICENSE` |
 | Plugin `Plugins/CyInsights` (Runtime, Editor, Quest) | MIT | `Plugins/CyInsights/LICENSE` |
-| Plugin chargeur `Plugins/CyGPUInspector` | MIT | `Plugins/CyGPUInspector/LICENSE` |
+| Modules internes Windows `CyInsightsGpuLoader`, `CyInsightsGpuWindows` | MIT | `Plugins/CyInsights/LICENSE` |
 | SDK C, IPC et formats `ThirdParty/CyGPUInspector/CyGPUInspectorCore` | MIT | `CyGPUInspectorCore/LICENSE` |
 | Collecteur ReShade `ThirdParty/CyGPUInspector/CyGPUInspectorRS` | MIT | `CyGPUInspectorRS/LICENSE` |
 | Adaptateurs facultatifs `Tools/NativeTasks`, `Tools/NativeActivities`, `Tools/NativeTiming` et build du collecteur `Tools/WindowsCollector` | MIT | `LICENSE` dans chaque dossier |

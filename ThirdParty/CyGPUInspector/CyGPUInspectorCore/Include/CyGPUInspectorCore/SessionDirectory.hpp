@@ -17,7 +17,11 @@
 
 namespace cygi
 {
+#if CYINSIGHTS_WINDOWS_GPU
+	inline constexpr const char *kSessionDirectoryName = "Local\\CyInsights.Gpu.Sessions.v1";
+#else
 	inline constexpr const char *kSessionDirectoryName = "Local\\CyGPUInspector.Sessions.v1";
+#endif
 	inline constexpr uint32_t kSessionDirectoryMagic = 0x53495943; // 'CYIS'
 	inline constexpr uint32_t kMaxSessions = 32;
 	inline constexpr uint64_t kSessionStaleMilliseconds = 3000;

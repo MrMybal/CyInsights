@@ -822,5 +822,11 @@ namespace cygi
 	// Control pipe of a session: \\.\pipe\CyGPUInspector\<pid>.<device>
 	void MakePipeName(uint32_t process_id, uint32_t device_index, char *out, size_t out_size);
 	// Control pipe of the standalone, used by the MCP proxy: \\.\pipe\CyGPUInspector\app
+#if CYINSIGHTS_WINDOWS_GPU
+	inline constexpr const char *kGpuIpcPrefix = "CyInsights.Gpu";
+	inline constexpr const char *kAppPipeName = "\\\\.\\pipe\\CyInsights.Gpu\\app";
+#else
+	inline constexpr const char *kGpuIpcPrefix = "CyGPUInspector";
 	inline constexpr const char *kAppPipeName = "\\\\.\\pipe\\CyGPUInspector\\app";
+#endif
 }

@@ -17,9 +17,10 @@ const char* domains[]={"GameThread","RenderThread","GPU"};
 Application::InteractionState Application::InteractionView() const {
     InteractionState state;state.scope_x=scope_probe_x_;state.scope_y=scope_probe_y_;state.scope_name=scope_probe_name_;
     state.menu_x=context_hist_x_;state.menu_y=context_hist_y_;state.hist_x=hist_probe_x_;state.hist_y=hist_probe_y_;state.hist_width=hist_probe_width_;
+    state.blank_x=timing_blank_x_;state.blank_y=timing_blank_y_;
     state.filter_name=timing_exact_name_;state.function_name=distribution_result_function_;state.selection_a=range_start_;state.selection_b=range_end_;
     state.hist_a=distribution_a_;state.hist_b=distribution_b_;state.count=distribution_.count;state.matched=distribution_.matched;state.bin=distribution_.selected_bin;state.bins=distribution_.bins;
-    auto* timing=ImGui::FindWindowByName("Timing");auto* distribution=ImGui::FindWindowByName("Distributions");
+    auto* timing=ImGui::FindWindowByName(WindowName("Timing").c_str());auto* distribution=ImGui::FindWindowByName(WindowName("Distributions").c_str());
     state.separate_dock=timing&&distribution&&timing->DockId&&distribution->DockId&&timing->DockId!=distribution->DockId;return state;
 }
 void Application::FilterFunction(const std::string& name) {
@@ -39,12 +40,12 @@ void Application::OpenFunctionHistogram(const std::string& name) {
 }
 void Application::DockFunctionHistogram() {
     if(!histogram_dock_pending_)return;histogram_dock_pending_=false;
-    auto* timing=ImGui::FindWindowByName("Timing");auto* distribution=ImGui::FindWindowByName("Distributions");
+    auto* timing=ImGui::FindWindowByName(WindowName("Timing").c_str());auto* distribution=ImGui::FindWindowByName(WindowName("Distributions").c_str());
     if(!timing||!timing->DockId||(distribution&&distribution->DockId&&distribution->DockId!=timing->DockId))return;
     auto* node=ImGui::DockBuilderGetNode(timing->DockId);if(!node||!node->IsLeafNode())return;
     auto* root_node=node;while(root_node->ParentNode)root_node=root_node->ParentNode;auto root=root_node->ID;ImGuiID bottom=0,top=0;
     ImGui::DockBuilderSplitNode(node->ID,ImGuiDir_Down,.42f,&bottom,&top);
-    ImGui::DockBuilderDockWindow("Distributions",bottom);ImGui::DockBuilderFinish(root);
+    ImGui::DockBuilderDockWindow(WindowName("Distributions").c_str(),bottom);ImGui::DockBuilderFinish(root);
 }
 void Application::FollowTimelineSelection() {
     if(!native_.store)return;
@@ -67,8 +68,8 @@ void Application::FocusInterval(double a,double b,uint32_t thread,bool native_id
     double pad=std::max(.00001,(b-a)*.15);view_start_=std::max(std::min(timing_model_.start,a),a-pad);view_end_=std::min(std::max(timing_model_.end,b),b+pad);
     selected_cpu_=selected_timer_=-1;show_timing_=true;
     for(auto& track:timing_model_.tracks)if(native_identity&&track.has_id&&track.id==thread){track.visible=true;track.collapsed=false;}
-    auto* w=ImGui::FindWindowByName("Timing");if(w&&w->DockNode&&w->DockNode->TabBar){w->DockNode->SelectedTabId=w->TabId;w->DockNode->TabBar->NextSelectedTabId=w->TabId;}
-    ImGui::SetWindowFocus("Timing");
+    auto* w=ImGui::FindWindowByName(WindowName("Timing").c_str());if(w&&w->DockNode&&w->DockNode->TabBar){w->DockNode->SelectedTabId=w->TabId;w->DockNode->TabBar->NextSelectedTabId=w->TabId;}
+    ImGui::SetWindowFocus(WindowName("Timing").c_str());
 }
 bool Application::InspectFirstTask() {
     if(!tasks_store_||tasks_result_candidates_||links_query_.valid())return false;
@@ -79,13 +80,21 @@ bool Application::InspectFirstTask() {
     return false;
 }
 void Application::WriteAnalysisReport(const fs::path& output) const {
+    size_t limited_gpu_tracks=0;
+    for(const auto& track:timing_model_.tracks)if(track.gpu&&track.gpu_detail.Limited())++limited_gpu_tracks;
+    uint64_t stat_metrics=0,stat_samples=0,stat_bounds=0,stat_delayed=0,stat_execution_unknown=0;
+    for(const auto& metric:counters_->series)if(metric.frame_stats){++stat_metrics;stat_samples+=metric.frame_samples.size();for(const auto& sample:metric.frame_samples){stat_bounds+=(sample.flags&cyfs::FrameBounds)!=0;stat_delayed+=(sample.flags&cyfs::Delayed)!=0;stat_execution_unknown+=(sample.flags&cyfs::ExecutionUnknown)!=0;}}
     std::ofstream out(output);out<<std::setprecision(17)<<std::boolalpha;
     out<<"{\"timing_events\":"<<(native_.store?native_.store->count:0)
        <<",\"native_setup_ready\":"<<(native_setup_.state==NativeSetup::State::Ready)
        <<",\"native_setup_status\":"<<cygi::Json(native_setup_.message).Write(-1)
        <<",\"native_timing_backend\":\""<<(native_.DirectTiming()?"direct_binary":"csv_bridge")<<"\""
        <<",\"native_decode_seconds\":"<<native_.DecodeSeconds()<<",\"native_index_seconds\":"<<native_.IndexSeconds()
-       <<",\"native_timing_bytes\":"<<native_.ExportBytes()<<",\"native_counter_catalog\":"<<counters_.series.size()
+       <<",\"native_timing_bytes\":"<<native_.ExportBytes()<<",\"native_counter_catalog\":"<<counters_->series.size()
+       <<",\"gpu_timing_detail_limited_tracks\":"<<limited_gpu_tracks
+       <<",\"vulkan_subpass_records\":"<<(native_.vulkan_contents?native_.vulkan_contents->count:0)
+       <<",\"frame_stat_metrics\":"<<stat_metrics<<",\"frame_stat_samples\":"<<stat_samples<<",\"frame_stat_source_bounds\":"<<stat_bounds
+       <<",\"frame_stat_delayed_samples\":"<<stat_delayed<<",\"frame_stat_unknown_execution_frame\":"<<stat_execution_unknown
        <<",\"selection_start\":"<<range_start_<<",\"selection_end\":"<<range_end_<<",\"view_start\":"<<view_start_<<",\"view_end\":"<<view_end_
        <<",\"activity_events\":"<<(activity_store_?activity_store_->count:0)
        <<",\"activity_lanes\":"<<(activity_store_?activity_store_->lanes.size():0)
@@ -174,7 +183,7 @@ void Application::PollTraceAnalysis() {
     if(links_query_.valid()&&links_query_.wait_for(std::chrono::seconds(0))==std::future_status::ready){try{auto links=links_query_.get();if(selected_task_&&selected_task_->id==links_request_id_&&!tasks_result_candidates_)task_links_=std::move(links);}catch(const std::exception& e){tasks_message_=e.what();}}
 }
 void Application::DistributionView() {
-    bool visible=ImGui::Begin("Distributions",&show_distribution_);Activate(focus_distribution_);if(!visible){ImGui::End();return;}
+    bool visible=BeginView("Distributions",&show_distribution_);Activate(focus_distribution_);if(!visible){ImGui::End();return;}
     if(!native_.store){ImGui::TextWrapped("Open a trace and wait for its native timing index.");ImGui::End();return;}
     if(distribution_label_.empty()&&!distribution_task_.valid())StartDistribution();
     float scale=UiScale();ImGui::BeginDisabled(distribution_task_.valid());
@@ -239,7 +248,7 @@ void Application::DistributionView() {
     ImGui::End();
 }
 void Application::TasksView() {
-    bool visible=ImGui::Begin("Tasks",&show_tasks_);Activate(focus_tasks_);if(!visible){ImGui::End();return;}
+    bool visible=BeginView("Tasks",&show_tasks_);Activate(focus_tasks_);if(!visible){ImGui::End();return;}
     if(!native_.store){ImGui::TextWrapped("Open a trace first.");ImGui::End();return;}
     if(!tasks_auto_started_)StartNativeTasks();
     if(!tasks_store_&&!task_reader_.Busy()&&tasks_message_.empty())tasks_message_="Native tasks unavailable; CPU scopes can be inspected as candidates";

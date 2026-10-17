@@ -14,6 +14,7 @@ public class CyInsightsTrace : ModuleRules
         string Aux = File.ReadAllText(Path.Combine(Runtime, "Core", "Public", "ProfilingDebugging", "TraceAuxiliary.h"));
         string Trace = File.ReadAllText(Path.Combine(Runtime, "TraceLog", "Public", "Trace", "Trace.h"));
         PublicDefinitions.Add("CYINSIGHTS_TRACE_HAS_AUX_CAPTURE=" + (Aux.Contains("EConnectionType") ? "1" : "0"));
+        PublicDefinitions.Add("CYINSIGHTS_TRACE_HAS_ENUM_CHANNELS=" + (Trace.Contains("ChannelIterFunc") ? "1" : "0"));
         PublicDefinitions.Add("CYINSIGHTS_TRACE_HAS_GUID=" + (Aux.Contains("OutTraceGuid") ? "1" : "0"));
         PublicDefinitions.Add("CYINSIGHTS_TRACE_HAS_EXCLUDE_TAIL=" + (Aux.Contains("bExcludeTail") ? "1" : "0"));
         PublicDefinitions.Add("CYINSIGHTS_TRACE_HAS_SEND_FLAGS=" + (Trace.Contains("FSendFlags") && Trace.Contains("ExcludeTail") ? "1" : "0"));

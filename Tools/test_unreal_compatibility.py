@@ -18,7 +18,10 @@ def main():
     parser.add_argument('--platform', choices=['Win64', 'Android'], default='Win64')
     parser.add_argument('--configuration', choices=['Development', 'Debug', 'DebugGame'], default='Development')
     parser.add_argument('--target', choices=['Editor', 'Game'], default='Editor')
-    parser.add_argument('--without-gpu', action='store_true')
+    parser.add_argument('--without-gpu', action='store_true', help='Legacy native-only host label; the internal Windows collector remains disabled at runtime by default')
+    parser.add_argument('--runtime-host', action='store_true', help='Also link our generated primary game module for an owned runtime smoke test')
+    parser.add_argument('--skip-rules', action='store_true', help='Reuse already compiled UBT rules if a shared engine cache is locked')
+    parser.add_argument('--wait-mutex', action='store_true', help='Wait for another UnrealBuildTool invocation to finish')
     parser.add_argument('--compiler', help='Optional installed MSVC version, e.g. 14.29.30133')
     parser.add_argument('--no-pch', action='store_true', help='Compile without shared precompiled headers')
     args = parser.parse_args()
@@ -29,10 +32,10 @@ def main():
         raise SystemExit('Supported source range: UE 4.27 and 5.0–5.8')
     if args.platform == 'Android' and args.target == 'Editor':
         raise SystemExit('Use --target Game for Android')
-    name = f'{major}.{minor}-{args.platform}-{args.target}-{args.configuration}' + ('-native-only' if args.without_gpu else '')
+    name = f'{major}.{minor}-{args.platform}-{args.target}-{args.configuration}' + ('-native-only' if args.without_gpu else '-integrated-gpu')
     host = ROOT / 'build/UnrealCompatibility' / name
     host.mkdir(parents=True, exist_ok=True)
-    plugins = ['CyInsights'] + ([] if args.without_gpu else ['CyGPUInspector'])
+    plugins = ['CyInsights']
     for plugin in plugins:
         shutil.copytree(ROOT / 'Plugins' / plugin, host / 'Plugins' / plugin,
                         dirs_exist_ok=True, ignore=shutil.ignore_patterns('Binaries', 'Intermediate', '__pycache__'))
@@ -68,17 +71,17 @@ public class {target_name}Target : TargetRules {{
 ''', encoding='utf-8')
     config = host / 'Config'
     config.mkdir(exist_ok=True)
-    (config / 'DefaultEngine.ini').write_text('''[/Script/CyGPUInspector.CyGPUInspectorSettings]
+    (config / 'DefaultEngine.ini').write_text('''[/Script/CyInsightsGpuWindows.CyInsightsWindowsGpuSettings]
 bLoadInEditor=False
 bLoadInGame=False
-bLaunchStandalone=False
 ''', encoding='utf-8')
     log = host / 'build.log'
     modules = ['CyInsightsTrace', 'CyInsights']
-    if args.platform == 'Win64' and not args.without_gpu:
-        modules += ['CyGPUInspectorLoader', 'CyGPUInspector']
+    if args.runtime_host: modules += ['CyCompatibilityHost']
+    if args.platform == 'Win64':
+        modules += ['CyInsightsGpuLoader', 'CyInsightsGpuWindows']
     if args.target == 'Editor':
-        modules += ['CyInsightsEditor'] + ([] if args.without_gpu else ['CyGPUInspectorEditor'])
+        modules += ['CyInsightsEditor']
     if args.platform == 'Android':
         modules += ['CyInsightsQuest']
     arguments = ['CyCompatibilityHost' + ('Editor' if args.target == 'Editor' else ''), args.platform,
@@ -87,6 +90,8 @@ bLaunchStandalone=False
     arguments += ['-NoUnity', '-NoXGE', '-NoUBA', '-NoUBALocal', '-MaxParallelActions=4', '-Log=' + str(log)]
     if args.compiler: arguments += ['-CompilerVersion=' + args.compiler]
     if args.no_pch: arguments += ['-NoPCH']
+    if args.skip_rules: arguments += ['-SkipRulesCompile']
+    if args.wait_mutex: arguments += ['-WaitMutex']
     if major == 4:
         command = [str(engine / 'Binaries/DotNET/UnrealBuildTool.exe')] + arguments
     else:

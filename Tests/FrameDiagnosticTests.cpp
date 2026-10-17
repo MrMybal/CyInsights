@@ -13,6 +13,8 @@ int main() {
     check(DiagnosticDomain("GameThread")==FrameDomain::Game,"Identify GameThread");
     check(DiagnosticDomain("RenderThread")==FrameDomain::Render,"Identify RenderThread");
     check(DiagnosticDomain("GPU1")==FrameDomain::Gpu,"Identify native GPU timeline");
+    check(DiagnosticDomain("GPU / Meta Game / graphics (measured hardware stages)")==FrameDomain::Gpu,"Measured game hardware stages participate in GPU diagnostics");
+    check(DiagnosticDomain("GPU / Meta Other process 32 / graphics (measured hardware stages)")==FrameDomain::Other&&DiagnosticDomain("GPU / Meta Process unknown / graphics (measured hardware stages)")==FrameDomain::Other,"System or unidentified hardware work does not blame the game's GPU");
     check(DiagnosticDomain("Foreground Worker")==FrameDomain::Other,"Workers do not masquerade as a frame thread");
     check(DiagnosticDomain("GpuWorkerThread")==FrameDomain::Other,"CPU worker with GPU in its name is not a GPU queue");
     check(DiagnosticWait("FTaskGraphInterface::WaitUntilTasksComplete"),"Recognize namespaced task waits");
@@ -30,17 +32,29 @@ int main() {
     check(near(frames[0].work[2].active,.024),"GPU nested pass timings unioned rather than summed");
     check(!frames[1].work[0].available&&!frames[1].work[2].available,"Missing interval coverage is unavailable, not measured zero");
     check(DiagnoseFrame(frames[0],.03,.016)==FrameCause::Gpu,"GPU candidate beats waiting GameThread");
+    check(FrameCauseHighlights(frames[0],.03,.016,FrameDomain::Gpu)&&
+        !FrameCauseHighlights(frames[0],.03,.016,FrameDomain::Game)&&!FrameCauseHighlights(frames[0],.03,.016,FrameDomain::Render),
+        "A GPU bottleneck highlights only GPU, never waiting CPU or unrelated threads");
     auto diagnostic=frames[0];diagnostic.work[2]={};
     check(DiagnoseFrame(diagnostic,.03,.016)==FrameCause::Render,"CPU-only trace can identify RenderThread candidate with GPU unavailable");
     diagnostic.work[1]={};
     check(DiagnoseFrame(diagnostic,.03,.016)==FrameCause::Wait,"Long wait with little productive work is wait/pacing, not CPU workload");
+    check(!FrameCauseHighlights(diagnostic,.03,.016,FrameDomain::Game),"Wait-only frames do not blame productive GameThread work");
     diagnostic.work[0].wait=0;diagnostic.work[0].active=.025;
     check(DiagnoseFrame(diagnostic,.03,.016)==FrameCause::Game,"GameThread work over budget");
     diagnostic.work[1]={.024,0,.024,true,false};
     check(DiagnoseFrame(diagnostic,.03,.016)==FrameCause::Mixed,"Similar concurrent work is ambiguous rather than unique cause");
+    check(FrameCauseHighlights(diagnostic,.03,.016,FrameDomain::Game)&&FrameCauseHighlights(diagnostic,.03,.016,FrameDomain::Render)&&
+        !FrameCauseHighlights(diagnostic,.03,.016,FrameDomain::Gpu)&&!FrameCauseHighlights(diagnostic,.03,.016,FrameDomain::Other),
+        "Mixed bottlenecks highlight only the participating over-budget domains");
+    auto borderline=diagnostic;borderline.work[0].active=.017;borderline.work[1].active=.0159;
+    check(DiagnoseFrame(borderline,.03,.016)==FrameCause::Game&&!FrameCauseHighlights(borderline,.03,.016,FrameDomain::Render),
+        "A near-costly thread within budget is not a second cause");
     check(DiagnoseFrame(diagnostic,.03,.04)==FrameCause::WithinBudget,"Budget is configurable for frame rate");
+    check(!FrameCauseHighlights(diagnostic,.03,.04,FrameDomain::Game),"Frames within budget have no culprit tint");
     diagnostic.work[0].incomplete=true;
     check(DiagnoseFrame(diagnostic,.03,.016)==FrameCause::Unknown,"Unfinished timing cannot prove a bottleneck");
+    check(!FrameCauseHighlights(diagnostic,.03,.016,FrameDomain::Render),"Incomplete measurements have no inferred culprit tint");
     check(DiagnoseFrame({},.03,.016)==FrameCause::Unknown,"Uninstrumented slow frame unresolved");
     check(DiagnoseFrame({},.016,.016)==FrameCause::WithinBudget,"Exact budget boundary");
     check(DiagnoseFrame({},.03,0)==FrameCause::Unknown,"Invalid budget");

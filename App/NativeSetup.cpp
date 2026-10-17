@@ -3,7 +3,7 @@
 #include "NativeTrace.hpp"
 #include <CyGPUInspectorCore/Json.hpp>
 #include <CyGPUInspectorCore/Sha256.hpp>
-#include <set>
+#include <cmath>
 namespace cyinsights {
 namespace {
 std::filesystem::path EnvironmentPath(const wchar_t* name) {
@@ -13,69 +13,102 @@ std::filesystem::path EnvironmentPath(const wchar_t* name) {
 struct Handle {HANDLE value=nullptr;~Handle(){if(value&&value!=INVALID_HANDLE_VALUE)CloseHandle(value);}};
 struct OwnedMutex {HANDLE value=nullptr;bool owned=false;~OwnedMutex(){if(owned)ReleaseMutex(value);if(value)CloseHandle(value);}};
 }
-NativeSetup::~NativeSetup(){Cancel();if(discover_.valid())discover_.wait();if(prepare_.valid())prepare_.wait();}
+NativeSetup::~NativeSetup(){Cancel();if(prepare_.valid())prepare_.wait();}
 void NativeSetup::Cancel(){cancel_=true;}
-std::vector<std::filesystem::path> NativeSetup::Detect(const std::filesystem::path& preferred) {
-    std::vector<std::filesystem::path> paths;
-    auto add=[&](std::filesystem::path path){
-        if(path.empty())return;
-        if(path.filename()!=L"UnrealInsights.exe")path/=L"Engine/Binaries/Win64/UnrealInsights.exe";
-        std::error_code ec;if(!std::filesystem::is_regular_file(path,ec))return;
-        path=std::filesystem::weakly_canonical(path,ec);
-        if(std::find(paths.begin(),paths.end(),path)==paths.end())paths.push_back(path);
-    };
-    add(preferred);
-    try {cygi::Json config;if(cygi::Json::Parse(ReadNativeFile(NativeDataDirectory()/"analyzer.json"),config))add(std::filesystem::u8path(config["analyzer"].AsString()));}catch(...){}
-    for(const auto hive:{HKEY_LOCAL_MACHINE,HKEY_CURRENT_USER}) {
-        HKEY key=nullptr;
-        if(RegOpenKeyExW(hive,L"SOFTWARE\\EpicGames\\Unreal Engine",0,KEY_READ,&key)!=ERROR_SUCCESS)continue;
-        wchar_t name[512]{};DWORD length=512;
-        for(DWORD index=0;RegEnumKeyExW(key,index,name,&length,nullptr,nullptr,nullptr,nullptr)==ERROR_SUCCESS;++index,length=512) {
-            HKEY child=nullptr;if(RegOpenKeyExW(key,name,0,KEY_READ,&child)!=ERROR_SUCCESS)continue;
-            wchar_t path[32768]{};DWORD bytes=sizeof(path);
-            if(RegGetValueW(child,nullptr,L"InstalledDirectory",RRF_RT_REG_SZ,nullptr,path,&bytes)==ERROR_SUCCESS)add(path);
-            if(wcscmp(name,L"Builds")==0) {
-                wchar_t label[512]{};DWORD labelLength=512,type=0;
-                for(DWORD i=0;;++i) {
-                    labelLength=512;bytes=sizeof(path);
-                    if(RegEnumValueW(child,i,label,&labelLength,nullptr,&type,reinterpret_cast<BYTE*>(path),&bytes)!=ERROR_SUCCESS)break;
-                    if(type==REG_SZ&&bytes>=sizeof(wchar_t)&&bytes<sizeof(path)){path[bytes/sizeof(wchar_t)]=0;add(path);}
-                }
+namespace {
+bool SameAnalyzer(const std::filesystem::path& a,const std::filesystem::path& b) {
+    return _wcsicmp(a.lexically_normal().c_str(),b.lexically_normal().c_str())==0;
+}
+}
+std::filesystem::path NativeSetup::EngineRoot(const std::filesystem::path& analyzer) {
+    auto engine=AnalyzerEngine(analyzer);
+    return _wcsicmp(engine.filename().c_str(),L"Engine")==0?engine.parent_path():engine;
+}
+std::filesystem::path NativeSetup::ResolveEngineRoot(const std::filesystem::path& root,std::string& error) {
+    error.clear();
+    try {
+        if(root.empty())throw std::runtime_error("Enter the root folder of your Unreal engine.");
+        auto engine=root;std::error_code ec;
+        if(!std::filesystem::is_regular_file(engine/"Build/Build.version",ec))engine/=L"Engine";
+        auto analyzer=engine/L"Binaries/Win64/UnrealInsights.exe";
+        if(!std::filesystem::is_regular_file(analyzer,ec))throw std::runtime_error("UnrealInsights.exe is missing from this engine's Binaries/Win64 folder.");
+        cygi::Json version;
+        if(!cygi::Json::Parse(ReadNativeFile(engine/"Build/Build.version"),version)||!version.IsObject())
+            throw std::runtime_error("The engine's Build/Build.version file is missing or invalid.");
+        const auto major=version["MajorVersion"].AsNumber(-1),minor=version["MinorVersion"].AsNumber(-1);
+        if(!((major==4&&minor==27)||(major==5&&minor>=0&&minor<=8&&minor==std::floor(minor))))
+            throw std::runtime_error("Select an Unreal engine from UE 4.27 to UE 5.8.");
+        return std::filesystem::canonical(analyzer);
+    }catch(const std::exception& e){error=e.what();return {};}
+}
+bool NativeSetup::SaveRegistered(std::string& error) const {
+    try {
+        const auto directory=NativeDataDirectory();std::filesystem::create_directories(directory);
+        auto config=cygi::Json::Object();config["version"]=1;config["engines"]=cygi::Json::Array();
+        for(const auto& analyzer:installations)config["engines"].Push(AnalyzerEngine(analyzer).u8string());
+        config["selected_engine"]=selected.empty()?std::string():AnalyzerEngine(selected).u8string();
+        const auto temporary=directory/("engines-"+std::to_string(GetCurrentProcessId())+".tmp");
+        std::ofstream out(temporary,std::ios::binary|std::ios::trunc);out<<config.Write(2);out.close();
+        if(!out||!MoveFileExW(temporary.c_str(),(directory/"engines.json").c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
+            throw std::runtime_error("Cannot save the registered Unreal engines.");
+        error.clear();return true;
+    }catch(const std::exception& e){error=e.what();return false;}
+}
+bool NativeSetup::AddEngineRoot(const std::filesystem::path& root,std::string& error) {
+    if(Busy()){error="Wait for reader preparation to finish before changing engines.";return false;}
+    auto analyzer=ResolveEngineRoot(root,error);if(analyzer.empty())return false;
+    auto previous=installations;auto previousSelected=selected;
+    auto found=std::find_if(installations.begin(),installations.end(),[&](const auto& p){return SameAnalyzer(p,analyzer);});
+    if(found==installations.end())installations.push_back(analyzer);else analyzer=*found;
+    selected=analyzer;
+    if(SaveRegistered(error))return true;
+    installations=std::move(previous);selected=std::move(previousSelected);return false;
+}
+bool NativeSetup::SelectEngine(const std::filesystem::path& analyzer,std::string& error) {
+    if(Busy()){error="Wait for reader preparation to finish before changing engines.";return false;}
+    auto found=std::find_if(installations.begin(),installations.end(),[&](const auto& p){return SameAnalyzer(p,analyzer);});
+    if(found==installations.end()){error="Add this engine's root folder in Session first.";return false;}
+    auto previous=selected;selected=*found;
+    if(SaveRegistered(error))return true;
+    selected=std::move(previous);return false;
+}
+bool NativeSetup::RemoveEngine(const std::filesystem::path& analyzer,std::string& error) {
+    if(Busy()){error="Wait for reader preparation to finish before changing engines.";return false;}
+    auto previous=installations;auto previousSelected=selected;
+    installations.erase(std::remove_if(installations.begin(),installations.end(),[&](const auto& p){return SameAnalyzer(p,analyzer);}),installations.end());
+    if(SameAnalyzer(selected,analyzer))selected=installations.empty()?std::filesystem::path():installations.front();
+    if(SaveRegistered(error)){if(selected.empty()){state=State::Idle;message="Add an Unreal engine root folder in Session to read native traces.";}return true;}
+    installations=std::move(previous);selected=std::move(previousSelected);return false;
+}
+void NativeSetup::LoadRegistered(const std::filesystem::path& preferred) {
+    if(Busy())return;
+    installations.clear();selected.clear();state=State::Idle;
+    try {
+        const auto text=ReadNativeFile(NativeDataDirectory()/"engines.json");
+        if(!text.empty()) {
+            cygi::Json config;
+            if(!cygi::Json::Parse(text,config)||!config.IsObject()||config["version"].AsNumber()!=1||!config["engines"].IsArray())
+                throw std::runtime_error("The registered engines file is invalid. Add your engine root folder again in Session.");
+            for(const auto& value:config["engines"].Items()) {
+                auto engine=std::filesystem::u8path(value.AsString());if(!engine.is_absolute())continue;
+                auto analyzer=(engine/"Binaries/Win64/UnrealInsights.exe").lexically_normal();
+                if(std::none_of(installations.begin(),installations.end(),[&](const auto& p){return SameAnalyzer(p,analyzer);}))installations.push_back(analyzer);
             }
-            RegCloseKey(child);
+            auto chosen=std::filesystem::u8path(config["selected_engine"].AsString())/"Binaries/Win64/UnrealInsights.exe";
+            for(const auto& analyzer:installations)if(SameAnalyzer(chosen,analyzer)){selected=analyzer;break;}
         }
-        RegCloseKey(key);
-    }
-    auto programData=EnvironmentPath(L"ProgramData");
-    if(!programData.empty()) {
-        cygi::Json launcher;
-        if(cygi::Json::Parse(ReadNativeFile(programData/"Epic/UnrealEngineLauncher/LauncherInstalled.dat"),launcher))
-            for(const auto& entry:launcher["InstallationList"].Items())if(entry["AppName"].AsString().rfind("UE_",0)==0)add(std::filesystem::u8path(entry["InstallLocation"].AsString()));
-    }
-    // Include sibling engines of known installations, without searching whole drives.
-    auto known=paths;
-    for(const auto& path:known) {
-        std::error_code ec;auto parent=AnalyzerEngine(path).parent_path().parent_path();
-        for(std::filesystem::directory_iterator it(parent,ec),end;!ec&&it!=end;it.increment(ec))
-            if(it->path().filename().wstring().rfind(L"UE_",0)==0)add(it->path());
-    }
-    std::filesystem::path first;
-    if(!preferred.empty()){std::error_code ec;auto path=std::filesystem::weakly_canonical(preferred,ec);if(std::find(paths.begin(),paths.end(),path)!=paths.end())first=path;}
-    if(first.empty())try{cygi::Json config;if(cygi::Json::Parse(ReadNativeFile(NativeDataDirectory()/"analyzer.json"),config)){auto saved=std::filesystem::u8path(config["analyzer"].AsString());if(std::find(paths.begin(),paths.end(),saved)!=paths.end())first=saved;}}catch(...){}
-    std::sort(paths.begin(),paths.end(),[&](const auto& a,const auto& b){if(a==b)return false;if(a==first)return true;if(b==first)return false;auto av=AnalyzerVersion(a),bv=AnalyzerVersion(b);if(av!=bv)return av>bv;return a.native()<b.native();});
-    return paths;
+        // An environment override is an explicit path; never probe the registry,
+        // Epic Launcher inventory, sibling installations or whole drives.
+        if(!preferred.empty()) {
+            std::string error;if(!AddEngineRoot(AnalyzerEngine(preferred),error))throw std::runtime_error(error);
+        }
+        if(selected.empty()&&!installations.empty())selected=installations.front();
+        if(selected.empty())message="Add an Unreal engine root folder in Session to read native traces.";
+        else Prepare(selected);
+    }catch(const std::exception& e){state=State::Failed;message=e.what();}
 }
 std::string NativeSetup::SourceStamp(const std::filesystem::path& app) {
-    cygi::Sha256 hash;
-    for(const auto* part:{"InstallNativeReaders.ps1","NativeTiming","NativeTasks","NativeActivities"}) {
-        auto path=app/"Tools"/part;
-        std::vector<std::filesystem::path> files;std::error_code ec;
-        if(std::filesystem::is_regular_file(path,ec))files.push_back(path);
-        else if(std::filesystem::is_directory(path,ec))for(const auto& entry:std::filesystem::recursive_directory_iterator(path))if(entry.is_regular_file())files.push_back(entry.path());
-        std::sort(files.begin(),files.end());
-        for(const auto& file:files){auto name=file.lexically_relative(app).generic_u8string(),bytes=ReadNativeFile(file);hash.Update(name.data(),name.size());hash.Update(bytes.data(),bytes.size());}
-    }
-    return hash.Finish().ToHex();
+    return NativeReaderSourceStamp(app);
 }
 bool NativeSetup::ReadersReady(const std::filesystem::path& analyzer,const std::filesystem::path& app) {
     auto cache=NativeCacheDirectory(analyzer);std::error_code ec;
@@ -85,10 +118,6 @@ bool NativeSetup::ReadersReady(const std::filesystem::path& analyzer,const std::
         local&=std::filesystem::is_regular_file(app/relative,ec);ec.clear();cached&=std::filesystem::is_regular_file(cache/relative,ec);ec.clear();
     }
     return local||cached;
-}
-void NativeSetup::Discover(const std::filesystem::path& preferred) {
-    if(Busy())return;cancel_=false;state=State::Discovering;message="Detecting installed Unreal analyzers...";started_=std::chrono::steady_clock::now();
-    discover_=std::async(std::launch::async,[preferred]{return Detect(preferred);});
 }
 void NativeSetup::Prepare(const std::filesystem::path& analyzer,const std::filesystem::path& app) {
     if(Busy())return;selected=analyzer;cancel_=false;state=State::Preparing;phase=0;log_tail.clear();message="Preparing native trace readers...";started_=last_log_=std::chrono::steady_clock::now();
@@ -100,7 +129,7 @@ void NativeSetup::Prepare(const std::filesystem::path& analyzer,const std::files
 NativeSetup::Result NativeSetup::Build(const std::filesystem::path& analyzer,const std::filesystem::path& app,
     const std::filesystem::path& destination,const std::filesystem::path& journal) {
     std::error_code ec;
-    if(!std::filesystem::is_regular_file(analyzer,ec))return {State::Unavailable,"Select your installed UnrealInsights.exe in Session."};
+    if(!std::filesystem::is_regular_file(analyzer,ec))return {State::Unavailable,"The registered engine's Unreal Insights executable is missing. Add its current root folder in Session."};
     auto version=AnalyzerVersion(analyzer);
     if(version!="5.5"&&version!="5.6"&&version!="5.7"&&version!="5.8")return {State::Unavailable,"Native readers support installed UE 5.5-5.8. The CSV timing reader remains available."};
     if(ReadersReady(analyzer,app))return {State::Ready,"Native trace readers ready."};
@@ -161,10 +190,6 @@ NativeSetup::Result NativeSetup::Build(const std::filesystem::path& analyzer,con
     return {State::Ready,"Native trace readers ready. Preparation is reused on subsequent launches."};
 }
 void NativeSetup::Poll() {
-    if(discover_.valid()&&discover_.wait_for(std::chrono::seconds(0))==std::future_status::ready) {
-        try{installations=discover_.get();state=State::Idle;if(cancel_){state=State::Cancelled;message="Analyzer detection cancelled.";}else if(installations.empty()){state=State::Unavailable;message="Select your installed UnrealInsights.exe in Session.";}else Prepare(installations.front());}
-        catch(const std::exception& e){state=State::Failed;message=e.what();}
-    }
     auto now=std::chrono::steady_clock::now();
     if(state==State::Preparing&&now-last_log_>std::chrono::milliseconds(300)) {
         last_log_=now;std::ifstream in(log,std::ios::binary);if(in){in.seekg(0,std::ios::end);auto size=in.tellg();if(size>0){in.seekg(std::max<std::streamoff>(0,static_cast<std::streamoff>(size)-16384));log_tail={(std::istreambuf_iterator<char>(in)),{}};}}
@@ -174,7 +199,7 @@ void NativeSetup::Poll() {
     }
     if(prepare_.valid()&&prepare_.wait_for(std::chrono::seconds(0))==std::future_status::ready) {
         auto result=prepare_.get();state=result.state;message=std::move(result.message);log_tail=ReadNativeFile(log);if(log_tail.size()>16384)log_tail.erase(0,log_tail.size()-16384);
-        if(state==State::Ready||state==State::Unavailable)try{std::error_code ec;if(std::filesystem::is_regular_file(selected,ec)){std::filesystem::create_directories(NativeDataDirectory());cygi::Json config=cygi::Json::Object();config["analyzer"]=selected.u8string();std::ofstream out(NativeDataDirectory()/"analyzer.json");out<<config.Write();}}catch(...){}
+
     }
 }
 }

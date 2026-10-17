@@ -5,6 +5,7 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <vector>
 namespace cyinsights {
 inline std::filesystem::path ApplicationDirectory() {
     wchar_t path[32768]{}; GetModuleFileNameW(nullptr,path,32768);
@@ -42,11 +43,24 @@ inline std::string NativeCacheKey(const std::filesystem::path& analyzer) {
 inline std::filesystem::path NativeCacheDirectory(const std::filesystem::path& analyzer) {
     return NativeDataDirectory()/"NativeReaders"/NativeCacheKey(analyzer);
 }
+inline std::string NativeReaderSourceStamp(const std::filesystem::path& app) {
+    uint64_t hash=14695981039346656037ull;
+    auto add=[&](const auto& value){for(auto c:value){hash^=static_cast<unsigned char>(c);hash*=1099511628211ull;}hash^=0xff;hash*=1099511628211ull;};
+    for(const auto* part:{"InstallNativeReaders.ps1","NativeTiming","NativeTasks","NativeActivities"}) {
+        auto path=app/"Tools"/part;
+        std::vector<std::filesystem::path> files;std::error_code ec;
+        if(std::filesystem::is_regular_file(path,ec))files.push_back(path);
+        else if(std::filesystem::is_directory(path,ec))for(const auto& entry:std::filesystem::recursive_directory_iterator(path))if(entry.is_regular_file())files.push_back(entry.path());
+        std::sort(files.begin(),files.end());
+        for(const auto& file:files){add(file.lexically_relative(app).generic_u8string());add(ReadNativeFile(file));}
+    }
+    std::ostringstream result;result<<std::hex<<hash;return result.str();
+}
 inline std::filesystem::path FindNativeReader(const char* name,const std::filesystem::path& analyzer,
                                              const std::filesystem::path& app=ApplicationDirectory()) {
     auto relative=std::filesystem::path(std::string("Native")+name)/AnalyzerVersion(analyzer)/(std::string("CyNative")+name+".exe");
     std::error_code ec;
-    try {auto cache=NativeCacheDirectory(analyzer);if(std::filesystem::is_regular_file(cache/"ready.txt",ec)&&std::filesystem::is_regular_file(cache/relative,ec))return cache/relative;}catch(...){}
+    try {auto cache=NativeCacheDirectory(analyzer);if(ReadNativeFile(cache/"ready.txt")==NativeReaderSourceStamp(app)&&std::filesystem::is_regular_file(cache/relative,ec))return cache/relative;}catch(...){}
     return app/relative;
 }
 }

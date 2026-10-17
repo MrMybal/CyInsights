@@ -8,7 +8,7 @@ namespace cyinsights {
 cygi::Json AiError(const std::string& code,const std::string& message){auto out=cygi::Json::Object();out["error"]["code"]=code;out["error"]["message"]=message;return out;}
 AiRpc::~AiRpc(){Stop();}
 std::string AiRpc::Name() const{return name_;}
-bool AiRpc::Start(std::string& error){
+bool AiRpc::Start(std::string& error,uint64_t document){
     if(Running())return true;
     HANDLE token=nullptr;DWORD size=0;
     if(!OpenProcessToken(GetCurrentProcess(),TOKEN_QUERY,&token)){error="Cannot read Windows identity";return false;}
@@ -17,6 +17,7 @@ bool AiRpc::Start(std::string& error){
     LPWSTR sid=nullptr;if(!valid||!ConvertSidToStringSidW(reinterpret_cast<TOKEN_USER*>(data.data())->User.Sid,&sid)){error="Cannot secure local AI pipe";return false;}
     std::wstring security=L"D:P(A;;GA;;;"+std::wstring(sid)+L")";LocalFree(sid);
     name_="\\\\.\\pipe\\CyInsights.AI."+std::to_string(GetCurrentProcessId());
+    if(document)name_+="."+std::to_string(document);
     std::wstring name(name_.begin(),name_.end());running_=true;
     for(int i=0;i<4;++i)workers_.emplace_back([this,name,security]{Serve(name,security);});
     return true;

@@ -6,8 +6,15 @@ wheels verrouillées. Extraire tout le ZIP avant de lancer l'application. Les
 paramètres et captures existants ne sont pas inclus dans ce paquet.
 
 Un Unreal Insights installé séparément est nécessaire pour analyser un `.utrace`.
-L'application détecte les installations au démarrage et mémorise celle choisie.
-Au premier lancement, elle prépare automatiquement les lecteurs de timings,
+Dans **Session > Native analyzer**, coller le dossier racine d'un moteur Unreal
+puis cliquer **Add engine**, ou utiliser **Browse engine folder**. Le sous-dossier
+`Engine` est aussi accepté. L'application vérifie la version et retrouve
+`UnrealInsights.exe`, mémorise les moteurs ajoutés et la sélection. La liste peut
+contenir plusieurs moteurs ; **Remove selected engine** retire seulement une
+entrée, sans supprimer le moteur. Elle ne consulte plus le registre ni l'inventaire
+du Launcher et ne recherche pas d'autres installations voisines. Après une mise
+à jour depuis la détection automatique, ajouter son moteur une fois manuellement.
+Après cet ajout, elle prépare automatiquement les lecteurs de timings,
 tâches et activités en arrière-plan, avec progression, journal et annulation.
 Une capture ouverte pendant cette étape attend sa fin puis reprend automatiquement.
 Il n'est plus nécessaire de lancer un script manuellement.
@@ -18,7 +25,10 @@ ne sont pas installées automatiquement. Si elles manquent ou si la préparation
 est annulée, le pont CSV reste disponible. Les lecteurs prêts sont conservés
 dans `%LOCALAPPDATA%/CyInsights/NativeReaders`, par installation/version du moteur.
 Une mise à jour des sources ou du moteur déclenche une nouvelle préparation.
-Dans **Session**, on peut changer d'analyseur ou relancer la préparation.
+Dans **Session > Registered Unreal engines**, on peut changer de moteur ou
+relancer la préparation. Au démarrage, seule la liste locale enregistrée est
+chargée et le moteur sélectionné est réutilisé. Les métadonnées d'une capture
+peuvent choisir une version correspondante uniquement dans cette liste.
 
 Pour un diagnostic ou une installation manuelle facultative :
 

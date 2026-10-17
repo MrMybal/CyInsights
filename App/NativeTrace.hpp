@@ -2,6 +2,7 @@
 #pragma once
 #include "TimingEvent.hpp"
 #include "CounterModel.hpp"
+#include "VulkanPassDetails.hpp"
 #include <Windows.h>
 #include <filesystem>
 #include <future>
@@ -40,6 +41,7 @@ class NativeTrace {
     }
     std::vector<TimingEvent> events;
     CounterModel counters;
+    std::shared_ptr<VulkanPassDetails> vulkan_contents;std::string vulkan_contents_error;
     static bool ReadCsv(const std::filesystem::path &file, std::vector<TimingEvent> &events,
                         std::string &error, NativeReadProgress* progress = nullptr);
     static bool ScanCsv(const std::filesystem::path& file,
@@ -57,6 +59,7 @@ class NativeTrace {
     struct CsvResult {
         std::vector<TimingEvent> events;
         CounterModel counters;
+        std::shared_ptr<VulkanPassDetails> vulkan_contents;std::string vulkan_contents_error;
         std::shared_ptr<PagedTimingStore> store;
         std::string error;
         bool success = false;

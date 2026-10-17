@@ -14,7 +14,7 @@ call "%CYINSIGHTS_VS%\VC\Auxiliary\Build\vcvars64.bat" >nul
 if errorlevel 1 exit /b 1
 set "VSLANG=1033"
 set "CYINSIGHTS_CMAKE=%CYINSIGHTS_VS%\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
-"%CYINSIGHTS_CMAKE%" -S "%~dp0." -B "%~dp0build\%CYINSIGHTS_CONFIG%" -G Ninja -DCMAKE_MAKE_PROGRAM="%CYINSIGHTS_VS%\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe" -DCMAKE_BUILD_TYPE=%CYINSIGHTS_CONFIG% -DCYGI_SOURCE="%~dp0ThirdParty\CyGPUInspector"
+"%CYINSIGHTS_CMAKE%" -S "%~dp0." -B "%~dp0build\%CYINSIGHTS_CONFIG%" -G Ninja -DCMAKE_MAKE_PROGRAM="%CYINSIGHTS_VS%\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe" -DCMAKE_BUILD_TYPE=%CYINSIGHTS_CONFIG%
 if errorlevel 1 exit /b 1
 python "%~dp0Tools\check_msvc_dependencies.py" "%~dp0build\%CYINSIGHTS_CONFIG%"
 if errorlevel 1 exit /b 1

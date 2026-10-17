@@ -99,6 +99,7 @@ int main(int argc,char** argv) {
         auto repeated=indexed->Window(9000.25,9000.75,100.25,100.75,100);
         check(selected.blocks_read>0&&repeated.blocks_read==0&&repeated.cache_hits==selected.block_candidates,"Repeated reads reuse disk blocks without repeating I/O");
         TimingModel exact;exact.Build(selected.events);indexed->ApplyTotals(selected,exact);
+        check(!exact.tracks.empty()&&exact.tracks.front().gpu,"GPU remains above CPU after paged statistics publication despite file order");
         auto values=indexed->Summary(selected,exact);
         auto cpu=std::find_if(values.begin(),values.end(),[](const auto& v){return v.group.key.name=="Shared"&&!v.group.key.gpu;});
         auto gpu=std::find_if(values.begin(),values.end(),[](const auto& v){return v.group.key.name=="Shared"&&v.group.key.gpu;});
@@ -168,6 +169,18 @@ int main(int argc,char** argv) {
     auto query=[&](const std::string& name){auto m=names->FunctionMask(name);size_t count=0;names->VisitScopes(SIZE_MAX,0,5,false,[&](const StoredScope&){++count;},nullptr,&m);return count;};
     auto concurrent=std::async(std::launch::async,[&]{return query("Foo");});
     check(query("FooExtra")==1&&concurrent.get()==3,"Concurrent function queries retain exact results while sharing disk blocks");
+    {
+        std::ofstream fixture(csv);fixture<<std::setprecision(17)<<"ThreadId,ThreadName,TimerId,TimerName,StartTime,EndTime,Depth\n"
+            <<"9,GPU,100,MobileSceneRender,0,0.02,0\n";
+        for(int i=0;i<5;++i)fixture<<"9,GPU,"<<101+i<<",Group"<<i<<","<<.019+i*1e-6<<","<<.019+i*1e-6+1e-6<<",1\n";
+    }
+    auto quest=PagedTimingStore::Build(csv,other,progress,error);auto quest_window=quest->Window(0,.02,0,.02,10);
+    check(quest_window.aggregated&&quest_window.gpu_details.size()==1&&quest_window.gpu_details[0].Limited()&&quest_window.gpu_details[0].nested==5,
+        "Raw GPU timing diagnostic survives pixel aggregation of differently named near-zero groups");
+    TimingModel quest_model;quest_model.Build(quest_window.events,false);quest->ApplyTotals(quest_window,quest_model);
+    check(quest_model.tracks[0].gpu_detail_source.Limited(),"Paged GPU detail diagnostic reaches its native track identity");
+    auto outside=quest->Window(.1,.2,.1,.2,10);
+    check(!outside.gpu_details[0].Limited(),"GPU timing warning does not survive a query outside the measured interval");
     std::filesystem::remove(csv);std::filesystem::remove(binary);std::filesystem::remove(other);
     std::cout<<checks<<" checks, "<<failures<<" failures\n";return failures?1:0;
 }

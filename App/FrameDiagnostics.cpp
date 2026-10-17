@@ -12,6 +12,7 @@ FrameDomain DiagnosticDomain(const std::string& thread) {
     auto n=Lower(thread);
     if(n=="gamethread")return FrameDomain::Game;
     if(n=="renderthread"||n=="renderingthread"||n.rfind("renderthread ",0)==0)return FrameDomain::Render;
+    if(n.rfind("gpu / meta ",0)==0&&n.rfind("gpu / meta game / ",0)!=0)return FrameDomain::Other;
     if(n=="gpu"||n.rfind("gpu ",0)==0||(n.rfind("gpu",0)==0&&n.size()>3&&std::isdigit(static_cast<unsigned char>(n[3]))))return FrameDomain::Gpu;
     return FrameDomain::Other;
 }
@@ -110,8 +111,20 @@ FrameCause DiagnoseFrame(const FrameDiagnostic& frame,double duration,double bud
     // Observed work must exceed the target; a slow frame with little observed
     // work is not proof that its longest sampled thread caused the delay.
     if(largest<=budget)return wait>=duration*.25?FrameCause::Wait:FrameCause::Unknown;
-    for(size_t i=0;i<3;++i)if(i!=index&&frame.work[i].available&&frame.work[i].active>=largest*.9)return FrameCause::Mixed;
+    for(size_t i=0;i<3;++i)if(i!=index&&frame.work[i].available&&frame.work[i].active>budget&&frame.work[i].active>=largest*.9)return FrameCause::Mixed;
     return index==0?FrameCause::Game:index==1?FrameCause::Render:FrameCause::Gpu;
+}
+bool FrameCauseHighlights(const FrameDiagnostic& frame,double duration,double budget,FrameDomain domain) {
+    if(domain==FrameDomain::Other)return false;
+    const auto cause=DiagnoseFrame(frame,duration,budget);
+    if(cause==FrameCause::Mixed){
+        const auto& work=frame.work[static_cast<size_t>(domain)];
+        double largest=0;for(const auto& w:frame.work)if(w.available)largest=std::max(largest,w.active);
+        return work.available&&work.active>budget&&work.active>=largest*.9;
+    }
+    return (cause==FrameCause::Game&&domain==FrameDomain::Game)||
+        (cause==FrameCause::Render&&domain==FrameDomain::Render)||
+        (cause==FrameCause::Gpu&&domain==FrameDomain::Gpu);
 }
 const char* FrameCauseName(FrameCause cause) {
     switch(cause){case FrameCause::WithinBudget:return "Within budget";case FrameCause::Game:return "GameThread candidate";

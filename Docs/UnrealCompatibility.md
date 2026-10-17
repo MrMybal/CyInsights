@@ -1,6 +1,6 @@
 # Compatibilité du plugin Unreal
 
-Les sources de `CyInsights` et de l'intégration Windows `CyGPUInspector` ciblent
+Les sources du plugin `CyInsights`, incluant ses modules Windows internes, ciblent
 UE **4.27 et 5.0–5.8**, sans modification ni recompilation du moteur. Les modules
 restent limités à l'éditeur et aux clients Debug, DebugGame et Development.
 Shipping, Test et Server sont exclus. Une installation Unreal complète et
@@ -20,8 +20,12 @@ licenciée, avec les outils C++/SDK requis, est nécessaire pour compiler le plu
 | 5.8.3 Windows | Six modules, Editor Development | Compilation réussie |
 | 5.5.4 Android | Runtime, Trace et Quest, Game Development | Compilation réussie ; packaging et capture sur casque à valider |
 
-Les six modules Windows sont `CyInsightsTrace`, `CyInsights`, `CyInsightsEditor`,
-`CyGPUInspectorLoader`, `CyGPUInspector` et `CyGPUInspectorEditor`. Ces builds
+Les builds du 10 octobre utilisaient encore le plugin Windows séparé. Depuis le
+11 octobre, il est remplacé par les modules internes `CyInsightsGpuLoader` et
+`CyInsightsGpuWindows`, dans le seul plugin `CyInsights`. Leurs options de chargement
+sont désactivées par défaut ; aucun autre logiciel de capture n'est lancé.
+Les résultats de la matrice historique ci-dessus ne valident pas automatiquement
+les nouveaux modules. Ces builds
 vérifient la compilation des plugins, sans constituer un test des collecteurs sur
 tous les matériels ni un test de jeu packagé dans chaque configuration.
 

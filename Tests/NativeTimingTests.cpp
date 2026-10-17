@@ -2,6 +2,9 @@
 #include "NativeTrace.hpp"
 #include "PagedTimingStore.hpp"
 #include "../Tools/NativeTiming/Format.hpp"
+#include "../Tools/NativeTiming/GpuScopeName.hpp"
+#include "../Tools/NativeTiming/VulkanPassRecords.hpp"
+#include "../Tools/NativeTiming/MetaGpuRecords.hpp"
 #include <fstream>
 #include <iostream>
 #include <cmath>
@@ -12,6 +15,14 @@ int main(){
  auto root=std::filesystem::temp_directory_path()/("CyNativeTimingTests_"+std::to_string(GetCurrentProcessId()));std::filesystem::create_directories(root);
  auto source=root/"timing.cynt",index=root/"timing.cyindex";std::string error;int checks=0,failures=0;
  auto check=[&](bool ok,const char* name){++checks;if(!ok){++failures;std::cerr<<name<<'\n';}};
+ uint64_t mono=0;check(cymeta::MonoAnchorFromCycles(438545596504ull,1000000,mono)&&mono==438545596504000ull,"Unreal Android microsecond cycles align to Perfetto nanoseconds without a factor-1000 error");
+ check(!cymeta::MonoAnchorFromCycles(1,0,mono)&&!cymeta::MonoAnchorFromCycles(UINT64_MAX,1000000,mono),"Missing frequency and overflow never create clock anchors");
+ auto label=[](const std::string& bytes){return cynt::GpuScopeName(reinterpret_cast<const uint8_t*>(bytes.data()),bytes.size());};
+ check(label(std::string("\x68" "Basepass"))=="Basepass","GPU group metadata preserves its name");
+ check(label(std::string("\x67" "Éclat!"))=="Éclat!","GPU group metadata retains UTF-8");
+ check(label(std::string("\x78\x18")+std::string(24,'x'))==std::string(24,'x'),"Extended CBOR group length decoded");
+ for(const auto& bad:{std::string{},std::string("\x7f"),std::string("\x78"),std::string("\x68" "Short"),std::string("\x63" "abcZ"),std::string("\x63\xc0\x80" "X"),std::string("\x63\xed\xa0\x80"),std::string("\x62\xc3" "X"),std::string("\x61\0",2),std::string("\x1b\xff\xff\xff\xff\xff\xff\xff\xff")})
+  check(label(bad).empty(),"Malformed GPU group metadata falls back without fabricating a name");
  std::ofstream out(source,std::ios::binary);auto value=[&](auto v){out.write(reinterpret_cast<const char*>(&v),sizeof(v));};
  auto string=[&](std::string s){value(static_cast<uint32_t>(s.size()));out.write(s.data(),s.size());};
  out.write(cynt::magic,8);value(uint32_t(3));value(uint64_t(17));string("Outer");value(uint64_t(23));string("Child, \"quoted\" / é");value(uint64_t(24));string("Still running");
@@ -45,5 +56,29 @@ int main(){
  bad=bytes;double invalid=std::numeric_limits<double>::quiet_NaN();std::memcpy(bad.data()+first_event,&invalid,8);replace(bad);check(!read(),"Non-finite timing starts are rejected");
  replace(bytes);progress.cancel=true;check(!read(),"Direct binary decoding honors cancellation");progress.cancel=false;
  replace(bytes.substr(0,bytes.size()-1));auto existing=std::filesystem::file_size(index);check(!PagedTimingStore::Build(source,index,progress,error,true)&&std::filesystem::file_size(index)==existing&&!std::filesystem::exists(index.wstring()+L".partial"),"Incomplete decoding never replaces a published cache");
+ auto passSource=root/"passes.cynt";FILE* passOut=_wfopen(passSource.c_str(),L"wb");FILE* raw=tmpfile();
+ if(passOut&&raw) {
+  cyvp::WriteValue(raw,cyvp::Raw{5010250,5013000,1,0});cyvp::WriteValue(raw,cyvp::Raw{5005300,5005900,0,0});cyvp::WriteValue(raw,cyvp::Raw{8000000,8001000,0,0});
+  fwrite(cynt::magic,1,8,passOut);cyvp::WriteValue(passOut,uint32_t(2));
+  for(uint64_t i=0;i<2;++i){cyvp::WriteValue(passOut,i);std::string name="Vulkan pass "+std::to_string(i+1);cyvp::WriteValue(passOut,uint32_t(name.size()));fwrite(name.data(),1,name.size(),passOut);}
+  cyvp::WriteValue(passOut,uint32_t(1));auto counts=cyvp::ExportTrack(passOut,raw,{{5000000,uint64_t(1000000)-5000000,0}},0);
+  cyvp::WriteValue(passOut,uint64_t(0));fwrite(cynt::footer,1,8,passOut);cyvp::WriteValue(passOut,counts.aligned);fclose(raw);fclose(passOut);
+  check(counts.aligned==2&&counts.unavailable==1,"Export drops unaligned passes instead of using receipt time");
+  events.clear();error.clear();check(NativeTrace::ScanBinary(passSource,[&](TimingEvent&& e){events.push_back(std::move(e));},error,&progress)&&events.size()==2,"Supplemental exporter is readable by the actual native binary importer");
+  if(events.size()==2)check(events[0].thread==cyvp::track_name&&events[0].thread_id>>63&&std::abs(events[0].start-1.01025)<1e-9&&std::abs(events[0].end-events[0].start-.00275)<1e-9,"GPU identity, calibrated start and measured duration survive export");
+  auto passes=PagedTimingStore::Build(passSource,root/"passes.cyindex",progress,error,true);
+  check(bool(passes),"Supplemental passes support paged indexing despite delayed out-of-order arrival");
+  if(passes){auto window=passes->Window(1,1.02,1,1.02,2000,nullptr,1);TimingModel model;model.Build(window.events);passes->ApplyTotals(window,model);check(window.events.size()==2&&model.tracks.size()==1&&model.tracks[0].gpu,"New pass track remains a GPU domain through timeline preparation");}
+ }else {check(false,"Vulkan export fixture files opened");if(raw)fclose(raw);if(passOut)fclose(passOut);}
+ {auto metaSource=root/"meta.cynt";FILE* out=_wfopen(metaSource.c_str(),L"wb");FILE* spool=tmpfile();
+  if(out&&spool){fwrite(cynt::magic,1,8,out);cyvp::WriteValue(out,uint32_t(2));
+   for(uint64_t i=0;i<2;++i){std::string name=i?"Meta / Render":"Meta / Binning";cyvp::WriteValue(out,i);cyvp::WriteValue(out,uint32_t(name.size()));fwrite(name.data(),1,name.size(),out);}
+   cyvp::WriteValue(out,uint32_t(1));cyvp::WriteValue(spool,cymeta::Record{1.002,1.009,1});cyvp::WriteValue(spool,cymeta::Record{1.,1.002,0});
+   cymeta::ExportTrack(out,spool,"GPU / Meta Game / graphics (measured hardware stages)",1,2,0);
+   cyvp::WriteValue(out,uint64_t(0));fwrite(cynt::footer,1,8,out);cyvp::WriteValue(out,uint64_t(2));fclose(spool);fclose(out);
+   auto meta=PagedTimingStore::Build(metaSource,root/"meta.cyindex",progress,error,true);check(bool(meta),"Production Meta exporter supports native paged indexing with delayed unordered events");
+   if(meta){auto window=meta->Window(1,1.01,1,1.01,1000,nullptr,1);TimingModel model;model.Build(window.events);meta->ApplyTotals(window,model);check(window.events.size()==2&&model.tracks.size()==1&&model.tracks[0].gpu,"Measured Meta stages survive native timeline preparation");check(window.events[0].name!=window.events[1].name,"Meta hardware names are searchable independent timers");}
+  }else{check(false,"Meta fixture files opened");if(out)fclose(out);if(spool)fclose(spool);}
+ }
  std::filesystem::remove_all(root);std::cout<<checks<<" checks, "<<failures<<" failures\n";return failures?1:0;
 }

@@ -27,6 +27,24 @@ TimingEvent Event(const char *thread, const char *timer, double start, double en
 }
 } // namespace
 int main() {
+    std::vector<TimingEvent> gpu_groups={Event("GPU","MobileSceneRender",0,.02,0,9,1)};
+    for(int i=0;i<5;++i)gpu_groups.push_back(Event("GPU","Group",.019+i*1e-6,.019+i*1e-6+1e-6,1,9,2));
+    std::vector<size_t> group_indices={0,1,2,3,4,5};
+    auto gpu_detail=InspectGpuTimingDetail(gpu_groups,group_indices);
+    Check(gpu_detail.Limited()&&gpu_detail.nested==5&&gpu_detail.near_zero==5,"Collapsed Quest intervals reported as limited group timing, preserving values");
+    gpu_groups[1].end=gpu_groups[1].start+.0002;gpu_groups[2].end=gpu_groups[2].start+.0002;
+    Check(!InspectGpuTimingDetail(gpu_groups,group_indices).Limited(),"Resolved subgroup timings do not trigger collapsed-interval diagnostic");
+    for(auto& group:gpu_groups)group.display_aggregate=true;
+    Check(!InspectGpuTimingDetail(gpu_groups,group_indices).Limited(),"Derived display aggregates are not evidence of near-zero native intervals");
+    GpuTimingDetail invalid;auto incomplete=Event("GPU","Pending",0,.02,0,9,3);incomplete.open_ended=true;invalid.Add(incomplete);
+    Check(invalid.longest_outer==0&&invalid.nested==0,"Unresolved GPU queries excluded from detail diagnostic");
+    TimingModel ordered;
+    ordered.Build({Event("GameThread","Tick",0,.02,0,1,1),Event("GpuWorkerThread","CPU work",0,.01,0,2,2),
+        Event("RenderThread","Render",0,.01,0,3,3),Event("GPU1","Pass",0,.02,0,4,4),
+        Event("GPU2","Async pass",0,.02,0,5,5),Event("RHIThread","Submit",0,.01,0,6,6)});
+    Check(ordered.tracks[0].gpu&&ordered.tracks[1].gpu&&ordered.tracks[2].name=="GameThread"&&
+        ordered.tracks[3].name=="RenderThread"&&ordered.tracks[4].name=="RHIThread"&&!ordered.tracks[5].gpu,
+        "All GPU queues precede GameThread; CPU GPU workers remain ordinary CPU tracks");
     std::vector<TimingEvent> events = {Event("Worker", "Outer", 0, 10, 0, 1, 10),
                                        Event("Worker", "Work", 2, 6, 1, 1, 20),
                                        Event("Worker", "Nested", 3, 4, 2, 1, 30),

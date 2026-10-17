@@ -77,10 +77,21 @@ typedef uint32_t (*PFN_CyGPUInspectorRS_GetApiVersion)(void);
 /* Version 2. Returns 1, or 0 when scope is null or malformed. */
 typedef int32_t (*PFN_CyGPUInspectorRS_SetViewportScope)(const CygiViewportScope *scope);
 
+#if CYINSIGHTS_WINDOWS_GPU
+#define CyGPUInspectorRS_RequestCapture CyInsightsGpu_RequestCapture
+#define CyGPUInspectorRS_GetStatus CyInsightsGpu_GetStatus
+#define CyGPUInspectorRS_GetApiVersion CyInsightsGpu_GetApiVersion
+#define CyGPUInspectorRS_SetViewportScope CyInsightsGpu_SetViewportScope
+#define CYGI_EXPORT_REQUEST_CAPTURE "CyInsightsGpu_RequestCapture"
+#define CYGI_EXPORT_GET_STATUS "CyInsightsGpu_GetStatus"
+#define CYGI_EXPORT_GET_API_VERSION "CyInsightsGpu_GetApiVersion"
+#define CYGI_EXPORT_SET_VIEWPORT_SCOPE "CyInsightsGpu_SetViewportScope"
+#else
 #define CYGI_EXPORT_REQUEST_CAPTURE "CyGPUInspectorRS_RequestCapture"
 #define CYGI_EXPORT_GET_STATUS "CyGPUInspectorRS_GetStatus"
 #define CYGI_EXPORT_GET_API_VERSION "CyGPUInspectorRS_GetApiVersion"
 #define CYGI_EXPORT_SET_VIEWPORT_SCOPE "CyGPUInspectorRS_SetViewportScope"
+#endif
 
 #ifdef __cplusplus
 }

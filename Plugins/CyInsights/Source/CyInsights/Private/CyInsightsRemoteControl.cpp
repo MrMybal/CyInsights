@@ -1,8 +1,11 @@
 // Copyright (C) 2026 Cyberalien. SPDX-License-Identifier: MIT
 #include "CyInsightsRemoteControl.h"
 #include "CyInsights.h"
+#include "CyInsightsSettings.h"
+#include "CyInsightsCaptureJson.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformTime.h"
+#include "CoreGlobals.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "Misc/FileHelper.h"
@@ -50,9 +53,16 @@ void FCyInsightsRemoteControl::Tick()
         auto Address = Sockets->CreateInternetAddr(FNetworkProtocolTypes::IPv4);
         Address->SetAnyAddress(); Address->SetPort(Port);
         Listener = Sockets->CreateSocket(NAME_Stream, TEXT("CyInsights capture control"), FNetworkProtocolTypes::IPv4);
-        if (!Listener || !Listener->SetNonBlocking() || !Listener->Bind(*Address) || !Listener->Listen(1)) {
+        bool Reusable=true;
+#if PLATFORM_ANDROID
+        // SO_REUSEADDR permits rebinding after our old TCP connection enters
+        // TIME_WAIT. Never enable SO_REUSEPORT or share an active listener.
+        Reusable=Listener&&Listener->SetReuseAddr(true);
+#endif
+        if (!Listener || !Reusable || !Listener->SetNonBlocking() || !Listener->Bind(*Address) || !Listener->Listen(1)) {
+            const int32 SocketError=static_cast<int32>(Sockets->GetLastErrorCode());
             CloseListener();
-            UE_LOG(LogCyInsightsRemote, Warning, TEXT("Cannot listen for capture commands on port %d"), Port);
+            UE_LOG(LogCyInsightsRemote, Warning, TEXT("Cannot listen for capture commands on port %d (socket error %d); retrying in 5 seconds"), Port,SocketError);
         } else {
             BoundPort = Port;
             UE_LOG(LogCyInsightsRemote, Display, TEXT("Remote capture ready on TCP %d (development only)"), Port);
@@ -116,17 +126,38 @@ void FCyInsightsRemoteControl::Dispatch(const FString& Line)
         if (Command == TEXT("hello") || Command == TEXT("status")) {
             Ok = true;
         } else if (Command == TEXT("start")) {
+            auto Options=UCyInsightsSettings::CaptureDefaults();
+            const bool HasOptions=Request->HasField(TEXT("capture_options"));
+            bool ValidOptions=true;
+            if(HasOptions){
+                const auto Field=Request->TryGetField(TEXT("capture_options"));
+                if(!Field.IsValid()||Field->Type!=EJson::Object){ValidOptions=false;Error=TEXT("Capture options must be an object");}
+                else ValidOptions=CyInsightsOptions::Read(Field->AsObject(),Options,Error);
+            }
             double ReceiverPort = 0, Seconds = 0;
             Request->TryGetNumberField(TEXT("receiver_port"), ReceiverPort);
             Request->TryGetNumberField(TEXT("seconds"), Seconds);
-            if (!FMath::IsFinite(ReceiverPort) || ReceiverPort < 1 || ReceiverPort > 65535 ||
+            if(!ValidOptions){}
+            else if (!FMath::IsFinite(ReceiverPort) || ReceiverPort < 1 || ReceiverPort > 65535 ||
                 ReceiverPort != FMath::FloorToDouble(ReceiverPort) || !FMath::IsFinite(Seconds) || Seconds < 0 || Seconds > 3600) {
                 Error = TEXT("Invalid receiver port or duration");
-            } else if (Owner.StartCapture(PeerIp, static_cast<uint16>(ReceiverPort))) {
+            } else if (Owner.StartCapture(PeerIp, static_cast<uint16>(ReceiverPort),HasOptions?&Options:nullptr)) {
                 OwnedSession = Owner.SessionId;
                 Owner.StopAtSeconds = Seconds > 0 ? FPlatformTime::Seconds() + Seconds : 0;
                 Ok = true;
             } else Error = TEXT("Capture unavailable or another native trace is active");
+        } else if(Command==TEXT("gpu")) {
+            FString Session;Request->TryGetStringField(TEXT("session_id"),Session);
+            if(Session.IsEmpty()||Session!=OwnedSession||Session!=Owner.SessionId||!Owner.bCapturing)Error=TEXT("This connection does not own an active capture");
+            else {
+                auto Options=Owner.CaptureOptions;
+                bool ValidOptions=true;
+                if(Request->HasField(TEXT("capture_options"))){const auto Field=Request->TryGetField(TEXT("capture_options"));
+                    if(!Field.IsValid()||Field->Type!=EJson::Object){ValidOptions=false;Error=TEXT("Capture options must be an object");}
+                    else ValidOptions=CyInsightsOptions::Read(Field->AsObject(),Options,Error);
+                }
+                if(ValidOptions){Ok=Owner.CaptureGpu(Options);if(!Ok)Error=Owner.GpuCaptureMessage;}
+            }
         } else if (Command == TEXT("stop")) {
             FString Session;
             Request->TryGetStringField(TEXT("session_id"), Session);
@@ -140,6 +171,18 @@ void FCyInsightsRemoteControl::Dispatch(const FString& Line)
     Reply->SetStringField(TEXT("session_id"), Owner.SessionId);
     Reply->SetStringField(TEXT("state"), Owner.bNetworkPending ? TEXT("starting") : Owner.bCapturing ? TEXT("recording") : TEXT("idle"));
     Reply->SetBoolField(TEXT("native_trace_active"), CyInsightsTrace::IsConnected());
+    Reply->SetBoolField(TEXT("runtime_ready"),GFrameCounter>0);
+    Reply->SetStringField(TEXT("game_frame"),LexToString(GFrameCounter));
+    Reply->SetObjectField(TEXT("capture_defaults"),CyInsightsOptions::Write(UCyInsightsSettings::CaptureDefaults()));
+    auto Capabilities=MakeShared<FJsonObject>();Capabilities->SetNumberField(TEXT("capture_options_version"),1);
+    Capabilities->SetBoolField(TEXT("gpu_request"),Owner.CanCaptureGpu());Capabilities->SetBoolField(TEXT("gpu_payload_transfer"),false);
+    Capabilities->SetBoolField(TEXT("native_gpu_passes"),true);
+    Capabilities->SetBoolField(TEXT("quest_per_frame_observations"),true);
+    Capabilities->SetBoolField(TEXT("quest_gpu_completion"),true);
+    Capabilities->SetBoolField(TEXT("quest_vulkan_passes"),CYINSIGHTS_VULKAN_PASSES!=0);
+    Capabilities->SetBoolField(TEXT("remote_startup_status"),true);
+    Reply->SetObjectField(TEXT("capture_capabilities"),Capabilities);
+    if(!Owner.GpuCaptureMessage.IsEmpty())Reply->SetStringField(TEXT("gpu_capture_message"),Owner.GpuCaptureMessage);
     if (!Owner.NetworkError.IsEmpty()) Reply->SetStringField(TEXT("capture_error"), Owner.NetworkError);
     // Start/status snapshots; the finalized manifest is retained after native EOF.
     TSharedPtr<FJsonObject> Manifest;

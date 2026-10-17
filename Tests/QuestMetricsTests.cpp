@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
 #include "MetaMetricsReader.h"
+#include "MetricCadence.h"
 #include <cstring>
 #include <iostream>
 #include <limits>
@@ -77,6 +78,15 @@ int main()
         ++checks;
         if (!ok) { ++failures; std::cerr << "FAIL: " << name << '\n'; }
     };
+    cyinsights::quest::MetricCadence cadence;
+    test(cadence.Due(100,1.,0),"first frame observed immediately");
+    test(!cadence.Due(100,1.001,0),"repeated callback cannot duplicate a frame");
+    bool allFrames=true;for(uint64_t frame=101;frame<221;++frame)allFrames&=cadence.Due(frame,1.+(frame-100)/120.,0);
+    test(allFrames,"every frame at 120 FPS; no 10 Hz throttle");
+    cadence.Reset();test(cadence.Due(100,1.,10)&&!cadence.Due(101,1.01,10)&&cadence.Due(112,1.12,10),"optional rate throttle is retained");
+    cadence.Reset();test(cadence.Due(112,1.12,0),"new capture can observe the same frame identity");
+    test(cadence.Due(113,.5,10),"clock reset does not stall observations");
+    test(cadence.Due(114,.51,std::numeric_limits<double>::quiet_NaN()),"nonfinite rate defaults to per frame");
     using cyinsights::quest::MetricsReader;
     MetricsReader reader;
     test(!reader.Read(100).Valid() && runtime.queries == 0, "no query without a session");

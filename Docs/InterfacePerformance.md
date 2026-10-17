@@ -8,6 +8,13 @@ Frames, Timing, les compteurs et les activités natives. Le déplacement conserv
 le grab pendant les publications asynchrones ; les profondeurs des pistes suivent
 les événements présents dans l'intervalle visible.
 
+Le glissement au bouton droit déplace la timeline sur les deux axes. Le bouton
+gauche sur Frames ou la règle conserve le déplacement horizontal et le zoom
+vertical ; la molette zoome. Les pistes GPU apparaissent avant GameThread,
+RenderThread, RHIThread puis les autres threads. Un double-clic dans le vide retire
+le filtre de fonctions sans effacer la plage d'analyse sélectionnée. Les couleurs
+de diagnostic sont limitées aux domaines candidats ; voir [diagnostic par frame](FrameDiagnostics.md).
+
 ## Préparation des données
 
 - Les activités accumulent leurs recouvrements par plages de pixels et propagent

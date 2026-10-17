@@ -1,6 +1,7 @@
 // CyInsights native Win32/D3D11 host. Dear ImGui docking and detached windows.
 // Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
 #include "Application.hpp"
+#include "DocumentWorkspace.hpp"
 #include "Branding.hpp"
 #include "ResourceIds.h"
 #include <chrono>
@@ -9,6 +10,7 @@
 #include <exception>
 #include <fstream>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <imgui_impl_dx11.h>
 #include <imgui_impl_win32.h>
 #include <shellapi.h>
@@ -241,22 +243,28 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
     ShowWindow(window, SW_MAXIMIZE);
     UpdateWindow(window);
     {
-        cyinsights::Application app;
-        app.SetBrandLogo(static_cast<ImTextureID>(reinterpret_cast<uintptr_t>(brand_logo)));
+        cyinsights::DocumentWorkspace workspace(static_cast<ImTextureID>(reinterpret_cast<uintptr_t>(brand_logo)));
+        auto& startup_app=workspace.Primary();
+        bool multi_trace_smoke=false,ai_control_all=false;int multi_trace_step=0,multi_trace_wait=0;
+        bool standalone_ai_smoke=false,standalone_ai_complete=false;size_t standalone_ai_step=0;
+        std::future<cygi::Json> standalone_ai_future;auto standalone_ai_results=cygi::Json::Array();
+        const std::array<const char*,7> standalone_ai_operations{{"get_state","get_analysis_guide","get_capabilities","histogram","query_frames","query_scopes","list_counters"}};
         int count = 0;
         auto args = CommandLineToArgvW(GetCommandLineW(), &count);
         std::filesystem::path snapshot;
         std::filesystem::path loading_snapshot;
         std::filesystem::path ui_profile;std::vector<double> draw_profile,drag_profile;
+        bool vulkan_details_view=false,vulkan_details_focused=false;int vulkan_details_settle=0;
         bool navigation_smoke=false,drag_pan=false,drag_zoom=false,wheel_zoom=false;
+        bool frame_stats_range_smoke=false,frame_stats_range_filtered=false;int frame_stats_step=0;uint64_t frame_stats_full=0;
         bool activity_range_smoke=false,activity_range_filtered=false,activity_plot_reused=false;int activity_step=0;uint64_t activity_full=0,activity_plot_before=0;
         bool diagnostic_smoke=false,diagnostic_focused=false;int diagnostic_settle=0;
         bool inspect_task=false,task_inspected=false;
-        bool interaction_smoke=false,interaction_filter=false,interaction_range=false,interaction_dock=false,interaction_bin=false;
-        int interaction_step=0,interaction_selected_bin=0;uint64_t interaction_count=0,interaction_full_count=0;
+        bool interaction_smoke=false,interaction_filter=false,interaction_range=false,interaction_dock=false,interaction_bin=false,interaction_clear=false,interaction_blank_clear=false;
+        int interaction_step=0,interaction_selected_bin=0,interaction_menu_wait=0;uint64_t interaction_count=0,interaction_full_count=0;
         std::string interaction_name;double interaction_begin=0,interaction_before_a=0,interaction_before_b=0;
         int navigation_step=0,navigation_wait=0,drag_samples=0;
-        bool continuous_drag=true,frames_follow=false,dynamic_height=false,ruler_drag=false,track_drag=false;
+        bool continuous_drag=true,frames_follow=false,dynamic_height=false,ruler_drag=false,track_drag=false,right_pan=false,right_scroll=false,right_no_menu=false;
         uint64_t drag_reload_count=0;
         double drag_started=0;
         auto navigation_point=ImVec2();
@@ -268,34 +276,45 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             else if(argument==L"--profile-ui"&&i+1<count)ui_profile=args[++i];
             else if(argument==L"--loading-snapshot"&&i+1<count)
                 loading_snapshot=args[++i];
+            else if(argument==L"--multi-trace-smoke")multi_trace_smoke=true;
+            else if(argument==L"--ai-control-all")ai_control_all=true;
+            else if(argument==L"--vulkan-details-view")vulkan_details_view=true;
             else if(argument==L"--navigation-smoke")navigation_smoke=true;
-            else if(argument==L"--activity-range-smoke"){activity_range_smoke=true;app.FocusActivities();}
+            else if(argument==L"--frame-stats-range-smoke"){frame_stats_range_smoke=true;startup_app.FocusFrameStats();}
+            else if(argument==L"--activity-range-smoke"){activity_range_smoke=true;startup_app.FocusActivities();}
             else if(argument==L"--diagnostics-smoke")diagnostic_smoke=true;
-            else if(argument==L"--distribution-view")app.FocusDistribution();
-            else if(argument==L"--tasks-view")app.FocusTasks();
-            else if(argument==L"--activities-view")app.FocusActivities();
-            else if(argument==L"--inspect-task"){app.FocusTasks();inspect_task=true;}
+            else if(argument==L"--distribution-view")startup_app.FocusDistribution();
+            else if(argument==L"--tasks-view")startup_app.FocusTasks();
+            else if(argument==L"--activities-view")startup_app.FocusActivities();
+            else if(argument==L"--inspect-task"){startup_app.FocusTasks();inspect_task=true;}
             else if(argument==L"--interaction-smoke")interaction_smoke=true;
-            else if(argument==L"--ai-enable")app.EnableAi();
-            else if(argument==L"--ai-control")app.EnableAi(true);
-            else if(argument==L"--ai-capture")app.EnableAi(true,true);
-            else if(argument==L"--ai-view")app.FocusAi();
-            else if(argument==L"--session-view")app.FocusSession();
+            else if(argument==L"--ai-enable")startup_app.EnableAi();
+            else if(argument==L"--ai-control")startup_app.EnableAi(true);
+            else if(argument==L"--ai-capture")startup_app.EnableAi(true,true);
+            else if(argument==L"--ai-view")startup_app.FocusAi();
+            else if(argument==L"--ai-method-view")startup_app.FocusAiMethod();
+            else if(argument==L"--standalone-ai-smoke"){standalone_ai_smoke=true;startup_app.FocusAiMethod();}
+            else if(argument==L"--session-view")startup_app.FocusSession();
+            else if(argument==L"--capture-options-view")startup_app.FocusCaptureOptions();
             else if (argument == L"--gpu-view")
-                app.FocusGpu();
+                startup_app.FocusGpu();
             else if (argument == L"--graph-view")
-                app.FocusGraph();
+                startup_app.FocusGraph();
+            else if(argument==L"--frame-stats-view")
+                startup_app.FocusFrameStats();
             else if (argument.rfind(L"--connect=", 0) == 0)
-                app.Connect(static_cast<uint32_t>(wcstoul(argument.c_str() + 10, nullptr, 10)));
+                startup_app.Connect(static_cast<uint32_t>(wcstoul(argument.c_str() + 10, nullptr, 10)));
             else
-                app.Open(args[i]);
+                workspace.Open(args[i]);
         }
         if (args)
             LocalFree(args);
+        if(ai_control_all)for(size_t i=0;i<workspace.Count();++i)workspace.At(i).EnableAi(true);
         int frames = 0;
         auto begin = std::chrono::steady_clock::now();
         bool done = false;
         while (!done) {
+            auto& app=workspace.Primary();
             MSG msg;
             while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
                 TranslateMessage(&msg);
@@ -316,6 +335,17 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             }
             ImGui_ImplDX11_NewFrame();
             ImGui_ImplWin32_NewFrame();
+            if(frame_stats_range_smoke){
+                io.ConfigInputTrickleEventQueue=false;const auto state=app.FrameStatsViewState();const auto nav=app.NavigationView();
+                auto pointer=[&](float fraction){io.AddMouseViewportEvent(ImGui::GetMainViewport()->ID);io.AddMousePosEvent(nav.ruler_x+nav.ruler_width*fraction,nav.ruler_y+3);};
+                if(frame_stats_step==0&&!app.AnalysisBusy()&&state.rows>1&&state.curve){frame_stats_full=state.rows;pointer(.05f);io.AddKeyEvent(ImGuiMod_Shift,true);io.AddMouseButtonEvent(0,true);frame_stats_step=1;}
+                else if(frame_stats_step==1){pointer(.5f);frame_stats_step=2;}
+                else if(frame_stats_step==2){io.AddMouseButtonEvent(0,false);io.AddKeyEvent(ImGuiMod_Shift,false);frame_stats_step=3;}
+                else if(frame_stats_step==3&&!app.AnalysisBusy()&&state.selected_interval){
+                    frame_stats_range_filtered=state.rows>0&&state.rows<frame_stats_full&&state.curve;frame_stats_step=4;
+                    std::ofstream report(std::filesystem::path(executable).parent_path()/"frame-stats-range-smoke.json");report<<std::boolalpha<<"{\"timeline_range_filters_frame_stats\":"<<frame_stats_range_filtered<<",\"curve_retained\":"<<state.curve<<",\"visible_frames\":"<<frame_stats_full<<",\"selected_frames\":"<<state.rows<<'}';
+                }
+            }
             if(activity_range_smoke){
                 io.ConfigInputTrickleEventQueue=false;auto state=app.ActivityView();auto nav=app.NavigationView();auto range=app.InteractionView();
                 auto pointer=[&](float fraction){io.AddMouseViewportEvent(ImGui::GetMainViewport()->ID);io.AddMousePosEvent(nav.ruler_x+nav.ruler_width*fraction,nav.ruler_y+3);};
@@ -340,27 +370,45 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
                     interaction_filter=state.filter_name==interaction_name&&nav.start==interaction_before_a&&nav.end==interaction_before_b;
                     pointer(state.scope_x,state.scope_y);io.AddMouseButtonEvent(1,true);interaction_step=6;
                 }else if(interaction_step==6){io.AddMouseButtonEvent(1,false);interaction_step=7;}
-                else if(interaction_step==7&&state.menu_x>0){pointer(state.menu_x,state.menu_y);io.AddMouseButtonEvent(0,true);interaction_step=8;}
+                // Popups obtain their final size/position after their first frame.
+                else if(interaction_step==7&&state.menu_x>0&&++interaction_menu_wait>2){pointer(state.menu_x,state.menu_y);io.AddMouseButtonEvent(0,true);interaction_step=8;}
                 else if(interaction_step==8){io.AddMouseButtonEvent(0,false);interaction_step=9;}
                 else if(interaction_step==9&&!app.AnalysisBusy()&&state.count&&state.function_name==interaction_name){
                     interaction_full_count=state.count;interaction_dock=state.separate_dock;
-                    pointer(nav.ruler_x+nav.ruler_width*.2f,nav.ruler_y+3);io.AddKeyEvent(ImGuiMod_Shift,true);io.AddMouseButtonEvent(0,true);interaction_step=10;
-                }else if(interaction_step==10){pointer(nav.ruler_x+nav.ruler_width*.65f,nav.ruler_y+3);interaction_step=11;}
-                else if(interaction_step==11){io.AddMouseButtonEvent(0,false);io.AddKeyEvent(ImGuiMod_Shift,false);interaction_step=12;}
+                    pointer(nav.measure_x+nav.measure_width*.65f,nav.measure_y+nav.measure_height*.5f);io.AddMouseButtonEvent(0,true);interaction_step=10;
+                }else if(interaction_step==10){pointer(nav.measure_x+nav.measure_width*.2f,nav.measure_y+nav.measure_height+30);interaction_step=11;}
+                else if(interaction_step==11){io.AddMouseButtonEvent(0,false);interaction_step=12;}
                 else if(interaction_step==12&&!app.AnalysisBusy()&&state.selection_a!=state.selection_b&&state.hist_a==std::min(state.selection_a,state.selection_b)&&state.hist_b==std::max(state.selection_a,state.selection_b)){
-                    interaction_range=state.count>0&&state.count<interaction_full_count;interaction_count=state.count;
+                    interaction_range=state.count>0&&state.count<interaction_full_count&&nav.start==interaction_before_a&&nav.end==interaction_before_b;interaction_count=state.count;
                     interaction_selected_bin=static_cast<int>(std::max_element(state.bins.begin(),state.bins.end())-state.bins.begin());
                     pointer(state.hist_x+state.hist_width*(interaction_selected_bin+.5f)/64,state.hist_y+30);interaction_step=13;
                 }else if(interaction_step==13){io.AddMouseButtonEvent(0,true);interaction_step=14;}
                 else if(interaction_step==14){io.AddMouseButtonEvent(0,false);interaction_step=15;}
                 else if(interaction_step==15&&!app.AnalysisBusy()&&state.bin==interaction_selected_bin){
-                    interaction_bin=state.count==interaction_count&&state.matched==state.bins[interaction_selected_bin];interaction_step=16;
+                    interaction_bin=state.count==interaction_count&&state.matched==state.bins[interaction_selected_bin];
+                    pointer(nav.ruler_x+nav.ruler_width*.5f,nav.ruler_y+3);interaction_step=17;
+                }else if(interaction_step==17){io.AddMouseButtonEvent(0,true);interaction_step=18;}
+                else if(interaction_step==18){io.AddMouseButtonEvent(0,false);interaction_step=19;}
+                else if(interaction_step==19){io.AddMouseButtonEvent(0,true);interaction_step=20;}
+                else if(interaction_step==20){io.AddMouseButtonEvent(0,false);interaction_step=21;}
+                else if(interaction_step==21&&!app.AnalysisBusy()){
+                    interaction_clear=state.filter_name.empty()&&state.selection_a!=state.selection_b;
+                    app.FilterFunction(interaction_name);interaction_step=22;
+                }else if(interaction_step==22&&!app.AnalysisBusy()&&state.blank_y>0){pointer(state.blank_x,state.blank_y);interaction_step=23;}
+                else if(interaction_step==23){io.AddMouseButtonEvent(0,true);interaction_step=24;}
+                else if(interaction_step==24){io.AddMouseButtonEvent(0,false);interaction_step=25;}
+                else if(interaction_step==25){io.AddMouseButtonEvent(0,true);interaction_step=26;}
+                else if(interaction_step==26){io.AddMouseButtonEvent(0,false);interaction_step=27;}
+                else if(interaction_step==27&&!app.AnalysisBusy()){
+                    interaction_blank_clear=state.filter_name.empty()&&state.selection_a!=state.selection_b;interaction_step=16;
                     std::ofstream report(std::filesystem::path(executable).parent_path()/"interaction-smoke.json");
                     report<<std::boolalpha<<"{\"double_click_exact_without_zoom\":"<<interaction_filter<<",\"function_histogram_from_context\":"<<(state.function_name==interaction_name)
                         <<",\"timeline_range_filters_histogram\":"<<interaction_range<<",\"histogram_docked_beside_timeline\":"<<interaction_dock<<",\"cached_bin_retains_statistics\":"<<interaction_bin
+                        <<",\"empty_double_click_clears_filter_keeps_range\":"<<interaction_clear
+                        <<",\"blank_track_double_click_clears_filter\":"<<interaction_blank_clear
                         <<",\"full_samples\":"<<interaction_full_count<<",\"range_samples\":"<<interaction_count<<",\"selected_range_start\":"<<state.hist_a<<",\"selected_range_end\":"<<state.hist_b<<"}";
                 }
-                if(interaction_step>0&&interaction_step<16&&ImGui::GetTime()-interaction_begin>90){auto failure=std::filesystem::path(executable).parent_path()/"interaction-failure";std::ofstream(failure.wstring()+L".txt")<<interaction_step;app.WriteAnalysisReport(failure.wstring()+L".json");if(!snapshot.empty())SaveSnapshot(snapshot);return 7;}
+                if(interaction_step>0&&interaction_step!=16&&ImGui::GetTime()-interaction_begin>90){auto failure=std::filesystem::path(executable).parent_path()/"interaction-failure";std::ofstream(failure.wstring()+L".txt")<<interaction_step;app.WriteAnalysisReport(failure.wstring()+L".json");if(!snapshot.empty())SaveSnapshot(snapshot);return 7;}
             }
             if(navigation_smoke) {
                 // Exercise held input over multiple asynchronous publications, not a single move.
@@ -413,6 +461,20 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
                         io.AddMouseButtonEvent(0,false);navigation_step=10;navigation_wait=0;
                     }
                 }else if(navigation_step==10&&++navigation_wait>2&&!app.AnalysisBusy()) {
+                    navigation_before=navigation;drag_started=ImGui::GetTime();drag_samples=0;
+                    navigation_point=ImVec2(navigation.tracks_x+navigation.ruler_width*.5f,navigation.tracks_y);
+                    pointer(navigation_point.x,navigation_point.y);io.AddMouseButtonEvent(1,true);navigation_step=12;
+                }else if(navigation_step==12){
+                    double elapsed=ImGui::GetTime()-drag_started;float progress=static_cast<float>(std::min(1.,elapsed/2.));
+                    pointer(navigation_point.x-85*progress,navigation_point.y-100*progress);
+                    if(++drag_samples>2)continuous_drag&=navigation.dragging;
+                    if(elapsed>2.5){
+                        right_pan=navigation.start!=navigation_before.start&&std::abs((navigation.end-navigation.start)-(navigation_before.end-navigation_before.start))<1e-9;
+                        right_scroll=navigation.tracks_scroll>navigation_before.tracks_scroll+10;
+                        io.AddMouseButtonEvent(1,false);navigation_step=13;navigation_wait=0;
+                    }
+                }else if(navigation_step==13&&++navigation_wait>2&&!app.AnalysisBusy()) {
+                    right_no_menu=app.InteractionView().menu_x==0;
                     frames_follow=navigation.frames_start==navigation.start&&navigation.frames_end==navigation.end&&
                         std::abs(navigation.x-navigation.ruler_x)<1&&std::abs(navigation.width-navigation.ruler_width)<1;
                     dynamic_height=navigation.visible_rows<navigation.recorded_rows;
@@ -421,6 +483,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
                         <<",\"continuous_drag\":"<<continuous_drag<<",\"reloads_while_held\":"<<drag_reload_count
                         <<",\"frames_follow_timeline\":"<<frames_follow<<",\"dynamic_track_height\":"<<dynamic_height
                         <<",\"ruler_drag_outside_widget\":"<<ruler_drag<<",\"track_drag\":"<<track_drag
+                        <<",\"right_drag_pan_without_zoom\":"<<right_pan<<",\"right_drag_vertical_scroll\":"<<right_scroll<<",\"right_drag_does_not_open_menu\":"<<right_no_menu
                         <<",\"visible_rows\":"<<navigation.visible_rows<<",\"recorded_rows\":"<<navigation.recorded_rows<<"}";
                     navigation_step=11;
                 }
@@ -432,7 +495,39 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             }
             auto draw_begin=std::chrono::steady_clock::now();
             ImGui::NewFrame();
-            app.Draw();
+            workspace.Draw();
+            if(standalone_ai_smoke&&!standalone_ai_complete&&!workspace.Busy()&&frames>20){
+                auto host=std::filesystem::path(executable).parent_path();
+                if(std::filesystem::exists(host/"AI/app/CyTool.json")||std::filesystem::exists(host.parent_path().parent_path()/"AI/app/CyTool.json"))return 21;
+                if(standalone_ai_future.valid()&&standalone_ai_future.wait_for(std::chrono::seconds(0))==std::future_status::ready){
+                    auto local_result=standalone_ai_future.get();if(local_result["error"].IsObject()){auto diagnostic_path=snapshot;diagnostic_path+=L".standalone-ai-error.json";local_result["operation"]=standalone_ai_operations[standalone_ai_step];std::ofstream(diagnostic_path)<<local_result.Write(2);return 22;}
+                    if(standalone_ai_step==0&&(!local_result["ready"].AsBool()||local_result["permissions"]["appControl"].AsBool()))return 23;
+                    if(standalone_ai_step==1&&local_result["method"]["workflow"].Size()!=9)return 24;
+                    if(standalone_ai_step==2&&local_result["operations"].Size()!=39)return 25;
+                    if(standalone_ai_step==3&&local_result["summary"]["count"].AsString()=="0")return 26;
+                    if((standalone_ai_step==4||standalone_ai_step==5)&&local_result["rows"].Size()==0)return 27;
+                    auto entry=cygi::Json::Object();entry["operation"]=standalone_ai_operations[standalone_ai_step];entry["result"]=local_result;standalone_ai_results.Push(entry);++standalone_ai_step;
+                }
+                if(standalone_ai_step==standalone_ai_operations.size()){
+                    auto proof=app.StandaloneAiState();if(proof["bridgeRunning"].AsBool()||proof["embeddedOperations"].AsNumber()!=39)return 28;
+                    proof["passed"]=true;proof["externalCompanionPresent"]=false;proof["localOperations"]=standalone_ai_results;
+                    auto proof_path=snapshot;proof_path+=L".standalone-ai.json";std::ofstream(proof_path)<<proof.Write(2);standalone_ai_complete=true;
+                }else if(!standalone_ai_future.valid()){
+                    auto parameters=cygi::Json::Object();if(standalone_ai_step>=3)parameters["limit"]=3.;standalone_ai_future=app.RunLocalAiTool(standalone_ai_operations[standalone_ai_step],parameters);
+                }
+            }
+            if(multi_trace_smoke&&!workspace.Busy()&&frames>20){
+                if(workspace.Count()<2)return 11;
+                if(multi_trace_step==0){workspace.At(0).FilterFunction("MobileSceneRender");workspace.At(1).FilterFunction("FEngineLoop::Tick");workspace.Select(0);workspace.Detach(1);multi_trace_step=1;multi_trace_wait=0;}
+                else if(++multi_trace_wait>8){
+                    if(workspace.At(0).InteractionView().filter_name!="MobileSceneRender"||workspace.At(1).InteractionView().filter_name!="FEngineLoop::Tick")return 12;
+                    if(multi_trace_step==1){if(ImGui::GetPlatformIO().Viewports.Size<2)return 13;workspace.Attach(1);workspace.Select(0);multi_trace_step=2;multi_trace_wait=0;}
+                    else if(multi_trace_step==2){workspace.Detach(1);if(workspace.Count()>2)workspace.CloseCapture(2);multi_trace_step=3;multi_trace_wait=0;}
+                    else multi_trace_step=4;
+                }
+            }
+            if(vulkan_details_view&&!vulkan_details_focused&&!app.AnalysisBusy())vulkan_details_focused=app.FocusVulkanPassContents();
+            if(vulkan_details_focused)++vulkan_details_settle;
             if(inspect_task&&!task_inspected&&frames>20&&!app.AnalysisBusy()){
                 task_inspected=app.InspectFirstTask();if(!task_inspected)return 6;
             }
@@ -445,13 +540,28 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             if(!loading_snapshot.empty()&&frames>5&&app.AnalysisBusy()) {
                 SaveSnapshot(loading_snapshot);loading_snapshot.clear();
             }
-            if (!snapshot.empty() && ++frames > 20 && !app.AnalysisBusy()&&(!navigation_smoke||navigation_step==11)&&(!diagnostic_smoke||diagnostic_settle>5)&&(!interaction_smoke||interaction_step==16)&&(!activity_range_smoke||activity_step==4)) {
+            if (!snapshot.empty() && ++frames > 20 && !workspace.Busy()&&(!standalone_ai_smoke||standalone_ai_complete)&&(!multi_trace_smoke||multi_trace_step==4)&&(!vulkan_details_view||vulkan_details_settle>3)&&(!navigation_smoke||navigation_step==11)&&(!diagnostic_smoke||diagnostic_settle>5)&&(!interaction_smoke||interaction_step==16)&&(!activity_range_smoke||activity_step==4)&&(!frame_stats_range_smoke||frame_stats_step==4)) {
                 if (!SaveSnapshot(snapshot))
                     return 2;
-                auto report=snapshot;report+=L".json";app.WriteAnalysisReport(report);
-                if(navigation_smoke&&(!drag_pan||!drag_zoom||!wheel_zoom||!continuous_drag||drag_reload_count<3||!frames_follow||!dynamic_height||!ruler_drag||!track_drag))return 4;
-                if(interaction_smoke&&(!interaction_filter||!interaction_range||!interaction_dock||!interaction_bin))return 8;
+                auto report=snapshot;report+=L".json";app.WriteAnalysisReport(report);auto documents=snapshot;documents+=L".documents.json";workspace.WriteReport(documents);
+                if(multi_trace_smoke){
+                    if(workspace.Count()!=2)return 14;
+                    ImGuiID viewport_ids[2]{};
+                    for(size_t i=0;i<2;++i){
+                        auto* timing=ImGui::FindWindowByName(workspace.At(i).WindowName("Timing").c_str());
+                        if(!timing||!timing->Active||timing->Hidden||timing->SkipItems||timing->DrawList->VtxBuffer.empty())return 15;
+                        auto* viewport=ImGui::FindViewportByID(timing->ViewportId);
+                        if(!viewport||!viewport->PlatformHandleRaw)return 16;
+                        viewport_ids[i]=viewport->ID;
+                    }
+                    if(viewport_ids[0]==viewport_ids[1])return 17;
+                    auto* header=ImGui::FindWindowByName("##CaptureDocuments");
+                    if(!header||header->Size.y>ImGui::GetMainViewport()->WorkSize.y*.25f)return 18;
+                }
+                if(navigation_smoke&&(!drag_pan||!drag_zoom||!wheel_zoom||!continuous_drag||drag_reload_count<3||!frames_follow||!dynamic_height||!ruler_drag||!track_drag||!right_pan||!right_scroll||!right_no_menu))return 4;
+                if(interaction_smoke&&(!interaction_filter||!interaction_range||!interaction_dock||!interaction_bin||!interaction_clear||!interaction_blank_clear))return 8;
                 if(activity_range_smoke&&(!activity_range_filtered||!activity_plot_reused))return 9;
+                if(frame_stats_range_smoke&&!frame_stats_range_filtered)return 10;
                 done = true;
             }
             if (!snapshot.empty() && std::chrono::steady_clock::now() - begin > std::chrono::minutes(20))

@@ -23,11 +23,18 @@
 #endif
 #include <Windows.h>
 
+#if CYINSIGHTS_WINDOWS_GPU
+extern "C" __declspec(dllexport) const char *NAME = "CyInsights Windows GPU";
+extern "C" __declspec(dllexport) const char *DESCRIPTION =
+    "Optional CyInsights collector for detailed GPU commands, pipelines and resources. "
+    "Recorded by CyInsights; texture and buffer readbacks are explicit options.";
+#else
 extern "C" __declspec(dllexport) const char *NAME = "CyGPUInspectorRS";
 extern "C" __declspec(dllexport) const char *DESCRIPTION =
 	"Capture agent of CyGPUInspector: tracks shaders, pipelines, resources and frame events, and "
 	"streams them to the CyGPUInspectorApp standalone for frame debugging, profiling and shader "
 	"analysis.";
+#endif
 
 namespace
 {

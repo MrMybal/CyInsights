@@ -1,7 +1,7 @@
 {
   "FileVersion": 3,
-  "Version": 1,
-  "VersionName": "0.1.0",
+  "Version": 2,
+  "VersionName": "0.1.2",
   "FriendlyName": "CyInsights",
   "Description": "Native Unreal and optional GPU capture coordinator for Editor, Development, Debug and DebugGame only.",
   "Category": "Other",
@@ -45,6 +45,38 @@
       ]
     },
     {
+      "Name": "CyInsightsGpuWindows",
+      "Type": "RuntimeNoCommandlet",
+      "LoadingPhase": "Default",
+      "WhitelistPlatforms": [
+        "Win64"
+      ],
+      "BlacklistTargets": [
+        "Server"
+      ],
+      "WhitelistTargetConfigurations": [
+        "Debug",
+        "DebugGame",
+        "Development"
+      ]
+    },
+    {
+      "Name": "CyInsightsGpuLoader",
+      "Type": "RuntimeNoCommandlet",
+      "LoadingPhase": "PostConfigInit",
+      "WhitelistPlatforms": [
+        "Win64"
+      ],
+      "BlacklistTargets": [
+        "Server"
+      ],
+      "WhitelistTargetConfigurations": [
+        "Debug",
+        "DebugGame",
+        "Development"
+      ]
+    },
+    {
       "Name": "CyInsights",
       "Type": "Runtime",
       "LoadingPhase": "Default",
@@ -69,19 +101,6 @@
     }
   ],
   "Plugins": [
-    {
-      "Name": "CyGPUInspector",
-      "Enabled": true,
-      "Optional": true,
-      "WhitelistPlatforms": [
-        "Win64"
-      ],
-      "WhitelistTargetConfigurations": [
-        "Debug",
-        "DebugGame",
-        "Development"
-      ]
-    },
     {
       "Name": "OpenXR",
       "Enabled": true,

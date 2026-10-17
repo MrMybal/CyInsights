@@ -12,7 +12,7 @@ class UnrealDescriptors(unittest.TestCase):
     def setUp(self):
         self.plugins = {
             name: json.loads((ROOT / 'Plugins' / name / (name + '.uplugin')).read_text())
-            for name in ('CyInsights', 'CyGPUInspector')
+            for name in ('CyInsights',)
         }
 
     def test_capture_configurations(self):
@@ -35,11 +35,24 @@ class UnrealDescriptors(unittest.TestCase):
         self.assertEqual(quest['WhitelistPlatforms'], ['Android'])
         dependencies = {p['Name']: p for p in main['Plugins']}
         self.assertEqual(dependencies['OpenXR']['WhitelistPlatforms'], ['Android'])
-        self.assertEqual(dependencies['CyGPUInspector']['WhitelistPlatforms'], ['Win64'])
-        self.assertTrue(dependencies['CyGPUInspector']['Optional'])
-        loader = next(m for m in self.plugins['CyGPUInspector']['Modules']
-                      if m['Name'] == 'CyGPUInspectorLoader')
+        self.assertNotIn('CyGPUInspector', dependencies)
+        loader = next(m for m in main['Modules'] if m['Name'] == 'CyInsightsGpuLoader')
         self.assertEqual(loader['WhitelistPlatforms'], ['Win64'])
+        self.assertEqual(loader['LoadingPhase'], 'PostConfigInit')
+        runtime = next(m for m in main['Modules'] if m['Name'] == 'CyInsightsGpuWindows')
+        self.assertEqual(runtime['WhitelistPlatforms'], ['Win64'])
+
+    def test_windows_collector_is_opt_in_and_owned(self):
+        source=ROOT/'Plugins/CyInsights/Source'
+        settings=(source/'CyInsightsGpuWindows/Public/CyInsightsWindowsGpuSettings.h').read_text()
+        self.assertIn('bLoadInEditor=false',settings)
+        self.assertIn('bLoadInGame=false',settings)
+        runtime=(source/'CyInsightsGpuWindows/Private/CyInsightsGpuWindowsModule.cpp').read_text()
+        self.assertNotIn('CreateProc',runtime)
+        self.assertNotIn('CyGPUInspectorApp.exe',runtime)
+        build=(source/'CyInsights/CyInsights.Build.cs').read_text()
+        self.assertIn('PrivateDependencyModuleNames.Add("CyInsightsGpuWindows")',build)
+        self.assertNotIn('"..", "CyGPUInspector"',build)
 
     def test_common_descriptor_schema(self):
         # UE4 does not read AllowList/DenyList. UE5.8 rejects both spellings

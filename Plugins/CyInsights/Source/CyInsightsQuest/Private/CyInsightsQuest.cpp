@@ -2,6 +2,9 @@
 #include "CoreMinimal.h"
 #include "CyInsightsTrace.h"
 #include "ICyInsightsQuestMetrics.h"
+#include "QuestGpuPreparation.h"
+#include "MetricCadence.h"
+#include "Misc/CoreDelegates.h"
 #if CYINSIGHTS_QUEST_METRICS_API
 #include "MetaMetricsReader.h"
 #include "IOpenXRExtensionPlugin.h"
@@ -23,8 +26,8 @@ static TAutoConsoleVariable<int32> CVarQuestMetrics(
     TEXT("CyInsights.QuestGpuMetrics"), 1,
     TEXT("Embed available Meta OpenXR performance counters into the active Unreal trace. 0=disabled, 1=enabled."));
 static TAutoConsoleVariable<float> CVarQuestMetricsHz(
-    TEXT("CyInsights.QuestGpuMetricsHz"), 10.0f,
-    TEXT("Meta metric polling rate (1..120 Hz). Runtime measurement intervals remain unknown; polling is not per-frame GPU timing."));
+    TEXT("CyInsights.QuestGpuMetricsHz"), 0.0f,
+    TEXT("0=observe every game frame (default); 1..120 Hz=optional throttle. Native GPU scopes use GPU timestamps independently; Meta execution-frame identity remains unavailable."));
 
 // Alongside standard Counters provider events, keep source/units/validity and
 // observation identity inside the SAME trace. No CSV or privileged shell tool.
@@ -63,12 +66,13 @@ public:
     {
         RegisterOpenXRExtensionModularFeature();
         IModularFeatures::Get().RegisterModularFeature(FeatureName(), static_cast<ICyInsightsQuestMetrics*>(this));
-        TickHandle = FCyInsightsTicker::GetCoreTicker().AddTicker(
-            FTickerDelegate::CreateRaw(this, &FCyInsightsQuestModule::Tick));
+        GpuPreparation=CyInsightsPrepareQuestGpuTiming();
+        UE_LOG(LogCyInsightsQuest,Display,TEXT("GPU groups: %s"),*GpuPreparation);
+        FrameHandle=FCoreDelegates::OnEndFrame.AddRaw(this,&FCyInsightsQuestModule::SampleFrame);
     }
     void ShutdownModule() override
     {
-        FCyInsightsTicker::GetCoreTicker().RemoveTicker(TickHandle);
+        FCoreDelegates::OnEndFrame.Remove(FrameHandle);
         UnregisterOpenXRExtensionModularFeature();
         IModularFeatures::Get().UnregisterModularFeature(FeatureName(), static_cast<ICyInsightsQuestMetrics*>(this));
         FScopeLock Lock(&Mutex);
@@ -126,8 +130,10 @@ public:
         FScopeLock Lock(&Mutex);
         FCyInsightsQuestMetricsStatus Status;
         Status.Reason = Reason;
+        Status.GpuPreparation = GpuPreparation;
         Status.TraceGuid = TraceGuid.ToString(EGuidFormats::DigitsWithHyphens);
         Status.ValidSamples = ValidSamples;
+        Status.ObservedFrames = ObservedFrames;
         Status.CounterCount = static_cast<int32>(Reader.Metrics().size());
         return Status;
     }
@@ -136,44 +142,48 @@ public:
         FScopeLock Lock(&Mutex);
         Reader.End();
     }
+    void ConfigureCapture(bool Enabled,int32 Hertz) override {FScopeLock Lock(&Mutex);CaptureOverride=true;CaptureEnabled=Enabled;CaptureHertz=FMath::Clamp(Hertz,0,120);Cadence.Reset();}
+    void ClearCaptureConfiguration() override {FScopeLock Lock(&Mutex);CaptureOverride=false;Cadence.Reset();}
 
 private:
-    bool Tick(float)
+    void SampleFrame()
     {
         FScopeLock Lock(&Mutex);
         FGuid NativeSessionGuid, CurrentTraceGuid;
         const bool Connected = CyInsightsTrace::GetIdentity(NativeSessionGuid, CurrentTraceGuid);
         if (Connected && TraceGuid != CurrentTraceGuid) {
             TraceGuid = CurrentTraceGuid;
-            ValidSamples = 0;
+            ValidSamples = 0;ObservedFrames=0;
             WrittenState.Reset();
-            LastPollSeconds = 0;
+            Cadence.Reset();
         }
-        const bool Recording = Connected && CVarQuestMetrics.GetValueOnAnyThread() != 0 &&
+        const bool Recording = Connected && (CaptureOverride?CaptureEnabled:CVarQuestMetrics.GetValueOnAnyThread()!=0) &&
             UE_TRACE_CHANNELEXPR_IS_ENABLED(CountersChannel);
         if (!Recording) {
-            Reader.End();
+            Reader.End();Cadence.Reset();
             if (Connected) Reason = TEXT("Meta metric option or counters trace channel disabled");
-            return true;
+            return;
         }
         const double Now = FPlatformTime::Seconds();
-        float Rate = CVarQuestMetricsHz.GetValueOnAnyThread();
-        if (!FMath::IsFinite(Rate)) Rate = 10.0f;
-        if (Now - LastPollSeconds < 1.0 / FMath::Clamp(Rate, 1.0f, 120.0f)) return true;
-        LastPollSeconds = Now;
+        float Rate = CaptureOverride?static_cast<float>(CaptureHertz):CVarQuestMetricsHz.GetValueOnAnyThread();
+        if (!FMath::IsFinite(Rate)) Rate = 0.0f;
+        const uint64 ObservedFrame=GFrameCounter;
+        if(!Cadence.Due(ObservedFrame,Now,FMath::Clamp(Rate,0.0f,120.0f)))return;
         if (!Reader.Ready()) {
             // Keep the startup failure; a supported catalog may be empty.
             if (Reason.IsEmpty()) Reason = TEXT("Meta OpenXR performance counters unavailable");
             EmitSource();
-            return true;
+            return;
         }
         if (!Reader.Begin(Session)) {
             Reason = Session == XR_NULL_HANDLE ? TEXT("No active OpenXR session") :
                 UTF8_TO_TCHAR(Reader.Error().c_str());
             EmitSource();
-            return true;
+            return;
         }
-        Reason = TEXT("Polling latest runtime values; each sample carries validity; measurement interval and GPU execution frame unavailable");
+        ++ObservedFrames;
+        Reason = Rate==0?TEXT("Meta values observed each game frame; GPU execution frame and runtime measurement interval unavailable"):
+            TEXT("Meta values observed with optional throttle; GPU execution frame and runtime measurement interval unavailable");
         EmitSource();
         for (const auto& Metric : Reader.Metrics()) {
             const uint64 BeginCycle = FPlatformTime::Cycles64();
@@ -182,7 +192,7 @@ private:
             const FString Path = UTF8_TO_TCHAR(Metric.name.c_str());
             UE_TRACE_LOG(CyInsightsQuest, Sample, CountersChannel)
                 << Sample.ReadBeginCycle(BeginCycle) << Sample.ReadEndCycle(EndCycle)
-                << Sample.ObservedGameFrame(GFrameCounter) << Sample.PathId(Metric.path)
+                << Sample.ObservedGameFrame(ObservedFrame) << Sample.PathId(Metric.path)
                 << Sample.InstanceGeneration(InstanceGeneration) << Sample.SessionGeneration(SessionGeneration)
                 << Sample.Path(*Path) << Sample.Result(static_cast<int32>(Reading.result))
                 << Sample.Unit(static_cast<int32>(Reading.raw.counterUnit))
@@ -203,7 +213,7 @@ private:
             if (Reading.valid_uint) SetInt(Name + TEXT(" [") + Unit + TEXT("]/uint"), Reading.raw.uintValue);
             if (Reading.valid_float) SetFloat(Name + TEXT(" [") + Unit + TEXT("]/float"), Reading.raw.floatValue);
         }
-        return true;
+        return;
     }
     void EmitSource()
     {
@@ -229,16 +239,19 @@ private:
         FCountersTrace::OutputSetValue(Id, Value);
     }
     mutable FCriticalSection Mutex;
+    bool CaptureOverride=false,CaptureEnabled=true;
+    int32 CaptureHertz=0;
+    cyinsights::quest::MetricCadence Cadence;
     cyinsights::quest::MetricsReader Reader;
     IOpenXRHMDModule* HmdModule = nullptr;
     XrSession Session = XR_NULL_HANDLE;
-    FCyInsightsTickerHandle TickHandle;
+    FDelegateHandle FrameHandle;
     TMap<FString, uint16> CounterIds;
     FGuid TraceGuid;
-    uint64 ValidSamples = 0;
+    uint64 ValidSamples = 0, ObservedFrames=0;
     uint64 InstanceGeneration = 0, SessionGeneration = 0;
-    double LastPollSeconds = 0;
     FString Reason = TEXT("Waiting for the Unreal OpenXR backend to initialize");
+    FString GpuPreparation;
     FString WrittenState;
 };
 IMPLEMENT_MODULE(FCyInsightsQuestModule, CyInsightsQuest)
@@ -248,6 +261,8 @@ class FCyInsightsQuestModule final : public IModuleInterface, public ICyInsights
 public:
     void StartupModule() override
     {
+        GpuPreparation=CyInsightsPrepareQuestGpuTiming();
+        UE_LOG(LogCyInsightsQuest,Display,TEXT("GPU groups: %s"),*GpuPreparation);
         IModularFeatures::Get().RegisterModularFeature(FeatureName(), static_cast<ICyInsightsQuestMetrics*>(this));
         UE_LOG(LogCyInsightsQuest, Display, TEXT("%s"), *GetMetricsStatus().Reason);
     }
@@ -258,6 +273,7 @@ public:
     FCyInsightsQuestMetricsStatus GetMetricsStatus() const override
     {
         FCyInsightsQuestMetricsStatus Status;
+        Status.GpuPreparation=GpuPreparation;
 #if !CYINSIGHTS_QUEST_METRICS_API
         Status.Reason = TEXT("Quest metrics unavailable: this engine's OpenXR SDK/lifecycle lacks the required Meta metric API or destruction hook");
 #else
@@ -266,6 +282,8 @@ public:
         return Status;
     }
     void StopMetrics() override {}
+private:
+    FString GpuPreparation;
 };
 IMPLEMENT_MODULE(FCyInsightsQuestModule, CyInsightsQuest)
 #endif

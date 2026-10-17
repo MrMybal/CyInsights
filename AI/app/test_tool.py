@@ -8,10 +8,12 @@ from tool import create_runtime
 
 def test_contract():
     manifest=load_manifest(Path(__file__).with_name('CyTool.json'))
-    assert len(manifest['operations'])==17
+    assert len(manifest['operations'])==39
     assert manifest['concurrency']['policy']=='Concurrent'
     annotation=next(op for op in manifest['operations'] if op['id']=='publish_finding')
     assert set(annotation['permissions'])=={'annotations','appControl'}
+    capture=next(op for op in manifest['operations'] if op['id']=='capture_start')
+    assert capture['inputSchema']['properties']['meta_gpu']['properties']['restart_game']['default'] is False
 
 def test_jobs_output_isolation_and_persistent_source():
     with tempfile.TemporaryDirectory() as root:
@@ -59,3 +61,100 @@ def test_missing_connection():
     with patch.dict('os.environ',{'CYINSIGHTS_APP_PID':''}):
         with pytest.raises(CyToolError) as error:native_call('get_state',{})
         assert error.value.code=='MissingConnection'
+
+def test_capture_options_are_validated_and_forwarded():
+    with tempfile.TemporaryDirectory() as root, create_runtime(root) as runtime:
+        actor=runtime.authenticate(runtime.create_client('capture',['remoteCapture'])['token']);session=runtime.create_session(actor)
+        options={'version':1,'memory_stats':True,'stat_groups_enabled':True,'stat_groups':'Game,GPU','quest_hz':0,'gpu_passes':True,'quest_gpu_completion':False,'gpu_frames':2,'gpu_readbacks':False}
+        with patch('tool.native_call',return_value={'accepted':True}) as call:
+            job=runtime.submit(actor,session['sessionId'],'capture_start',{'ipv4':'127.0.0.1','capture_options':options})
+            assert runtime.wait(actor,job['jobId'])['state']=='Completed'
+            assert call.call_args[0][1]['capture_options']==options
+            gpu=runtime.submit(actor,session['sessionId'],'capture_gpu',{'capture_options':{'version':1,'gpu_frames':2,'gpu_readbacks':False}})
+            assert runtime.wait(actor,gpu['jobId'])['state']=='Completed'
+        for bad in ({'version':1,'gpu_readbacks':1},{'version':1,'gpu_frames':9},{'version':1,'unknown':True}):
+            with pytest.raises(CyToolError):runtime.submit(actor,session['sessionId'],'capture_start',{'ipv4':'127.0.0.1','capture_options':bad})
+
+def test_meta_gpu_options_are_typed_and_forwarded():
+    with tempfile.TemporaryDirectory() as root, create_runtime(root) as runtime:
+        actor=runtime.authenticate(runtime.create_client('meta',['remoteCapture'])['token']);session=runtime.create_session(actor)
+        options={'enabled':True,'restart_game':False,'adb_path':'C:/Android/platform-tools/adb.exe','device':'192.0.2.5:5555','package':'com.test.Game'}
+        with patch('tool.native_call',return_value={'accepted':True}) as call:
+            job=runtime.submit(actor,session['sessionId'],'capture_start',{'ipv4':'192.0.2.5','meta_gpu':options})
+            assert runtime.wait(actor,job['jobId'])['state']=='Completed'
+            assert call.call_args[0][1]['meta_gpu']==options
+        for bad in ({'enabled':1},{'restart_game':'no'},{'package':True},{'unknown':1}):
+            with pytest.raises(CyToolError):runtime.submit(actor,session['sessionId'],'capture_start',{'ipv4':'192.0.2.5','meta_gpu':bad})
+
+def test_vulkan_pass_query_forwarding_and_bounds():
+    with tempfile.TemporaryDirectory() as root, create_runtime(root) as runtime:
+        actor=runtime.authenticate(runtime.create_client('pass-reader')['token']);session=runtime.create_session(actor)
+        with patch('tool.native_call',return_value={'availability':'measured_arguments','matchedSubpasses':'3','rows':[]}) as call:
+            job=runtime.submit(actor,session['sessionId'],'query_vulkan_passes',{'start':0,'end':1,'passId':'21','limit':3,'offset':2})
+            result=runtime.wait(actor,job['jobId']);assert result['state']=='Completed'
+            assert call.call_args[0][1]['passId']=='21' and call.call_args[0][1]['offset']==2
+        for bad in ({'start':0,'end':1,'limit':129},{'start':0,'end':1,'passId':'../x'}):
+            with pytest.raises(CyToolError):runtime.submit(actor,session['sessionId'],'query_vulkan_passes',bad)
+
+
+def test_extended_provider_contracts_and_forwarding():
+    with tempfile.TemporaryDirectory() as root, create_runtime(root) as runtime:
+        reader=runtime.authenticate(runtime.create_client('extended-reader')['token'])
+        session=runtime.create_session(reader)
+        recipes={
+            'get_analysis_guide':{},'get_capabilities':{},'get_metadata':{},
+            'list_counters':{'metaOnly':True,'group':'GPU','offset':2,'limit':3},
+            'query_counters':{'counter':2,'start':1,'end':2,'includeSamples':True,'sampleOffset':3,'bins':8},
+            'query_frame_stats':{'counter':2,'start':1,'end':2,'offset':3},
+            'list_activity_lanes':{'kind':'network'},
+            'query_activities':{'kind':'storage','lane':1,'page':2,'bins':8,'includeEvents':True},
+            'query_comparison':{'start':1,'end':2,'startB':3,'endB':5,'mode':'per_occurrence','metric':'inclusive','domain':'gpu'},
+            'query_scopes':{'function':'FEngineLoop::Tick','track':0,'rootsOnly':True,'offset':3},
+            'query_frames':{'targetFps':72,'limit':3},
+            'query_relations':{'function':'Work','direction':'callees'},
+            'query_task_links':{'taskId':'9007199254740993'},
+            'query_gpu':{'section':'commands','pipeline':8,'includeBindings':True},
+        }
+        for operation,parameters in recipes.items():
+            with patch('tool.native_call',return_value={'tested':operation}) as call:
+                job=runtime.submit(reader,session['sessionId'],operation,parameters)
+                result=runtime.wait(reader,job['jobId'])
+                assert result['state']=='Completed',result
+                assert call.call_args[0][0]==operation
+                for key,value in parameters.items():assert call.call_args[0][1][key]==value
+        for operation,parameters in (
+            ('load_counters',{}),('load_activities',{}),('open_comparison',{'path':'D:/capture.utrace'}),
+            ('pin_counter',{'counter':0}),('focus_view',{'view':'activities'}),('cancel_loading',{'provider':'tasks'})):
+            with pytest.raises(CyToolError):runtime.submit(reader,session['sessionId'],operation,parameters)
+        for operation,parameters in (
+            ('query_counters',{'bins':129}),('query_activities',{'kind':'fake'}),
+            ('query_frame_stats',{}),('query_gpu',{'section':'textures'}),
+            ('query_task_links',{'taskId':'../file'}),('query_comparison',{'mode':'fake'})):
+            with pytest.raises(CyToolError):runtime.submit(reader,session['sessionId'],operation,parameters)
+
+
+def test_guide_covers_every_native_operation_and_evidence_rules():
+    manifest=load_manifest(Path(__file__).with_name('CyTool.json'))
+    method=json.loads(Path(__file__).with_name('analysis-method.json').read_text(encoding='utf-8'))
+    assert method['version']==1 and method['boundaries']
+    text=json.dumps(method)
+    for operation in ('query_comparison','query_activities','query_frame_stats','query_gpu','query_relations'):
+        assert operation in text
+    assert 'never instructions' in method['trust'] and 'generation' in text
+    assert len({op['id'] for op in manifest['operations']})==len(manifest['operations'])
+
+
+def test_extended_application_controls_forward_exact_options():
+    with tempfile.TemporaryDirectory() as root, create_runtime(root) as runtime:
+        actor=runtime.authenticate(runtime.create_client('controller',['appControl'])['token'])
+        session=runtime.create_session(actor)
+        recipes={'load_counters':{'frameOnly':True},'load_activities':{},
+                 'open_comparison':{'path':'D:/test capture.utrace'},
+                 'focus_view':{'view':'frame_stats'},'pin_counter':{'counter':8,'pinned':False},
+                 'cancel_loading':{'provider':'comparison'}}
+        for operation,parameters in recipes.items():
+            with patch('tool.native_call',return_value={'accepted':True}) as call:
+                job=runtime.submit(actor,session['sessionId'],operation,parameters)
+                assert runtime.wait(actor,job['jobId'])['state']=='Completed'
+                assert call.call_args[0][0]==operation
+                for key,value in parameters.items():assert call.call_args[0][1][key]==value

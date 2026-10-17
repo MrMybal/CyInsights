@@ -35,8 +35,10 @@ une plage sans observation est indiquée comme indisponible.
 
 ## Enregistrer
 
-Le plugin demande par défaut `net,file,loadtime,memtag` en plus des canaux de
-timing existants. Le manifeste conserve les canaux demandés et la verbosité
+Le profil léger désactive par défaut `net,file,loadtime,memtag`. Ces sources sont
+activables dans **Session > Capture options** ou **Project Settings > Plugins >
+CyInsights**, pour la capture suivante. Voir [CaptureProfiles](CaptureProfiles.md).
+Le manifeste conserve les canaux demandés et la verbosité
 réseau native obtenue, sans prétendre que chaque canal a produit des événements.
 Cela s'applique à la capture locale et à la capture demandée par IPv4 : les
 sources restent dans le même `.utrace`, puis dans le même `.cycapture`.

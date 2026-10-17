@@ -56,6 +56,15 @@ void PagedTimingStore::VisitScopes(size_t track,double a,double b,bool roots,con
     }
     result.blocks_read=metrics.blocks_read;result.cache_hits=metrics.cache_hits;if(metrics_out)*metrics_out=result;
 }
+std::vector<StoredRelation> PagedTimingStore::Relations(double a,double b,const std::atomic<bool>* cancel) const {
+    Check(cancel);if(!relations_valid)throw std::runtime_error("Unavailable: source nesting does not support unique direct relations");
+    if(!std::isfinite(a)||!std::isfinite(b)||b<=a)throw std::runtime_error("Invalid relation range");
+    std::map<std::tuple<uint32_t,uint32_t,bool>,StoredRelation> totals;std::ifstream input;TimingWindow metrics;
+    for(uint32_t i=0;i<blocks_.size();++i){const auto& block=blocks_[i];if(block.start>=b||(!block.unfinished&&block.end<=a))continue;Check(cancel);
+        auto records=Records(i,input,metrics);for(const auto& r:*records){if(r.parent<0||timers[r.timer].frame_type>=0||timers[size_t(r.parent)].frame_type>=0)continue;double cost=std::max(0.,std::min(r.unfinished?end:r.end,b)-std::max(r.start,a));if(cost<=0)continue;
+            bool gpu=tracks[block.track].gpu;auto key=std::make_tuple(uint32_t(r.parent),r.timer,gpu);auto& v=totals[key];v.parent=uint32_t(r.parent);v.child=r.timer;v.gpu=gpu;if(r.unfinished)++v.unfinished;else{++v.count;v.inclusive+=cost;}}
+    }std::vector<StoredRelation> result;for(const auto& entry:totals)result.push_back(entry.second);return result;
+}
 void PagedTimingStore::ClearReadCache() const {
     std::lock_guard<std::mutex> guard(cache_->mutex);
     cache_->entries.clear();cache_->recent.clear();cache_->bytes=0;
@@ -206,6 +215,7 @@ TimingWindow PagedTimingStore::Window(double a,double b,double stats_a,double st
     Check(cancel);if(!std::isfinite(a)||!std::isfinite(b)||b<=a||!std::isfinite(pixels)||pixels<=0)throw std::runtime_error("Invalid timing window");
     TimingWindow window;window.start=a;window.end=b;window.stats_start=stats_a;window.stats_end=stats_b;window.totals.resize(timers.size());
     window.cpu_totals.resize(timers.size());window.gpu_totals.resize(timers.size());
+    window.gpu_details.resize(tracks.size());
     std::ifstream in(file_,std::ios::binary);if(!in)throw std::runtime_error("Timing cache missing; reopen the capture");
     auto name_matches=exact_name.empty()?std::vector<uint8_t>{}:FunctionMask(exact_name);
     struct Group {int column;Record first;double stop;uint64_t represented=1;bool unfinished=false,name_match=false;};
@@ -215,6 +225,7 @@ TimingWindow PagedTimingStore::Window(double a,double b,double stats_a,double st
         std::unordered_map<uint32_t,StoredTotal> totals;
         std::vector<TimingEvent> grouped;
         TimingWindow metrics;
+        GpuTimingDetail gpu_detail;
     };
     std::vector<uint32_t> candidates;
     auto find_blocks=[&](double left,double right) {
@@ -272,6 +283,7 @@ TimingWindow PagedTimingStore::Window(double a,double b,double stats_a,double st
                     if(r.parent>=0&&timers[static_cast<size_t>(r.parent)].frame_type<0)job.totals[static_cast<uint32_t>(r.parent)].exclusive-=cost;}
             }
             if(!display||r.start>b||stop<a)continue;
+            if(track.gpu)job.gpu_detail.AddInterval(r.start,r.end,block.depth,r.unfinished!=0,timer.frame_type);
             // Construct names only for actual render records, not every scope
             // folded into an existing pixel. Statistics above use every record.
             auto event=[&] {
@@ -316,6 +328,7 @@ TimingWindow PagedTimingStore::Window(double a,double b,double stats_a,double st
     for(auto& records:individuals)for(auto& event:records)window.events.push_back(std::move(event));
     for(auto i:order) {
         Check(cancel);auto& job=jobs[i];auto& domain=tracks[job.track].gpu?window.gpu_totals:window.cpu_totals;
+        window.gpu_details[job.track].Merge(job.gpu_detail);
         for(const auto& entry:job.totals) {
             auto add=[&](StoredTotal& total){total.count+=entry.second.count;total.unfinished+=entry.second.unfinished;
                 total.inclusive+=entry.second.inclusive;total.exclusive+=entry.second.exclusive;};
@@ -368,7 +381,8 @@ void PagedTimingStore::ApplyTotals(const TimingWindow& window,TimingModel& model
         if(tracks[i].has_id)track_ids.emplace(tracks[i].id,i);else track_names.emplace(tracks[i].name,i);
     }
     auto ordinal=[&](const TimingTrack& track){return track.has_id?track_ids.at(track.id):track_names.at(track.name);};
-    std::stable_sort(model.tracks.begin(),model.tracks.end(),[&](const auto& x,const auto& y){return ordinal(x)<ordinal(y);});
+    for(auto& track:model.tracks)if(ordinal(track)<window.gpu_details.size())track.gpu_detail_source=window.gpu_details[ordinal(track)];
+    std::stable_sort(model.tracks.begin(),model.tracks.end(),[&](const auto& x,const auto& y){const auto a=TimingTrackRank(x),b=TimingTrackRank(y);return a!=b?a<b:ordinal(x)<ordinal(y);});
     model.start=start;model.end=end;
 }
 std::optional<TimingEvent> PagedTimingStore::Nearest(uint64_t id,bool has_id,const std::string& name,double anchor) const {

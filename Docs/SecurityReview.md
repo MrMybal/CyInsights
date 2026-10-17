@@ -1,5 +1,7 @@
 # Executable alert investigation — 2026-10-08
 
+Capture-profile revision, 11 October 2026: the rebuilt local application and optional Windows collector were scanned with Kaspersky, with iChecker/iSwift disabled for this scan. The scan completed at 13:49:47 local: 3 processed objects, zero detections, suspicions, skipped/corrupt objects or errors. Report: `build/light-profile-kaspersky.txt`. Owned UI tests opened the basic trace and exercised range filtering. No antivirus protections/exclusions were changed; the older alert remains unresolved. These binaries remain unsigned.
+
 ## Multithreaded revision, Release-20261009.2
 
 Independent lanes, track indices and bounded CSV decoding batches use a reusable worker pool. Ordered ingestion/reduction preserves source identity and statistics; cancelled/failed batches drain running work before publication or cleanup. Nine suites pass 288 checks, and 180 benchmark windows have identical semantic fingerprints across worker counts. A real trace opens and renders, held navigation survives 120 model publications and the source remains unchanged. See [MultithreadedPreparation.md](MultithreadedPreparation.md).
@@ -106,3 +108,96 @@ Kaspersky report-only scanning of the product directory completed at 2026-10-09 
 Fresh source build with Windows ICON/PNG resources for the user-approved logo. The PNG is decoded once with Windows Imaging Component and uploaded to D3D11; it is not read from an external path at startup. Resource bytes and native Windows icon extraction were validated against the approved derived assets. No new external image decoding dependency was bundled.
 
 Kaspersky report-only scanning of the release directory completed at 2026-10-10 00:07:52 local: 5551 objects processed, zero detections, suspicions, skipped/corrupt objects or errors. Owned application tests then rendered the branding and opened an existing trace normally. Protections and exclusions remain unchanged; the old alert remains unresolved. The release is unsigned. The existing AI companion and unchanged native task readers are retained with their notices and source hashes.
+
+Per-frame Quest revision, 11 October 2026: the rebuilt local `bin/Release-20261011/CyInsightsApp.exe` passed a completed Kaspersky CLI file scan at 16:06:33 (2 processed objects, 0 detections, suspicions, skips or errors). Report: `build/quest-per-frame-kaspersky.txt`. The native capture-options snapshot then ran and exited normally. No antivirus settings/exclusions were changed, no binary was uploaded, and the earlier detections remain unresolved.
+
+After the paged GPU-lane ordering fix, the final rebuilt executable was scanned again at 16:12:29: 2 processed objects, 0 detections, suspicions, skips or errors (`build/quest-per-frame-final-kaspersky.txt`). It then opened the real rendered native trace, displayed Graphics/Compute above GameThread and exited normally via its owned screenshot harness.
+
+Default GPU group revision: the rebuilt local app completed a Kaspersky file scan at 16:40:44 on 11 October 2026 (2 processed objects; 0 detections, suspicions, skips or errors; `build/quest-gpu-groups-kaspersky.txt`). The options and real native timeline screenshot harnesses both exited normally. No protection or exclusion was changed, and no executable was uploaded. This scan does not resolve the earlier detections or guarantee future antivirus verdicts.
+## Vérification locale du collecteur intégré — 11 octobre 2026
+
+Le backend optionnel `CyInsightsGpu.addon64` est compilé à partir des sources MIT
+conservées dans ce dépôt. Le plugin CyGPUInspector séparé a été sorti du packaging ;
+aucun code de lancement/recherche de son application n'est repris dans les nouveaux
+modules. Sessions et exports sont propres à CyInsights. L'audit du working tree
+(515 fichiers, dépendances verrouillées et nouvelles sources incluses) passe sans
+secret ni chemin machine détecté. Aucune publication distante n'a été effectuée.
+
+Le scan Kaspersky de l'application recompilée et du backend intégré a terminé avec
+3 objets traités, 0 détection, suspicion, saut ou erreur. Rapport local :
+`build/integrated-gpu-kaspersky.txt`. Ce résultat concerne ces fichiers précis et
+ne résout pas rétrospectivement les alertes des anciens exécutables. Aucun réglage
+de protection ni exclusion antivirus n'a été changé.
+
+
+- 2026-10-11, Quest timestamp revision: publication audit of 521 working-tree source files passes. Targeted Kaspersky scan of the newly rebuilt local CyInsightsApp.exe completed at 20:55:43 (2 objects OK, 0 detections/suspicions/skips/errors). No exclusions or protection settings changed. This describes this scan only.
+
+
+## Local subpass-content build, 12 October 2026
+
+The new native detail reader uses a read-only mapping of an explicitly opened
+trace's disposable `.cyvp` analysis cache. Its block index, GPU identities and
+quantities do not read credentials, arbitrary engine installations, textures
+or indirect GPU buffers. Source publication checks are recorded separately.
+Kaspersky reported a cloud heuristic detection `VHO:Backdoor.Win64.Agent.gen`
+for the new `PassContents-20261012/CyInsightsApp.exe`, attributed to the linker
+before application launch; the file was subsequently absent. The exported event
+does not establish the precise removal/quarantine action. It was read from the product's
+file/behavior reports. This is unresolved and does not establish a false
+positive. No exclusions, protection changes, quarantine restoration or binary
+renaming workaround were performed. The earlier local build is retained.
+UI visual validation and delivery of the new app binary remain blocked.
+
+## Clean source build and delivery, 13 October 2026
+
+A new source build in a fresh CMake/Ninja directory writes to the same
+`PassContents-20261012/CyInsightsApp.exe` path. It includes the implemented
+subpass UI, explicit Meta driver/packet diagnostics and ordinary Windows
+version/publisher resources. No packing, obfuscation, antivirus exclusion,
+protection change, quarantine restoration or executable rename was used.
+The metadata is not a digital signature; no usable code-signing certificate was
+found and no self-signed certificate was created or trusted.
+
+The new executable SHA-256 is
+`24ad3604e1d068725c8f62062dd4cabab3e0f463611d047dcf3c1c645fcba76d`.
+Kaspersky scans completed on this file and then its product directory: two and
+155 objects processed respectively, zero detections, suspicions, skips,
+corruptions or errors. Reports are under ignored `build/` as
+`security-verified-kaspersky.txt` and `security-verified-directory-kaspersky.txt`.
+The file hash remained identical after startup tests. The earlier detected binary
+was unavailable for hashing; this scan does not classify the earlier event as a
+false positive, prove its cause or guarantee future antivirus verdicts.
+
+The new app opens normally and renders three explicitly synthetic subpass
+records from the native Unreal reader. A real named-pipe test exercises the
+new readonly query, pagination, selected intervals and unavailable GPU costs.
+All 21 CTest suites, eight SDK tests and eleven Python tests pass. Visual and
+runtime delivery of this new binary is therefore available locally, superseding
+the preceding build's blocked delivery. No new Beyond launch or recording was
+performed; read-only Quest queries confirmed driver state and source advertising.
+
+[Windows signing](WindowsSigning.md) describes trusted-certificate signing,
+SHA-256/RFC3161 verification, actual per-file signature manifests and the manual
+GitHub provenance workflow. Attestations and signatures do not certify malware
+absence. No upload to Kaspersky or publication of a new GitHub release occurred.
+
+## Capture-start regression correction, 13 October 2026
+
+The new `RemoteFix-20261013` local app restores capture of an already-running
+Quest game by default. The existing driver profiling mode is queried and
+preserved; no reactivation, game termination or launch is issued unless the user
+explicitly selects restart. The optional restart resolves the selected package's
+launcher before stopping it, then waits for its new capture-service identity.
+Startup stop/cancellation and local phase diagnostics are documented in
+[RemoteCapture](RemoteCapture.md). No game was started/stopped during development.
+
+Kaspersky scanning of the new product directory completed on 13 October: 152
+objects, zero detections, suspicions, skips, corruptions or errors. The app
+SHA-256 is `b5745d1430090853478b0aa77a75dc660d04943e23fdb68f74044947e95c7b30`.
+It remains unsigned. The UI startup/capture-options test passed in an isolated
+local profile. An earlier sandboxed UI test could not write the user's global
+engine registration; the isolated test preserves those settings and confirms
+native reader readiness. The existing running user app was not terminated.
+Twenty-one CTest suites, 45 Meta/TCP startup checks, 77 existing TCP checks, eight
+SDK tests and eleven Python tests pass. Plugin-only Android builds succeed on
+Meta UE 5.5.3 and UE 5.8.3. A fresh real Beyond capture remains unverified.

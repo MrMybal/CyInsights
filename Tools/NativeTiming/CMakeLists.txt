@@ -26,4 +26,15 @@ target_compile_options(CyNativeTiming PRIVATE /utf-8 /EHsc /sdl /guard:cf /Zc:__
 target_link_options(CyNativeTiming PRIVATE /DYNAMICBASE /NXCOMPAT /guard:cf)
 target_link_libraries(CyNativeTiming PRIVATE "${CY_UE_LIBS}/TraceServices/UnrealInsights-TraceServices.lib" "${CY_UE_LIBS}/Core/UnrealInsights-Core.lib"
  "${CY_UE_LIBS}/TraceAnalysis/UnrealInsights-TraceAnalysis.lib")
+option(CY_TIMING_BUILD_FIXTURE "Build the synthetic subpass-content provider writer" OFF)
+if(CY_TIMING_BUILD_FIXTURE)
+ add_executable(CyPassContentsFixture ContentsFixture.cpp)
+ get_target_property(CY_TIMING_INCLUDES CyNativeTiming INCLUDE_DIRECTORIES)
+ get_target_property(CY_TIMING_DEFINES CyNativeTiming COMPILE_DEFINITIONS)
+ target_include_directories(CyPassContentsFixture PRIVATE ${CY_TIMING_INCLUDES})
+ target_compile_definitions(CyPassContentsFixture PRIVATE ${CY_TIMING_DEFINES})
+ target_compile_options(CyPassContentsFixture PRIVATE /utf-8 /EHsc /Zc:__cplusplus /Zc:preprocessor)
+ set(CY_TIMING_EDITOR_LIBS "${CY_UE_ENGINE}/Intermediate/Build/Win64/x64/UnrealEditor/Development")
+ target_link_libraries(CyPassContentsFixture PRIVATE "${CY_TIMING_EDITOR_LIBS}/Core/UnrealEditor-Core.lib" "${CY_TIMING_EDITOR_LIBS}/TraceLog/UnrealEditor-TraceLog.lib")
+endif()
 

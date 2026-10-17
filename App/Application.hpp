@@ -21,6 +21,7 @@
 #include <set>
 #include <cmath>
 #include <unordered_map>
+#include <functional>
 namespace cyinsights {
 class Application {
   public:
@@ -28,34 +29,51 @@ class Application {
         double start=0,end=0,frames_start=0,frames_end=0;
         float x=0,y=0,width=0,height=0,ruler_x=0,ruler_y=0,ruler_width=0;
         uint64_t model_version=0;bool dragging=false;int visible_rows=0,recorded_rows=0;
-        float tracks_x=0,tracks_y=0;
+        float tracks_x=0,tracks_y=0,tracks_scroll=0,tracks_scroll_max=0;
+        float measure_x=0,measure_y=0,measure_width=0,measure_height=0;
     };
-    NavigationState NavigationView() const {return {view_start_,view_end_,frames_start_,frames_end_,navigation_x_,navigation_y_,navigation_width_,navigation_height_,ruler_x_,ruler_y_,ruler_width_,model_version_,drag_surface_!=DragSurface::None,visible_rows_,recorded_rows_,tracks_x_,tracks_y_};}
+    NavigationState NavigationView() const {return {view_start_,view_end_,frames_start_,frames_end_,navigation_x_,navigation_y_,navigation_width_,navigation_height_,ruler_x_,ruler_y_,ruler_width_,model_version_,drag_surface_!=DragSurface::None,visible_rows_,recorded_rows_,tracks_x_,tracks_y_,tracks_scroll_,tracks_scroll_max_,measure_x_,measure_y_,measure_width_,measure_height_};}
     struct InteractionState {
         float scope_x=0,scope_y=0,menu_x=0,menu_y=0,hist_x=0,hist_y=0,hist_width=0;
+        float blank_x=0,blank_y=0;
         std::string scope_name,filter_name,function_name;
         double selection_a=0,selection_b=0,hist_a=0,hist_b=0;
         uint64_t count=0,matched=0;int bin=-1;std::array<uint64_t,64> bins{};bool separate_dock=false;
     };
     InteractionState InteractionView() const;
+    struct FrameStatsState {uint64_t rows=0;bool selected_interval=false,curve=false;};
+    FrameStatsState FrameStatsViewState() const {return {frame_stat_rows_,range_start_!=range_end_,selected_counter_>=0&&static_cast<size_t>(selected_counter_)<counters_->series.size()&&counters_->series[selected_counter_].pinned};}
     struct ActivityState {uint64_t events=0,matches=0,plot_queries=0;double a=0,b=0;};
     ActivityState ActivityView() const {return {activity_store_?activity_store_->count:0,activity_result_.details.lanes.empty()?0:activity_result_.details.lanes.front().matched,activity_plot_queries_,activity_result_.details.start,activity_result_.details.end};}
     Application();
     ~Application();
     void SetBrandLogo(ImTextureID texture){brand_logo_=texture;}
     void FocusSession(){session_view_=true;}
+    bool FocusVulkanPassContents();
+    void FocusCaptureOptions(){session_view_=true;focus_capture_options_=true;}
     void Draw();
+    void DrawMenuBar();
+    void DrawHosted(bool visible);
+    void DrawInactive();
+    void ConfigureDocument(uint64_t id,std::function<void(const fs::path&)> open);
+    std::string WindowName(const char* name) const;
+    const fs::path& DocumentPath() const {return document_path_;}
+    bool CanCloseDocument() const {return !remote_.Snapshot().Busy();}
     bool Open(const fs::path &file);
     bool Connect(uint32_t process_id);
     bool FocusSlowFrame();
     void FocusDistribution(){show_distribution_=true;focus_distribution_=true;}
     void FocusTasks(){show_tasks_=true;focus_tasks_=true;}
     void FocusActivities(){show_activities_=true;focus_activities_=true;activity_dock_pending_=true;}
+    void FocusFrameStats(){show_frame_stats_=true;frame_stats_dock_pending_=true;session_view_=false;}
     void FilterFunction(const std::string& name);
     void OpenFunctionHistogram(const std::string& name);
     bool InspectFirstTask();
     void EnableAi(bool control=false,bool capture=false);
     void FocusAi(){show_ai_=true;focus_ai_=true;session_view_=false;}
+    void FocusAiMethod(){FocusAi();ai_requested_tab_=3;}
+    std::future<cygi::Json> RunLocalAiTool(const std::string& operation,const cygi::Json& parameters);
+    cygi::Json StandaloneAiState() const;
     void WriteAnalysisReport(const fs::path& output) const;
     bool AnalysisBusy() const { return native_import_pending_ || !pending_capture_.empty() || native_.Busy() || model_task_.valid() || counter_reader_.Busy() || comparison_reader_.Busy() || distribution_task_.valid() || distribution_pending_ || tasks_pending_ || task_reader_.Busy() || tasks_query_.valid() || links_query_.valid() || activity_reader_.Busy() || activity_query_.valid() || activity_pending_; }
     void FocusGpu() {
@@ -68,10 +86,25 @@ class Application {
     }
 
   private:
+    void Tick();
+    void DrawPanels();
+    void RequestOpen(const fs::path& file);
+    void ChooseAndOpenCaptures();
+    bool BeginView(const char* name,bool* open=nullptr,ImGuiWindowFlags flags=0);
+    const ImGuiViewport* WorkspaceViewport() const {return hosted_?&workspace_viewport_:ImGui::GetMainViewport();}
+    uint64_t document_id_=0;
+    fs::path document_path_;
+    std::function<void(const fs::path&)> open_document_;
+    bool hosted_=false,document_visible_=true;
+    ImGuiViewport workspace_viewport_{};
+    ImGuiID document_dock_=0;
     ImTextureID brand_logo_=0;
     void AiTick();
     void AiView();
+    void AiMethodView();
+    void PrepareAiTool(const std::string& operation);
     void AiDispatch(const std::shared_ptr<AiRequest>& request,bool external=true);
+    bool AiExtendedDispatch(const std::string& operation,const cygi::Json& parameters,const std::shared_ptr<AiRequest>& request);
     cygi::Json AiState() const;
     void StartAiIssues();
     AiRpc ai_rpc_;
@@ -88,12 +121,13 @@ class Application {
     std::string ai_message_,ai_result_;
     char ai_parameters_[16384]="{}";
     int ai_operation_=0;
+    int ai_requested_tab_=-1;
     void Layout(unsigned id);
     void Timing();
     void Frames();
     void FrameGlyphs(float width);
     FrameCause Cause(size_t frame) const;
-    void FrameBackground(float x,float y,float height);
+    void FrameBackground(float x,float y,float height,FrameDomain domain);
     double frame_glyph_start_=NAN,frame_glyph_end_=NAN;
     float frame_glyph_width_=-1;
     float frame_target_fps_=60;
@@ -105,6 +139,17 @@ class Application {
     void PlatformMetrics();
     void Counters();
     void CounterTracks(float width);
+    void FrameStatsView();
+    uint64_t frame_stat_rows_=0;
+    bool show_frame_stats_=false,frame_stats_dock_pending_=false;
+    bool frame_stat_samples_requested_=false;
+    char frame_stats_search_[256]{};
+    int frame_stats_group_=0;
+    std::vector<std::string> frame_stat_groups_;
+    std::vector<size_t> frame_stat_metrics_;
+    std::string frame_stat_filter_key_;
+    uint64_t frame_stat_catalog_revision_=UINT64_MAX;
+    size_t frame_stat_catalog_size_=0;
     void ActivitiesView();
     void ActivityTracks(float width);
     void ActivityTick();
@@ -163,13 +208,17 @@ class Application {
     void NativeSetupTick();
     void NativeSetupView();
     void SelectAnalyzer(const fs::path& path);
+    bool AddEngineRoot(const fs::path& root);
     NativeSetup native_setup_;
     bool native_import_pending_=false,setup_dismissed_=false;
+    char engine_root_input_[4096]{};
+    std::string engine_registration_error_;
     bool OpenNow(const fs::path& file);
     void LoadWindow();
-    enum class DragSurface {None,Frames,Ruler,Tracks};
+    enum class DragSurface {None,Frames,Ruler,Tracks,Measurement};
     void BeginTimingDrag(DragSurface surface,int button,float width,bool zoom=true);
     void AdvanceTimingDrag();
+    void MeasurementRuler(float width);
     void Relations(bool callers);
     void Messages();
     void UpdateTiming();
@@ -187,7 +236,7 @@ class Application {
     void StepFrame(int direction);
     void FocusTimer(uint32_t timer);
     TimingModel timing_model_;
-    CounterModel counters_;
+    std::shared_ptr<CounterModel> counters_=std::make_shared<CounterModel>();
     CounterTrace counter_reader_;
     int selected_counter_ = -1;
     bool show_counters_ = true, meta_counters_only_ = false, show_availability_ = false;
@@ -224,9 +273,13 @@ class Application {
     DragSurface drag_released_surface_=DragSurface::None;
     int drag_button_=0;bool drag_moved_=false,drag_zoom_=true;
     float drag_width_=1;
+    float drag_scroll_start_=0,tracks_scroll_=0,tracks_scroll_max_=0;
+    std::string drag_context_name_;
+    float timing_blank_x_=0,timing_blank_y_=0;
     double model_request_time_=-1,frames_start_=0,frames_end_=1;
     uint64_t model_version_=0;
     float ruler_x_=0,ruler_y_=0,ruler_width_=0;
+    float measure_x_=0,measure_y_=0,measure_width_=0,measure_height_=0,measure_drag_origin_=0;
     int visible_rows_=0,recorded_rows_=0;
     float tracks_x_=0,tracks_y_=0;
     int overview_width_=0;
@@ -253,6 +306,12 @@ class Application {
     char remote_ip_[64]{};
     int remote_port_ = 41855;
     float remote_seconds_ = 0;
+    bool remote_use_defaults_=true;
+    bool focus_capture_options_=false;
+    CaptureOptions remote_capture_,remote_gpu_options_;
+    MetaQuestOptions remote_meta_;
+    char remote_adb_[4096]{},remote_adb_device_[256]{},remote_android_package_[256]{};
+    char remote_stat_groups_[513]="Game,UObjects,GPU";
     bool show_details_ = false, show_metrics_ = false;
     int track_filter_ = 0;
     bool show_tick_guides_ = true, hide_inactive_tracks_ = false;
@@ -283,7 +342,7 @@ class Application {
     fs::path root_, trace_, cache_,capture_file_;
     std::string message_ = "Open a .cycapture or a native .utrace to begin";
     NativeTrace native_;
-    std::unique_ptr<cygi::SessionModel> gpu_;
+    std::shared_ptr<cygi::SessionModel> gpu_;
     cygi::CaptureInfo gpu_info_;
     cygi::FrameGraph graph_;
     cygi::FrameTimeline gpu_timeline_;
@@ -302,4 +361,6 @@ class Application {
     int depth_levels_ = 0; // All recorded depths; a limit is an explicit view setting.
 };
 fs::path ChooseFile(const wchar_t *filter, bool save = false);
+fs::path ChooseFolder();
+std::vector<fs::path> ChooseCaptures();
 } // namespace cyinsights

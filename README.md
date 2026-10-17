@@ -13,19 +13,27 @@ is written for CyInsights; it does not reuse the CyGPUInspector standalone UI.
 - Open `.utrace` and versioned `.cycapture` archives. Preserve the original trace.
 - Continuous tracks, synchronized frame overview, pan/zoom and range selection.
 - Timers, callers/callees, counters, task analysis, distributions and A/B comparison.
+- Quest Vulkan subpass command arguments and bounded detail queries; see [coverage and validation](Docs/QuestSubpassContents.md).
+- Optional Meta Quest Perfetto hardware GPU sources in the same capture; see [test defaults and validation limits](Docs/MetaQuestGpu.md).
+- Unreal frame-stat snapshots, synchronized curves and per-frame tables, with source/observation times and availability retained.
 - Network packets, Unreal file operations, asset loading and memory samples on the same timeline.
 - Double-click exact function filtering and right-click interval histograms.
 - Background workers, persistent disk indexes and visible loading/cancellation.
 - Frame diagnostics with recognized wait time and measured/derived distinctions.
-- Native AI Inspector and 17 CyToolsCore/MCP operations for compact analysis,
+- Native AI Inspector and 39 CyToolsCore/MCP operations for compact analysis,
   findings, timeline control and permission-gated remote capture.
 - Development capture over a local network by target IPv4, including Quest metrics.
 - Windows ReShade collector for commands, pipelines, shaders, resources and GPU timestamps.
+- Basic capture defaults and session-local PC overrides, with opt-in stat groups,
+  native activity sources and bounded GPU snapshots. Image/texture readbacks are off by default.
+
+Configure **Project Settings > Plugins > CyInsights** or **Session > Capture options**.
+See [capture profiles and costs](Docs/CaptureProfiles.md), including current remote GPU payload limitations.
 
 **This is a development build, not full Unreal Insights feature parity.** Native
 timings use an optional matching installed-engine binary reader; without it,
-the Epic Unreal Insights CSV bridge remains available. Counter values still use
-the export bridge. See [direct timing reading](Docs/NativeTiming.md).
+the Epic Unreal Insights CSV bridge remains available. Ordinary counter values still use
+the export bridge; plugin frame-stat snapshots use the native binary reader. See [direct timing reading](Docs/NativeTiming.md).
 Original traces are read-only; there is no arbitrary
 file-size/event-count rejection. Optional TaskTrace decoding uses a local adapter.
 Native activity providers use an optional installed-engine reader; memory callstack exploration, native log UI and other Insights providers remain incomplete.
@@ -71,23 +79,33 @@ only to regenerate those assets with `Tools/prepare_branding.py`.
 ## Open a trace
 
 Start the application, use **Open capture**, and select a `.utrace` or `.cycapture`.
-In **Session > Select UnrealInsights.exe**, select the matching licensed engine's
-Unreal Insights executable. Decoding and indexing show progress; previously
+In **Session > Native analyzer > Add engine**, enter the root folder of the
+matching licensed engine (for example `C:/Unreal/UE_5.8`), or use **Browse engine folder**.
+Its `Engine` subfolder is also accepted. Decoding and indexing show progress; previously
 indexed files reuse their disk cache. Select an interval to constrain statistics,
 histograms and AI findings. Open **Activities** for network, storage, loading and
 memory tracks. See [capture and timeline semantics](Docs/NativeActivities.md).
 
-At launch the app detects installed Unreal analyzers and automatically prepares
-the native timing/task/activity readers in the background, with visible progress,
+Open **Frame stats** for Unit, GPU, Game, UObjects, Memory and other recorded
+Unreal stat groups. Pin curves and select a timeline interval to inspect values
+per frame. New plugin captures record available snapshots automatically;
+old traces retain only the counters originally recorded. See [frame statistics](Docs/FrameStats.md).
+
+The application keeps a list of engines you register manually. It does not scan
+the registry, Epic Launcher inventory or neighboring installations. Selecting a
+registered engine automatically prepares the native timing/task/activity readers in the background, with visible progress,
 log and cancellation. Results are cached per engine installation for future launches.
 This first-time preparation needs a licensed installed UE 5.5–5.8 and Visual Studio
 C++/CMake tools (MSVC 14.44 for UE 5.8); it does not rebuild Unreal. No manual script
 is required. If dependencies are missing or preparation is cancelled, the CSV
 timing bridge remains available. See [first launch](Docs/GitHubRelease.md).
 
-Choose your installed analyzer in **Session > Select UnrealInsights.exe**, or
+Choose an engine in **Session > Registered Unreal engines**, or explicitly
 set the local `CYINSIGHTS_UNREAL_INSIGHTS` environment variable to its executable
-path before launching. Matching versions are searched beside that installation.
+path before launching. Capture metadata can select a matching engine only from
+your registered list. **Remove selected engine** removes the registration without
+deleting the installation or its reader cache. Previous automatic selections
+are not imported: register your engine once after updating.
 
 The existing local development release `Release-20261010.1` predates this licensing
 adaptation and is not a GitHub release. Historical security/build evidence and
@@ -104,10 +122,15 @@ Shipping, Test and Server are excluded. The plugin sources target UE 4.27 and
 for tested versions and older-engine limitations. Only project/plugin modules
 are compiled; the engine is not modified.
 
-For Windows GPU detail, also install `Plugins/CyGPUInspector`, build the separately
-licensed [Windows collector](Tools/WindowsCollector/README.md), and configure a
-separately installed add-on-capable ReShade runtime. This repository includes
-collector source, not ReShade runtime DLLs or old copied add-ons.
+Windows GPU detail is an **optional internal CyInsights collector**. Build the
+MIT [Windows collector](Tools/WindowsCollector/README.md) and enable it in
+Project Settings > Plugins > CyInsights - Windows GPU collector. It uses its own
+`CyInsightsGpu.addon64` and CyInsights recorder. No CyGPUInspector plugin or
+application is installed or launched. Native `.utrace` GPU groups are the default;
+the extra collector stays disabled unless explicitly enabled. ReShade's add-on-capable
+runtime is configured separately; its DLL is not committed in this repository.
+
+Quest prepares native GPU timestamp queries on detected headsets before RHI initialization; native GPU scopes are recorded per render frame, with optional RDG pass detail. Meta observations default to once per game frame (`quest_hz=0`); they do not expose their GPU execution-frame identity. See [Quest GPU frames and coverage](Docs/QuestGpuFrames.md).
 
 Quest/Android collects Meta OpenXR performance metrics into the same native
 trace, without launching a separate headset monitor. Their sampling interval
@@ -122,7 +145,12 @@ streams to the PC; the PC packages after stop. See [remote capture](Docs/RemoteC
 On a development network, restrict access to the capture command port to trusted
 hosts; this service is not an Internet-facing endpoint.
 
-## Optional AI/MCP companion
+## Local analysis tools and optional MCP companion
+
+The native **AI Inspector > Tools** and **AI method** tabs run without Python,
+MCP or CyAiCodex. Contracts, guided steps and translations are embedded in the
+application. The optional companion below connects external AI clients.
+
 
 Python 3.11 x64 is required for the provided offline Windows wheels:
 

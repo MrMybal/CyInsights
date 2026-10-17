@@ -199,16 +199,16 @@ namespace cygi
 
 	void MakeRingName(uint32_t process_id, uint32_t device_index, char *out, size_t out_size)
 	{
-		std::snprintf(out, out_size, "Local\\CyGPUInspectorRS.%u.%u.events", process_id, device_index);
+		std::snprintf(out, out_size, "Local\\%sRS.%u.%u.events", kGpuIpcPrefix, process_id, device_index);
 	}
 
 	void MakeSignalName(uint32_t process_id, uint32_t device_index, char *out, size_t out_size)
 	{
-		std::snprintf(out, out_size, "Local\\CyGPUInspectorRS.%u.%u.signal", process_id, device_index);
+		std::snprintf(out, out_size, "Local\\%sRS.%u.%u.signal", kGpuIpcPrefix, process_id, device_index);
 	}
 
 	void MakePipeName(uint32_t process_id, uint32_t device_index, char *out, size_t out_size)
 	{
-		std::snprintf(out, out_size, "\\\\.\\pipe\\CyGPUInspector\\%u.%u", process_id, device_index);
+		std::snprintf(out, out_size, "\\\\.\\pipe\\%s\\%u.%u", kGpuIpcPrefix, process_id, device_index);
 	}
 }

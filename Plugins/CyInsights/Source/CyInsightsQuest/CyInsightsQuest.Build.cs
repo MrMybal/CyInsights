@@ -10,8 +10,9 @@ public class CyInsightsQuest : ModuleRules
         if (Target.Version.MajorVersion < 5) CppStandard = CppStandardVersion.Cpp17;
         PrivateDependencyModuleNames.AddRange(new string[] {
             "Core", "CoreUObject", "Engine", "OpenXRHMD", "HeadMountedDisplay",
-            "AugmentedReality", "TraceLog", "CyInsightsTrace"
+            "AugmentedReality", "TraceLog", "CyInsightsTrace", "ApplicationCore"
         });
+        DynamicallyLoadedModuleNames.Add("VulkanRHI");
         PrivateIncludePathModuleNames.AddRange(new string[] { "OpenXR", "CyInsights" });
         string OpenXR = Path.Combine(EngineDirectory, "Source", "ThirdParty", "OpenXR", "include", "openxr", "openxr.h");
         string Hook = Path.Combine(EngineDirectory, "Plugins", "Runtime", "OpenXR", "Source", "OpenXRHMD", "Public", "IOpenXRExtensionPlugin.h");

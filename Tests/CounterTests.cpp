@@ -4,6 +4,7 @@
 #include "NativeTrace.hpp"
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <thread>
@@ -141,6 +142,36 @@ int main(int argc,char** argv) {
         bool equal=a.count==b.count&&a.unavailable==b.unavailable&&a.minimum_sample==b.minimum_sample&&a.maximum_sample==b.maximum_sample&&std::abs(a.mean-b.mean)<1e-12&&x.size()==y.size();
         if(x.size()==y.size())for(size_t i=0;i<x.size();++i)equal&=x[i].pixel==y[i].pixel&&x[i].first==y[i].first&&x[i].last==y[i].last&&x[i].minimum==y[i].minimum&&x[i].maximum==y[i].maximum;
         check(equal,"Dense Meta counter index preserves per-type availability gaps, invalid float readings and exact plot extrema");
+    }
+    {
+        const auto file=dir/"frame-stats.cystats";
+        auto fixture=[&](bool bad_id=false,bool truncated=false){
+            std::ofstream out(file,std::ios::binary);out.write(cyfs::magic,8);
+            auto value=[&](const auto& v){out.write(reinterpret_cast<const char*>(&v),sizeof(v));};
+            auto text=[&](const char* s){auto n=static_cast<uint32_t>(std::strlen(s));value(n);out.write(s,n);};
+            auto spec=[&](uint32_t id,bool floating,const char* group,const char* name,const char* unit){value(uint8_t(cyfs::Spec));value(id);value(uint8_t(floating));text(group);text(name);text(unit);};
+            spec(5,true,"Game","Tick inclusive","ms");spec(7,false,"UObjects","Allocated object slots","objects");
+            auto sample=[&](cyfs::Sample s){value(uint8_t(cyfs::Value));value(s);};
+            sample({5,cyfs::FrameBounds|cyfs::Delayed|cyfs::Aggregate|cyfs::Valid,1.2,1.3,3.4,43,21,0,0});
+            sample({bad_id?99u:5u,cyfs::FrameBounds|cyfs::Delayed|cyfs::Aggregate|cyfs::Valid,1,1.1,3,42,20,0,7.5});
+            sample({5,cyfs::FrameBounds|cyfs::Delayed,1.4,1.5,3.6,44,22,0,99});
+            sample({7,cyfs::FrameBounds|cyfs::Valid,1,1.1,1.1,42,20,9007199254740993ll,0});
+            if(!truncated){value(uint8_t(cyfs::End));value(uint64_t(4));}
+        };
+        fixture();CounterModel frames;CounterSeries mirror;mirror.id=UINT32_MAX;mirror.name="CyInsights/Stats/Game/Tick inclusive [ms]";frames.series.push_back(mirror);
+        check(frames.ReadFrameStats(file,true,error)&&frames.series.size()==2&&frames.series[0].frame_stats&&frames.series[0].samples.empty(),"frame-stat catalogue replaces observation mirrors without loading values");
+        check(frames.ReadFrameStats(file,false,error)&&frames.series.size()==2&&frames.series[0].samples.size()==3,"streamed frame stats load without duplicate catalogue entries");
+        auto measured=frames.InFrame(0,1,1.1);
+        check(measured&&measured->real==7.5&&frames.series[0].samples[0].time<1.1&&frames.series[0].frame_samples[0].observed==3,"delayed stats are aligned to source frame, not receive frame");
+        check(frames.series[0].frame_samples[0].game_frame==42&&frames.series[0].frame_samples[0].stats_frame==20,"source game and stats IDs stay separate");
+        check(!frames.InFrame(0,1.1,1.2)&&!frames.InFrame(0,3,3.1),"missing source frame and receipt frame never reuse a previous sample");
+        check(frames.InFrame(0,1.2,1.3)&&frames.InFrame(0,1.2,1.3)->real==0,"valid zero recorded for a frame remains measured");
+        check(!frames.InFrame(0,1.4,1.5),"invalid latest frame sample stays unavailable");
+        check(frames.InFrame(1,1,1.1)&&frames.series[1].Text(*frames.InFrame(1,1,1.1))=="9007199254740993","frame integer values preserve precision beyond double");
+        fixture(true);CounterModel invalid;check(!invalid.ReadFrameStats(file,true,error)&&invalid.series.empty(),"catalogue rejects unknown frame-stat identities before publishing");
+        fixture(false,true);check(!invalid.ReadFrameStats(file,false,error),"truncated frame-stat cache rejected");
+        fixture();std::atomic<bool> cancel{true};check(!invalid.ReadFrameStats(file,false,error,&cancel),"frame-stat import is cancellable");
+        check(frames.InFrame(0,1.2,1.3)!=nullptr,"failed import leaves an unrelated loaded frame model intact");
     }
     std::error_code ec;fs::remove_all(dir,ec);std::cout<<checks<<" checks, "<<failures<<" failures\n";return failures?1:0;
 }

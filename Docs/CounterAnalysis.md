@@ -1,5 +1,7 @@
 # Compteurs natifs et métriques Quest dans l'application
 
+Mise à jour du 11 octobre 2026 : **Frame stats** ajoute les snapshots de statistiques du plugin, leurs courbes synchronisées et un tableau par frame/range. Leur cache binaire est produit par le lecteur natif et chargé en arrière-plan sans nouveau processus Unreal Insights. Les compteurs ordinaires continuent d'utiliser le pont d'export décrit ci-dessous. Voir [FrameStats.md](FrameStats.md) pour la collecte, la synchronisation, les tests récents et les limites. Les validations de compilation seules rapportées plus bas sont historiques : la nouvelle application a été ouverte et inspectée sur une vraie capture.
+
 L'application C++/Dear ImGui lit les compteurs Unreal présents dans une `.utrace` ou dans la trace native d'un `.cycapture`, y compris les métriques Meta embarquées par le plugin. L'ouverture d'une capture reçue par réseau suit le même parcours. L'analyse commence après l'arrêt et la fermeture du flux natif.
 
 ## Utilisation
@@ -30,7 +32,7 @@ Cette étape utilise encore le `UnrealInsights.exe` installé, choisi dans Sessi
 
 Les plafonds de taille, de définitions et d'échantillons ont été supprimés. L'ouverture du timing importe seulement le catalogue : **Load counter samples** lance ensuite l'analyse des valeurs à la demande, avec annulation. Les valeurs sont encore conservées en mémoire ; leur stockage paginé reste à réaliser. Une série présentant des lignes invalides devient indisponible avec une raison ; aucun sous-ensemble partiel de cette série n'est publié. Les autres séries déjà validées restent consultables. Les timings utilisent maintenant un [index sur disque](LargeTraceLoading.md).
 
-L'export Epic sélectionne les compteurs par nom plutôt que par identifiant. Les noms dupliqués ou ne permettant pas une requête exacte (jokers, listes, guillemets, caractères de contrôle) ne sont pas associés arbitrairement. Les fichiers de valeurs portent uniquement un identifiant numérique. Un helper d'analyse versionné, l'indexation sur disque, les comparaisons de compteurs et l'analyse en direct restent à développer. L'export des valeurs dispose d'un délai maximal de dix minutes ; son annulation ne termine que le processus d'analyse détenu par l'application.
+L'export Epic sélectionne les compteurs par nom plutôt que par identifiant. Les noms dupliqués ou ne permettant pas une requête exacte (jokers, listes, guillemets, caractères de contrôle) ne sont pas associés arbitrairement. Les fichiers de valeurs portent uniquement un identifiant numérique. La lecture directe des compteurs ordinaires, leur indexation sur disque, leurs comparaisons et l'analyse en direct restent à développer. L'annulation de l'export ne termine que le processus d'analyse détenu par l'application.
 
 ## Validation
 

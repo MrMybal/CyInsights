@@ -27,11 +27,13 @@ struct StoredTrack {
 };
 struct StoredTotal { uint64_t count=0,unfinished=0;double inclusive=0,exclusive=0; };
 struct StoredScope {double start=0,end=0;uint32_t timer=0;int depth=0;bool unfinished=false;uint32_t track=0;};
+struct StoredRelation {uint32_t parent=0,child=0;bool gpu=false;uint64_t count=0,unfinished=0;double inclusive=0;};
 struct ScopeVisitMetrics {uint64_t block_candidates=0,blocks_read=0,cache_hits=0,records_scanned=0,samples=0;};
 struct TimingWindow {
     std::vector<TimingEvent> events;
     std::vector<StoredTotal> totals;
     std::vector<StoredTotal> cpu_totals,gpu_totals;
+    std::vector<GpuTimingDetail> gpu_details;
     bool aggregated=false;
     double start=0,end=0,stats_start=0,stats_end=0;
     uint64_t block_candidates=0,blocks_read=0,cache_hits=0,records_scanned=0;
@@ -48,6 +50,7 @@ public:
     void ApplyTotals(const TimingWindow& window,TimingModel& model) const;
     void ClearReadCache() const; // Diagnostics: reset reusable blocks, retain source/index.
     std::vector<uint8_t> FunctionMask(const std::string& exact_name) const;
+    std::vector<StoredRelation> Relations(double a,double b,const std::atomic<bool>* cancel=nullptr) const;
     void VisitScopes(size_t track,double a,double b,bool roots,const std::function<void(const StoredScope&)>& sink,
         const std::atomic<bool>* cancel=nullptr,const std::vector<uint8_t>* timer_matches=nullptr,ScopeVisitMetrics* metrics=nullptr) const;
     std::vector<ComparisonValue> Summary(const TimingWindow& window,const TimingModel& model) const;

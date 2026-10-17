@@ -8,6 +8,7 @@
 #include <set>
 #include <sstream>
 #include <stdexcept>
+#include <cstring>
 
 namespace cyinsights {
 namespace {
@@ -91,6 +92,10 @@ bool CounterModel::ReadCatalog(const std::filesystem::path& file,CounterModel& o
             counter.availability=counter.meta&&counter.name.size()>=10&&counter.name.compare(counter.name.size()-10,10,"/available")==0;
             auto unit=counter.name.rfind(" ["),end=counter.name.rfind("]/");
             if(counter.meta&&unit!=std::string::npos&&end!=std::string::npos&&end>unit+2)counter.unit=counter.name.substr(unit+2,end-unit-2);
+            if(counter.name.rfind("CyInsights/Stats/",0)==0){
+                const auto slash=counter.name.find('/',17);if(slash!=std::string::npos)counter.group=counter.name.substr(17,slash-17);
+                auto close=counter.name.rfind(']');if(unit!=std::string::npos&&close>unit+2)counter.unit=counter.name.substr(unit+2,close-unit-2);
+            }
             if(!CanExport(counter.name))counter.reason="Counter name cannot be queried exactly by installed analyzer";
             ++names[counter.name];result.series.push_back(std::move(counter));
         }
@@ -101,11 +106,69 @@ bool CounterModel::ReadCatalog(const std::filesystem::path& file,CounterModel& o
 }
 void CounterModel::LoadValues(const std::filesystem::path& directory,const std::atomic<bool>* cancel) {
     size_t total=0;uint64_t bytes=0;
-    for(auto& counter:series)if(counter.reason.empty()) {
+    for(auto& counter:series)if(counter.reason.empty()&&!counter.frame_stats) {
         if(cancel&&cancel->load())throw std::runtime_error("Counter import cancelled");
         ReadValues(directory/(std::to_string(counter.id)+".csv"),counter,total,bytes,cancel);
     }
     Index(cancel);
+}
+bool CounterModel::ReadFrameStats(const std::filesystem::path& file,bool catalog_only,std::string& error,const std::atomic<bool>* cancel) {
+    if(!std::filesystem::exists(file))return true;
+    try {
+        std::ifstream in(file,std::ios::binary);auto read=[&](void* data,size_t size){if(!in.read(static_cast<char*>(data),static_cast<std::streamsize>(size)))throw std::runtime_error("Truncated frame stats cache");};
+        auto string=[&](){uint32_t n;read(&n,4);if(n>1024*1024)throw std::runtime_error("Invalid frame-stat metadata length");std::string s(n,'\0');read(s.data(),n);if(s.find('\0')!=std::string::npos)throw std::runtime_error("Invalid frame-stat metadata");return s;};
+        char magic[8];read(magic,8);if(std::memcmp(magic,cyfs::magic,8))throw std::runtime_error("Unsupported frame stats cache version");
+        std::map<uint32_t,CounterSeries> metrics;std::map<uint32_t,std::vector<cyfs::Sample>> values;std::set<uint32_t> referenced;uint64_t count=0;
+        for(;;){
+            if(count%4096==0&&cancel&&cancel->load())throw std::runtime_error("Frame stats import cancelled");
+            uint8_t tag;read(&tag,1);
+            if(tag==cyfs::End){uint64_t total;read(&total,8);if(total!=count||in.peek()!=EOF)throw std::runtime_error("Invalid frame stats cache footer");break;}
+            if(tag==cyfs::Spec){
+                uint32_t id;uint8_t floating;read(&id,4);read(&floating,1);if(floating>1||metrics.count(id))throw std::runtime_error("Invalid frame-stat identity");
+                CounterSeries c;c.frame_stats=true;c.frame_stat_id=id;c.floating=floating!=0;c.group=string();auto name=string();c.unit=string();
+                c.name="CyInsights/Stats/"+c.group+"/"+name+" ["+c.unit+"]";metrics.emplace(id,std::move(c));
+            }else if(tag==cyfs::Value){
+                cyfs::Sample s;read(&s,sizeof(s));++count;
+                referenced.insert(s.metric);
+                if((s.flags&~31u)||!std::isfinite(s.begin)||!std::isfinite(s.end)||!std::isfinite(s.observed)||s.end<s.begin||s.observed<0||s.end>s.observed)
+                    throw std::runtime_error("Invalid frame-stat timing/flags");
+                if(!catalog_only)values[s.metric].push_back(s);
+            }else throw std::runtime_error("Invalid frame stats record type");
+        }
+        for(const auto id:referenced)if(!metrics.count(id))throw std::runtime_error("Unknown frame-stat metric identity");
+        // Prefer source-clock snapshots over their compatibility Counters mirror.
+        // A frame-stat ID lives in its own namespace, never aliases native IDs.
+        std::set<std::string> names;for(const auto& item:metrics)names.insert(item.second.name);
+        std::set<std::string> pinned;for(const auto& c:series)if(c.pinned)pinned.insert(c.name);
+        series.erase(std::remove_if(series.begin(),series.end(),[&](const CounterSeries& c){return names.count(c.name)!=0;}),series.end());
+        uint64_t next=0;for(const auto& c:series)next=std::max(next,uint64_t(c.id)+1);
+        for(auto& item:metrics){
+            auto& c=item.second;while(next<=UINT32_MAX&&std::any_of(series.begin(),series.end(),[&](const auto& existing){return existing.id==next;}))++next;
+            if(next>UINT32_MAX){ // Native IDs may already include UINT32_MAX.
+                next=0;while(next<=UINT32_MAX&&std::any_of(series.begin(),series.end(),[&](const auto& existing){return existing.id==next;}))++next;
+                if(next>UINT32_MAX)throw std::runtime_error("Counter identity space exhausted");
+            }
+            c.id=static_cast<uint32_t>(next++);
+            c.pinned=pinned.count(c.name)!=0;
+            if(!catalog_only){c.frame_samples=std::move(values[item.first]);
+                auto time=[](const cyfs::Sample& s){return s.flags&cyfs::FrameBounds?s.begin+(s.end-s.begin)*.5:s.observed;};
+                std::stable_sort(c.frame_samples.begin(),c.frame_samples.end(),[&](const auto& a,const auto& b){return time(a)<time(b);});
+                c.samples.reserve(c.frame_samples.size());
+                for(const auto& s:c.frame_samples){CounterSample value;value.time=time(s);value.integer=s.integer;value.real=s.real;value.valid=(s.flags&cyfs::Valid)&&(!c.floating||std::isfinite(s.real));c.samples.push_back(value);}
+                if(c.samples.empty())c.reason="No frame observations for this metric";
+            }
+            series.push_back(std::move(c));
+        }
+        if(!catalog_only)Index(cancel);error.clear();return true;
+    }catch(const std::exception& e){error=e.what();return false;}
+}
+const CounterSample* CounterModel::InFrame(size_t counter,double begin,double end,size_t* index) const {
+    if(counter>=series.size()||!std::isfinite(begin)||!std::isfinite(end)||end<=begin)return nullptr;
+    const auto& c=series[counter];auto first=c.Lower(begin),last=c.Lower(end);if(first==last)return nullptr;
+    // An invalid latest reading must remain unavailable, including a measured
+    // zero preceded by an availability failure. Do not fall back to an older one.
+    const auto i=last-1;if(!SampleAvailable(counter,i))return nullptr;
+    if(index)*index=i;return &c.samples[i];
 }
 void CounterModel::Index(const std::atomic<bool>* cancel) {
     start=INFINITY;end=-INFINITY;std::map<std::string,int> names;

@@ -93,7 +93,7 @@ bool Inspect(const fs::path& file, Capture& out, std::string& error) {
             if (i==0) {
                 Require(name=="manifest.json", "First entry must be manifest.json");
                 in.seekg(static_cast<std::streamoff>(offset));
-                Require(ReadManifest(in,size,result.manifest,error), error.c_str());
+                if(!ReadManifest(in,size,result.manifest,error))throw std::runtime_error(error);
             }
             result.entries.push_back({name,size,offset,hash.ToHex()});
         }
@@ -130,14 +130,14 @@ bool Pack(const fs::path& directory, const fs::path& output, std::string& error)
             Require(Stream(in,size,&out)==hash && fs::file_size(file)==size,"Capture changed while packaging");
         }
         out.close();Require(bool(out),"Cannot finalize archive");
-        Capture checked;Require(Inspect(temporary,checked,error),error.c_str());
+        Capture checked;if(!Inspect(temporary,checked,error))throw std::runtime_error(error);
         fs::rename(temporary,output);return true;
     }catch(const std::exception& e){error=e.what(); if(!temporary.empty()){std::error_code ec;fs::remove(temporary,ec);}return false;}
 }
 bool Extract(const Capture& capture,const fs::path& fresh,std::string& error) {
     bool created=false;
     try {
-        Capture checked;Require(Inspect(capture.file,checked,error),error.c_str());
+        Capture checked;if(!Inspect(capture.file,checked,error))throw std::runtime_error(error);
         Require(!fs::exists(fresh),"Extraction requires a new directory");
         Require(fs::create_directories(fresh),"Cannot create extraction directory");created=true;
         std::ifstream in(checked.file,std::ios::binary);

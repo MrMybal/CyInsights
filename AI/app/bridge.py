@@ -11,6 +11,10 @@ def native_call(operation, parameters, context=None):
     if not re.fullmatch(r'[1-9][0-9]{0,9}',pid):
         raise CyToolError('MissingConnection','Set CYINSIGHTS_APP_PID from AI Inspector > Connection.',recoverable=True)
     pipe=r'\\.\pipe\CyInsights.AI.'+pid
+    document=os.environ.get('CYINSIGHTS_DOCUMENT_ID','0')
+    if not re.fullmatch(r'(0|[1-9][0-9]{0,19})',document):
+        raise CyToolError('MissingConnection','Invalid CYINSIGHTS_DOCUMENT_ID; copy the selected trace connection.',recoverable=True)
+    if document!='0':pipe+='.'+document
     request=json.dumps({'operation':operation,'parameters':parameters},ensure_ascii=False,allow_nan=False).encode('utf-8')+b'\n'
     if len(request)>65536:raise CyToolError('InvalidParameters','Native request exceeds 64 KiB')
     def check():

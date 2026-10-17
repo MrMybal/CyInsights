@@ -37,7 +37,7 @@ void Application::OpenComparison(const fs::path& file) {
     message_=comparison_message_;
 }
 void Application::Comparison() {
-    if(!ImGui::Begin("Capture comparison",&show_comparison_)){ImGui::End();return;}
+    if(!BeginView("Capture comparison",&show_comparison_)){ImGui::End();return;}
     ImGui::BeginDisabled(AnalysisBusy()||native_.events.empty());
     if(ImGui::Button("Choose capture B...")) {
         auto file=ChooseFile(L"Unreal / CyInsights captures\0*.cycapture;*.utrace\0\0");
@@ -131,7 +131,7 @@ void Application::Comparison() {
                     if(side->group.identity_missing)ImGui::TextDisabled("Native identity unavailable");
                 }
                 ImGui::TextUnformatted("Double-click focuses A only when its group contains one timer.");ImGui::EndTooltip();
-                if(ImGui::IsMouseDoubleClicked(0)&&row.a.group.timers.size()==1) {show_timing_=true;FocusTimer(row.a.group.timers.front());ImGui::SetWindowFocus("Timing");}
+                if(ImGui::IsMouseDoubleClicked(0)&&row.a.group.timers.size()==1) {show_timing_=true;FocusTimer(row.a.group.timers.front());ImGui::SetWindowFocus(WindowName("Timing").c_str());}
             }
             ImGui::TableNextColumn();ImGui::TextUnformatted(row.key.gpu?"GPU*":"CPU*");
             ImGui::TableNextColumn();ImGui::TextUnformatted(row.Relation());

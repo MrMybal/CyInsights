@@ -58,19 +58,19 @@ void Application::ActivityTick(){
 }
 void Application::DockActivities(){
  if(!activity_dock_pending_)return;
- auto* timing=ImGui::FindWindowByName("Timing");auto* activity=ImGui::FindWindowByName("Activities");
+ auto* timing=ImGui::FindWindowByName(WindowName("Timing").c_str());auto* activity=ImGui::FindWindowByName(WindowName("Activities").c_str());
  if(!timing||!timing->DockId)return;
  activity_dock_pending_=false;
  if(activity&&activity->DockId&&activity->DockId!=timing->DockId)return;
  auto* node=ImGui::DockBuilderGetNode(timing->DockId);if(!node||!node->IsLeafNode())return;
  auto* root=node;while(root->ParentNode)root=root->ParentNode;auto id=root->ID;ImGuiID bottom=0,top=0;
  ImGui::DockBuilderSplitNode(node->ID,ImGuiDir_Down,.30f,&bottom,&top);
- ImGui::DockBuilderDockWindow("Activities",bottom);ImGui::DockBuilderFinish(id);
+ ImGui::DockBuilderDockWindow(WindowName("Activities").c_str(),bottom);ImGui::DockBuilderFinish(id);
 }
 void Application::ActivitiesView(){
  // A requested analysis also starts when its dock tab was previously hidden.
  if(!activity_store_&&!activity_auto_started_&&!trace_.empty()&&!native_.Busy())StartActivities();
- bool visible=ImGui::Begin("Activities",&show_activities_);
+ bool visible=BeginView("Activities",&show_activities_);
  if(focus_activities_){auto* window=ImGui::GetCurrentWindow();if(window->DockNode&&window->DockNode->TabBar){window->DockNode->SelectedTabId=window->TabId;window->DockNode->TabBar->NextSelectedTabId=window->TabId;}ImGui::SetWindowFocus();focus_activities_=false;}
  if(!visible){ImGui::End();return;}
  ImGui::TextWrapped("Network / storage / asset loading / memory on the native trace clock.");

@@ -110,11 +110,11 @@ void Unavailable(const char *label, ViewIcon icon, const char *explanation) {
 }
 } // namespace
 void Application::Toolbar() {
-    const auto *v = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(v->WorkPos);
-    ImGui::SetNextWindowSize(ImVec2(v->WorkSize.x, NavigationHeight()));
+    const auto *v = WorkspaceViewport();
+    if(!hosted_){ImGui::SetNextWindowPos(v->WorkPos);ImGui::SetNextWindowSize(ImVec2(v->WorkSize.x, NavigationHeight()));}
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5 * UiScale(), 2 * UiScale()));
-    ImGui::Begin("##InsightsNavigation", nullptr,
+    if(hosted_)ImGui::BeginChild("##InsightsNavigation",ImVec2(0,NavigationHeight()),0,ImGuiWindowFlags_NoScrollbar);
+    else BeginView("##InsightsNavigation", nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoMove |
                      ImGuiWindowFlags_NoScrollbar);
     if (NativeButton("Session", ViewIcon::Session, session_view_, true, 150, true))
@@ -129,6 +129,7 @@ void Application::Toolbar() {
     Toggle("Callers", ViewIcon::Callers, show_callers_);
     Toggle("Callees", ViewIcon::Callees, show_callees_);
     Toggle("Counters", ViewIcon::Counters, show_counters_);
+    if(NativeButton("Frame stats",ViewIcon::Counters,show_frame_stats_)){show_frame_stats_=!show_frame_stats_;if(show_frame_stats_)frame_stats_dock_pending_=true;}ImGui::SameLine(0,5*UiScale());
     Toggle("Distributions", ViewIcon::Counters, show_distribution_);
     Toggle("Tasks", ViewIcon::Callers, show_tasks_);
     if(NativeButton("Activities",ViewIcon::Counters,show_activities_)){show_activities_=!show_activities_;if(show_activities_)FocusActivities();}ImGui::SameLine(0,5*UiScale());
@@ -139,16 +140,14 @@ void Application::Toolbar() {
                 "available below.");
     Toggle("GPU frame", ViewIcon::Gpu, show_gpu_);
     if (NativeButton("Open capture", ViewIcon::Folder, false)) {
-        auto file = ChooseFile(L"Unreal / CyInsights captures\0*.cycapture;*.utrace\0\0");
-        if (!file.empty())
-            Open(file);
+        ChooseAndOpenCaptures();
     }
     ImGui::SameLine();
     ImGui::TextDisabled("%s", native_.store&&(model_task_.valid()||loaded_start_!=view_start_||loaded_end_!=view_end_)?"Updating visible interval..."
                               : AnalysisBusy()           ? "Analyzing..."
                               : native_.store ? "Native timing / disk index"
                               : native_.events.empty() ? "No timing data" : "Native timing");
-    ImGui::End();
+    if(hosted_)ImGui::EndChild();else ImGui::End();
     ImGui::PopStyleVar();
 }
 void Application::FitTiming() {
@@ -246,7 +245,7 @@ void Application::FocusTimer(uint32_t timer) {
         }
     if (depth_levels_ > 0)
         depth_levels_ = std::clamp(std::max(depth_levels_, event.depth + 1), 1, 4097);
-    ImGui::SetWindowFocus("Timing");
+    ImGui::SetWindowFocus(WindowName("Timing").c_str());
 }
 void Application::UpdateTiming() {
     if (native_.events.empty())
@@ -277,19 +276,68 @@ void Application::BeginTimingDrag(DragSurface surface,int button,float width,boo
     drag_zoom_=zoom;drag_moved_=false;
     overview_drag_start_=view_start_;overview_drag_end_=view_end_;
     overview_drag_x_=io.MousePos.x;overview_drag_y_=io.MousePos.y;
+    drag_scroll_start_=tracks_scroll_;drag_context_name_.clear();
 }
 void Application::AdvanceTimingDrag() {
     drag_released_surface_=DragSurface::None;
     if(drag_surface_==DragSurface::None)return;
+    if(drag_surface_==DragSurface::Measurement)ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+    else if(drag_button_==ImGuiMouseButton_Right)ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
     const auto& io=ImGui::GetIO();
     const double dx=io.MousePos.x-overview_drag_x_,dy=io.MousePos.y-overview_drag_y_;
     drag_moved_|=dx*dx+dy*dy>=9*UiScale()*UiScale();
     if(drag_moved_&&(ImGui::IsMouseDown(drag_button_)||ImGui::IsMouseReleased(drag_button_))) {
-        auto next=NavigateTimingWindow(overview_drag_start_,overview_drag_end_,timing_model_.start,timing_model_.end,
-            -dx/drag_width_*(overview_drag_end_-overview_drag_start_),drag_zoom_?dy*.012:0);
-        view_start_=next.first;view_end_=next.second;
+        if(drag_surface_==DragSurface::Measurement)
+            range_end_=overview_drag_start_+std::clamp(double(io.MousePos.x-measure_drag_origin_)/drag_width_,0.,1.)*(overview_drag_end_-overview_drag_start_);
+        else {
+            auto next=NavigateTimingWindow(overview_drag_start_,overview_drag_end_,timing_model_.start,timing_model_.end,
+                -dx/drag_width_*(overview_drag_end_-overview_drag_start_),drag_zoom_?dy*.012:0);
+            view_start_=next.first;view_end_=next.second;
+        }
     }
     if(!ImGui::IsMouseDown(drag_button_)){drag_released_surface_=drag_surface_;drag_surface_=DragSurface::None;}
+}
+void Application::MeasurementRuler(float width) {
+    const auto p=ImGui::GetCursorScreenPos();const float scale=UiScale(),height=48*scale;
+    measure_x_=p.x;measure_y_=p.y;measure_width_=width;measure_height_=height;
+    const double span=std::max(.000001,view_end_-view_start_);
+    auto* draw=ImGui::GetWindowDrawList();
+    draw->AddRectFilled(p,ImVec2(p.x+width,p.y+height),IM_COL32(43,47,51,255));
+    ImGui::InvisibleButton("measurement_ruler",ImVec2(width,height));
+    const bool hovered=ImGui::IsItemHovered();
+    if(hovered)ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+    if(hovered&&ImGui::IsMouseClicked(0)&&drag_surface_==DragSurface::None) {
+        BeginTimingDrag(DragSurface::Measurement,0,width,false);measure_drag_origin_=p.x;
+        range_start_=range_end_=view_start_+std::clamp(double(ImGui::GetIO().MousePos.x-p.x)/width,0.,1.)*span;
+    }
+    // Tick density follows screen pixels, independently of trace size. The
+    // measurement ruler shares the tracks' exact time-to-pixel projection.
+    const double desired=span*110*scale/std::max(1.f,width),power=std::pow(10.,std::floor(std::log10(desired)));
+    const double ratio=desired/power,major=power*(ratio<=1?1:ratio<=2?2:ratio<=5?5:10),minor=major/5;
+    const double first=std::ceil(view_start_/minor);
+    const int ticks=std::min(8192,int(std::ceil(span/minor))+2);
+    const int precision=std::clamp(int(std::ceil(-std::log10(major))),3,9);
+    draw->PushClipRect(p,ImVec2(p.x+width,p.y+height),true);
+    if(range_start_!=range_end_) {
+        const float a=p.x+width*float((std::min(range_start_,range_end_)-view_start_)/span),
+                    b=p.x+width*float((std::max(range_start_,range_end_)-view_start_)/span);
+        draw->AddRectFilled(ImVec2(a,p.y),ImVec2(b,p.y+height),IM_COL32(65,137,192,72));
+        for(float x:{a,b}){draw->AddLine(ImVec2(x,p.y),ImVec2(x,p.y+height),IM_COL32(129,199,248,255),2*scale);draw->AddTriangleFilled(ImVec2(x-4*scale,p.y),ImVec2(x+4*scale,p.y),ImVec2(x,p.y+5*scale),IM_COL32(129,199,248,255));}
+    }
+    for(int i=0;i<ticks;++i) {
+        const double index=first+i,t=index*minor;if(t>view_end_)break;
+        const float x=p.x+width*float((t-view_start_)/span);
+        const bool large=std::abs(std::remainder(index,5.))<.1;
+        draw->AddLine(ImVec2(x,p.y),ImVec2(x,p.y+(large?10:5)*scale),large?IM_COL32(183,189,196,255):IM_COL32(98,110,121,255));
+        if(large){char text[96];std::snprintf(text,sizeof(text),"%.*f s",precision,t);draw->AddText(ImVec2(x+3*scale,p.y+11*scale),IM_COL32(218,223,227,255),text);}
+    }
+    char label[256];
+    if(range_start_!=range_end_)std::snprintf(label,sizeof(label),"Range: %.6f - %.6f s  |  %.3f ms",std::min(range_start_,range_end_),std::max(range_start_,range_end_),std::abs(range_end_-range_start_)*1000);
+    else std::snprintf(label,sizeof(label),"Measure interval: drag here with the left mouse button");
+    draw->AddText(ImVec2(p.x+7*scale,p.y+31*scale),IM_COL32(161,205,238,255),label);
+    draw->AddLine(ImVec2(p.x,p.y+height-1),ImVec2(p.x+width,p.y+height-1),IM_COL32(75,91,106,255));
+    draw->PopClipRect();
+    if(hovered&&drag_surface_!=DragSurface::Measurement)ImGui::SetTooltip("Drag to measure a time range. The view stays fixed; statistics and histograms use this selection. Escape clears the range.");
 }
 void Application::FrameGlyphs(float width) {
     if(frame_glyph_start_==view_start_&&frame_glyph_end_==view_end_&&frame_glyph_width_==width)return;
@@ -300,17 +348,20 @@ FrameCause Application::Cause(size_t frame) const {
     if(!native_.store||frame>=native_.store->frame_diagnostics.size())return FrameCause::Unknown;
     return DiagnoseFrame(native_.store->frame_diagnostics[frame],cpu_frames_[frame].second-cpu_frames_[frame].first,1./frame_target_fps_);
 }
-void Application::FrameBackground(float x,float y,float height) {
-    if(!show_frame_causes_||!native_.store)return;
+void Application::FrameBackground(float x,float y,float height,FrameDomain domain) {
+    if(!show_frame_causes_||!native_.store||domain==FrameDomain::Other)return;
     auto* draw=ImGui::GetWindowDrawList();
     for(const auto& glyph:frame_glyphs_) {
-        auto cause=Cause(glyph.frame);if(cause==FrameCause::WithinBudget)continue;
-        draw->AddRectFilled(ImVec2(x+glyph.left,y),ImVec2(x+glyph.right,y+height),CauseColour(cause,35));
+        if(glyph.frame>=native_.store->frame_diagnostics.size())continue;
+        const auto frame=cpu_frames_[glyph.frame];
+        if(!FrameCauseHighlights(native_.store->frame_diagnostics[glyph.frame],frame.second-frame.first,1./frame_target_fps_,domain))continue;
+        const auto cause=domain==FrameDomain::Game?FrameCause::Game:domain==FrameDomain::Render?FrameCause::Render:FrameCause::Gpu;
+        draw->AddRectFilled(ImVec2(x+glyph.left,y),ImVec2(x+glyph.right,y+height),CauseColour(cause,48));
     }
 }
 void Application::Frames() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(0,0));
-    if (!ImGui::Begin("Frames", &show_frames_,ImGuiWindowFlags_NoScrollWithMouse|ImGuiWindowFlags_NoScrollbar)) {
+    if (!BeginView("Frames", &show_frames_,ImGuiWindowFlags_NoScrollWithMouse|ImGuiWindowFlags_NoScrollbar)) {
         ImGui::End();ImGui::PopStyleVar();return;
     }
     const auto p=ImGui::GetCursorScreenPos();const float scale=UiScale();
@@ -334,7 +385,6 @@ void Application::Frames() {
         ImGui::End();ImGui::PopStyleVar();return;
     }
     FrameGlyphs(w);
-    FrameBackground(p.x,p.y,h);
     const float baseline=p.y+h-4*scale,graphH=std::max(1.f,h-38*scale);
     for(auto pair:{std::pair<double,const char*>{.0166667,"16.7ms / 60fps"},{.0333333,"33.3ms / 30fps"},
                    {.05,"50ms / 20fps"},{.0666667,"66.7ms / 15fps"}}) {
@@ -344,8 +394,9 @@ void Application::Frames() {
     for(const auto& glyph:frame_glyphs_) {
         const size_t i=glyph.frame;const auto f=cpu_frames_[i];const double duration=f.second-f.first;
         float x=p.x+glyph.left,x2=p.x+glyph.right,y=baseline-graphH*static_cast<float>(std::min(.075,duration)/.075);
-        auto colour=show_frame_causes_&&native_.store?CauseColour(Cause(i)):
-            duration>.0333?IM_COL32(227,141,146,255):duration>.0167?IM_COL32(222,189,129,255):IM_COL32(209,205,135,255);
+        const auto cause=Cause(i);
+        const bool attributed=cause==FrameCause::Game||cause==FrameCause::Render||cause==FrameCause::Gpu||cause==FrameCause::Mixed;
+        auto colour=show_frame_causes_&&attributed?CauseColour(cause):IM_COL32(192,192,181,255);
         d->AddRectFilled(ImVec2(x,y),ImVec2(x2,baseline),colour);
         if(glyph.count==1) {
             char label[64];std::snprintf(label,sizeof(label),timing_model_.frames_native?"Frame %llu":"Tick %llu",
@@ -386,7 +437,7 @@ void Application::Frames() {
         float x=p.x+5*scale;d->AddRectFilled(p,ImVec2(p.x+w,p.y+16*scale),IM_COL32(38,38,38,245));
         d->AddText(ImVec2(x,p.y+scale),IM_COL32(215,215,215,255),legend);x+=ImGui::CalcTextSize(legend).x+8*scale;
         for(auto item:{std::pair<FrameCause,const char*>{FrameCause::Game,"GameThread"},{FrameCause::Render,"RenderThread"},
-            {FrameCause::Gpu,"GPU"},{FrameCause::Mixed,"Mixed"},{FrameCause::Wait,"Wait/pacing"},{FrameCause::Unknown,"Unresolved"}}) {
+            {FrameCause::Gpu,"GPU"},{FrameCause::Mixed,"Mixed"},{FrameCause::Unknown,"No attributed cause = neutral"}}) {
             auto length=ImGui::CalcTextSize(item.second).x;if(x+length>p.x+w)break;
             d->AddText(ImVec2(x,p.y+scale),CauseColour(item.first),item.second);x+=length+12*scale;
         }
@@ -404,7 +455,7 @@ void Application::Frames() {
 void Application::Timing() {
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(.28f, .28f, .28f, 1));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    if (!ImGui::Begin("Timing", &show_timing_)) {
+    if (!BeginView("Timing", &show_timing_)) {
         ImGui::End();
         ImGui::PopStyleVar();
         ImGui::PopStyleColor();
@@ -417,7 +468,7 @@ void Application::Timing() {
     if(keyboard&&!ImGui::GetIO().KeyCtrl&&!ImGui::GetIO().KeyAlt){
         if(ImGui::IsKeyPressed(ImGuiKey_F))fitSelection();
         if(ImGui::IsKeyPressed(ImGuiKey_Home))FitCapture();
-        if(ImGui::IsKeyPressed(ImGuiKey_Escape))range_start_=range_end_=0;
+        if(ImGui::IsKeyPressed(ImGuiKey_Escape)){range_start_=range_end_=0;if(drag_surface_==DragSurface::Measurement)drag_surface_=DragSurface::None;}
         if(ImGui::IsKeyPressed(ImGuiKey_LeftArrow))StepFrame(-1);
         if(ImGui::IsKeyPressed(ImGuiKey_RightArrow))StepFrame(1);
     }
@@ -498,7 +549,7 @@ void Application::Timing() {
     ImGui::SameLine();
     if(ImGui::SmallButton("Next slow frame"))FocusSlowFrame();
     if(!timing_exact_name_.empty()){ImGui::TextWrapped("Exact function: %s",timing_exact_name_.c_str());ImGui::SameLine();if(ImGui::SmallButton("Clear function filter"))FilterFunction({});}
-    if (timing_model_.timers.size()!=native_.events.size()||(native_.events.empty() && counters_.series.empty() && !activity_store_)) {
+    if (timing_model_.timers.size()!=native_.events.size()||(native_.events.empty() && counters_->series.empty() && !activity_store_)) {
         ImGui::Spacing();
         ImGui::TextWrapped("  %s", AnalysisBusy() ? message_.c_str()
                                                   : load_error_.empty()?"Open a capture to display native CPU/GPU tracks.":load_error_.c_str());
@@ -572,11 +623,13 @@ void Application::Timing() {
         }
     }
     ruler_x_=p.x;ruler_y_=p.y;ruler_width_=w;
-    if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(0))
+    if(ImGui::IsItemHovered()&&ImGui::IsMouseDoubleClicked(0)){search_[0]=0;FilterFunction({});}
+    else if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(0))
     {
         if(ImGui::GetIO().KeyShift)range_start_ = range_end_ = view_start_ + span * (ImGui::GetIO().MousePos.x - p.x) / w;
         else BeginTimingDrag(DragSurface::Ruler,0,w);
     }
+    if(ImGui::IsItemHovered()&&ImGui::IsMouseClicked(ImGuiMouseButton_Right))BeginTimingDrag(DragSurface::Ruler,ImGuiMouseButton_Right,w,false);
     if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0)&&ImGui::GetIO().KeyShift)
         range_end_ = view_start_ + span * (ImGui::GetIO().MousePos.x - p.x) / w;
     if(ImGui::IsItemHovered()&&ImGui::GetIO().MouseWheel) {
@@ -584,13 +637,26 @@ void Application::Timing() {
             std::clamp(double(ImGui::GetIO().MousePos.x-p.x)/w,0.,1.));
         view_start_=next.first;view_end_=next.second;
     }
+    MeasurementRuler(w);
     ImGui::BeginChild("native_tracks", ImVec2(0, 0), false,
                       ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_AlwaysVerticalScrollbar);
+    tracks_scroll_=ImGui::GetScrollY();tracks_scroll_max_=ImGui::GetScrollMaxY();
+    if(ImGui::IsWindowHovered()&&ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+        BeginTimingDrag(DragSurface::Tracks,ImGuiMouseButton_Right,w,false);
+    if(drag_button_==ImGuiMouseButton_Right&&drag_moved_&&
+       (drag_surface_==DragSurface::Tracks||drag_surface_==DragSurface::Ruler||
+        drag_released_surface_==DragSurface::Tracks||drag_released_surface_==DragSurface::Ruler))
+        ImGui::SetScrollY(drag_scroll_start_-(ImGui::GetIO().MousePos.y-overview_drag_y_));
+    bool scope_hovered=false,blank_lane_double_click=false;
+    const float counter_tracks_start=ImGui::GetCursorScreenPos().y;
+    CounterTracks(w);
+    const float counter_tracks_end=ImGui::GetCursorScreenPos().y;
     d = ImGui::GetWindowDrawList();
     auto clip = ImGui::GetCurrentWindow()->ClipRect;
     visible_rows_=recorded_rows_=0;
     tracks_y_=0;
     scope_probe_x_=scope_probe_y_=0;scope_probe_name_.clear();context_hist_x_=context_hist_y_=0;
+    timing_blank_x_=timing_blank_y_=0;
     for (auto &track : timing_model_.tracks) {
         if (!track.visible || (track_filter_ == 1 && track.gpu) || (track_filter_ == 2 && !track.gpu))
             continue;
@@ -624,14 +690,22 @@ void Application::Timing() {
         }
         bool laneHovered = ImGui::IsItemHovered();
         if(laneHovered&&ImGui::GetIO().MousePos.y>=pos.y+header_height) {
+            // InvisibleButton owns the active mouse item on the second click,
+            // so IsWindowHovered() alone cannot recognize empty lane space.
+            blank_lane_double_click|=ImGui::IsMouseDoubleClicked(0);
             if(ImGui::IsMouseClicked(0)&&!ImGui::IsMouseDoubleClicked(0))BeginTimingDrag(DragSurface::Tracks,0,w,false);
             if(ImGui::IsMouseClicked(ImGuiMouseButton_Middle))BeginTimingDrag(DragSurface::Tracks,ImGuiMouseButton_Middle,w,false);
         }
         ImGui::PopID();
         if (pos.y + height < clip.Min.y || pos.y > clip.Max.y)
             continue;
+        if(timing_blank_y_==0&&!track.collapsed&&rows>0&&pos.y+height<=clip.Max.y){
+            // Use lane padding, which survives integer mouse coordinates at any DPI.
+            timing_blank_x_=pos.x+w*.5f;timing_blank_y_=pos.y+height-2*scale;
+        }
         d->AddRectFilled(pos, ImVec2(pos.x + w, pos.y + height), IM_COL32(72, 72, 72, 255));
-        FrameBackground(pos.x,pos.y+header_height,height-header_height);
+        const auto domain=track.gpu?FrameDomain::Gpu:DiagnosticDomain(track.events.empty()?track.name:native_.events[track.events.front()].thread);
+        FrameBackground(pos.x,pos.y+header_height,height-header_height,domain);
         if(tracks_y_==0&&rows>0&&!track.collapsed) {tracks_x_=pos.x;tracks_y_=pos.y+header_height+scope_height*.5f;}
         d->AddLine(ImVec2(pos.x, pos.y + height - 1), ImVec2(pos.x + w, pos.y + height - 1),
                    IM_COL32(54, 54, 54, 255));
@@ -654,7 +728,23 @@ void Application::Timing() {
             continue;
         // Only tracks intersecting the vertical viewport need event lists.
         // Their row count above remains dynamic while scrolling or panning.
-        if(!track.visible_events_valid){track.visible_events.clear();track.Query(native_.events,view_start_,view_end_,query_rows,track.visible_events);track.visible_events_valid=true;}
+        if(!track.visible_events_valid){track.visible_events.clear();track.Query(native_.events,view_start_,view_end_,query_rows,track.visible_events);track.visible_events_valid=true;
+            track.gpu_detail=track.gpu?InspectGpuTimingDetail(native_.events,track.visible_events):GpuTimingDetail{};
+            if(track.gpu&&!track.gpu_detail.Limited()&&track.gpu_detail_source.Limited())track.gpu_detail=track.gpu_detail_source;}
+        if(track.gpu_detail.Limited()) {
+            const char* warning="GPU group costs unresolved";
+            const float warning_x=pos.x+w-ImGui::CalcTextSize(warning).x-8*scale;
+            d->AddText(ImVec2(warning_x,pos.y+2*scale),IM_COL32(239,188,107,255),warning);
+            if(ImGui::IsMouseHoveringRect(ImVec2(warning_x,pos.y),ImVec2(pos.x+w,pos.y+header_height))) {
+                ImGui::BeginTooltip();
+                ImGui::TextUnformatted("Derived diagnostic in the loaded timing interval");
+                ImGui::Text("%zu / %zu nested intervals are <= 2 us; longest outer interval: %.3f ms.",track.gpu_detail.near_zero,track.gpu_detail.nested,track.gpu_detail.longest_outer*1000.);
+                ImGui::TextUnformatted("Near-zero timestamp differences do not prove negligible GPU cost.");
+                ImGui::TextUnformatted("Tile render passes can prevent meaningful per-group timing. Recorded values are preserved.");
+                ImGui::TextUnformatted("The updated Quest plugin can add measured Vulkan render-pass boundaries in a new capture. Shared tile subpass costs remain unresolved.");
+                ImGui::EndTooltip();
+            }
+        }
         if (track.glyph_width != w || track.glyph_selected != selected_cpu_ ||
             track.glyph_search != filter_key) {
             BuildTimingGlyphs(native_.events, track.visible_events, view_start_, view_end_, w, selected_cpu_,
@@ -701,6 +791,7 @@ void Application::Timing() {
             }
             if (laneHovered &&
                 ImGui::IsMouseHoveringRect(ImVec2(x, y), ImVec2(std::max(x + 1, x2), y + scope_height))) {
+                scope_hovered=true;
                 if (glyph.count > 1)
                     ImGui::SetTooltip(
                         "Aggregated display (derived): %zu native scopes in this pixel column\nDepth: %d\nExecution range: %s "
@@ -712,21 +803,24 @@ void Application::Timing() {
                 else if (e.open_ended)
                     ImGui::SetTooltip("%s\nUnfinished scope: duration unavailable", e.name.c_str());
                 else
-                    ImGui::SetTooltip("%s\n%s\nStart: %s / End: %s\nInclusive: %.3f ms (measured)\nExclusive "
+                    ImGui::SetTooltip("%s\n%s\nStart: %s / End: %s\nInclusive: %.3f ms (%s)\nExclusive "
                                       "in interval: %.3f ms "
-                                      "(derived from nesting)%s%s",
+                                      "(derived from nesting)%s%s%s",
                                       e.name.c_str(), e.thread.c_str(), TimingLabel(e.start).c_str(),
                                       TimingLabel(e.end).c_str(), (e.end - e.start) * 1000,
+                                      track.gpu?"recorded timestamp interval":"measured",
                                       timing_model_.exclusive[i] * 1000,
                                       glyph.continues_left ? "\nStarts before the displayed interval." : "",
-                                      glyph.continues_right ? "\nEnds after the displayed interval." : "");
+                                      glyph.continues_right ? "\nEnds after the displayed interval." : "",
+                                      track.name.rfind("GPU / Meta ",0)==0?"\nMeasured hardware stage; aligned through Perfetto clock snapshots and native Sync. Unreal pass and execution-frame identity unavailable.":track.name=="GPU / Vulkan render passes (approximate alignment)"?"\nPass boundary interval measured on GPU; CPU alignment is approximate (device clock sample or engine clock relation). Not per-subpass rasterization timing.":track.gpu&&track.gpu_detail.Limited()?"\nGPU group timing is limited in this interval; a near-zero subgroup does not establish negligible GPU cost.":"");
                 if (glyph.count == 1 && ImGui::IsMouseClicked(0)) {
                     selected_cpu_ = static_cast<int>(i);
+                    if(e.thread=="GPU / Vulkan render passes (approximate alignment)"){show_details_=true;ImGui::SetWindowFocus(WindowName("Selection").c_str());}
                     selected_event_ = -1;
                     selected_timer_ = static_cast<int>(timing_model_.timers[i]);
                 }
                 if(glyph.count==1&&!e.display_aggregate&&e.frame_type<0&&ImGui::IsMouseClicked(ImGuiMouseButton_Right)){
-                    timing_scope_context_=e.name;ImGui::OpenPopup("timing_scope_actions");
+                    drag_context_name_=e.name;
                 }
                 if(glyph.count==1&&!e.display_aggregate&&e.frame_type<0&&ImGui::IsMouseDoubleClicked(0))FilterFunction(e.name);
                 else if (ImGui::IsMouseDoubleClicked(0)) {
@@ -751,6 +845,11 @@ void Application::Timing() {
                        IM_COL32(153, 201, 230, 255));
         }
     }
+    // A right click opens the menu only after release. Held input remains a pan,
+    // including when asynchronous reads replace the scopes under the cursor.
+    if(drag_released_surface_==DragSurface::Tracks&&drag_button_==ImGuiMouseButton_Right&&!drag_moved_&&!drag_context_name_.empty()){
+        timing_scope_context_=drag_context_name_;drag_context_name_.clear();ImGui::OpenPopup("timing_scope_actions");
+    }
     if(ImGui::BeginPopup("timing_scope_actions")){
         ImGui::TextWrapped("%s",timing_scope_context_.c_str());ImGui::Separator();
         if(ImGui::MenuItem("Filter all occurrences by exact name"))FilterFunction(timing_scope_context_);
@@ -759,8 +858,11 @@ void Application::Timing() {
         if(ImGui::MenuItem("Clear function filter",nullptr,false,!timing_exact_name_.empty()))FilterFunction({});
         ImGui::EndPopup();
     }
+    const float other_tracks_start=ImGui::GetCursorScreenPos().y;
     ActivityTracks(w);
-    CounterTracks(w);
+    const float mouse_y=ImGui::GetIO().MousePos.y;
+    const bool other_track_hovered=(mouse_y>=other_tracks_start&&mouse_y<ImGui::GetCursorScreenPos().y)||(mouse_y>=counter_tracks_start&&mouse_y<counter_tracks_end);
+    if((blank_lane_double_click||ImGui::IsWindowHovered())&&!scope_hovered&&!other_track_hovered&&ImGui::IsMouseDoubleClicked(0)){search_[0]=0;FilterFunction({});}
     if (ImGui::IsWindowHovered()) {
         auto &io = ImGui::GetIO();
         if (io.MouseWheel && io.KeyShift)
@@ -770,7 +872,7 @@ void Application::Timing() {
                        std::clamp(static_cast<double>((io.MousePos.x - ImGui::GetWindowPos().x) / w), 0., 1.),
                    time = view_start_ + span * anchor,
                    zoomed = std::clamp(span * std::pow(.8, io.MouseWheel), .000001,
-                                       std::max(.000001, std::max(timing_model_.end,counters_.end)-std::min(timing_model_.start,counters_.start)));
+                                       std::max(.000001, std::max(timing_model_.end,counters_->end)-std::min(timing_model_.start,counters_->start)));
             view_start_ = time - zoomed * anchor;
             view_end_ = view_start_ + zoomed;
         }
@@ -888,7 +990,7 @@ void Application::TimerTable(const char *id, const std::vector<TimerTotal> &rows
     }
 }
 void Application::Statistics() {
-    if (!ImGui::Begin("Timers", &show_timers_)) {
+    if (!BeginView("Timers", &show_timers_)) {
         ImGui::End();
         return;
     }
@@ -907,7 +1009,7 @@ void Application::Statistics() {
 }
 void Application::Relations(bool callers) {
     bool &visible = callers ? show_callers_ : show_callees_;
-    if (!ImGui::Begin(callers ? "Callers" : "Callees", &visible)) {
+    if (!BeginView(callers ? "Callers" : "Callees", &visible)) {
         ImGui::End();
         return;
     }
@@ -926,7 +1028,8 @@ void Application::LoadStatus() {
     if(native_setup_.Busy()){pending_shown_=true;return;}
     bool busy=native_import_pending_||!pending_capture_.empty()||native_.Busy()||model_task_.valid();
     if(!busy&&load_error_.empty())return;
-    const auto* viewport=ImGui::GetMainViewport();
+    const auto* viewport=WorkspaceViewport();
+    ImGui::SetNextWindowViewport(viewport->ID);
     // Keep the timeline usable while a replacement visible interval is queried.
     bool initial=!native_.store||!std::isfinite(loaded_start_);
     // Interval reads are reported in the toolbar. No appearing window may take
@@ -934,7 +1037,7 @@ void Application::LoadStatus() {
     if(!initial&&load_error_.empty())return;
     ImGui::SetNextWindowPos(initial||!load_error_.empty()?ImVec2(viewport->WorkPos.x+viewport->WorkSize.x*.5f,viewport->WorkPos.y+viewport->WorkSize.y*.45f):ImVec2(viewport->WorkPos.x+12*UiScale(),viewport->WorkPos.y+viewport->WorkSize.y-125*UiScale()),ImGuiCond_Always,initial||!load_error_.empty()?ImVec2(.5f,.5f):ImVec2(0,0));
     ImGui::SetNextWindowSize(ImVec2(560*UiScale(),0),ImGuiCond_Always);
-    ImGui::Begin(load_error_.empty()?"Loading capture":"Capture could not be opened",nullptr,
+    BeginView(load_error_.empty()?"Loading capture":"Capture could not be opened",nullptr,
         ImGuiWindowFlags_NoDocking|ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoCollapse|ImGuiWindowFlags_AlwaysAutoResize|ImGuiWindowFlags_NoFocusOnAppearing);
     if(!load_error_.empty()) {
         ImGui::TextColored(ImVec4(1,.45f,.4f,1),"Analysis error");ImGui::TextWrapped("%s",load_error_.c_str());
@@ -942,10 +1045,10 @@ void Application::LoadStatus() {
         ImGui::TextWrapped("Log: %s",native_.LogPath().u8string().c_str());
         if(ImGui::Button("Copy details")){auto details=load_error_+"\n"+trace_.u8string()+"\n"+native_.LogPath().u8string();ImGui::SetClipboardText(details.c_str());}
         ImGui::SameLine();if(ImGui::Button("Close"))load_error_.clear();
-        if(ImGui::Button("Choose Unreal analyzer and retry")) {
-            auto exe=ChooseFile(L"Unreal Insights\0UnrealInsights.exe\0\0");
-            if(!exe.empty()){SelectAnalyzer(exe);load_error_.clear();native_import_pending_=true;}
+        if(ImGui::Button("Add Unreal engine root and retry")) {
+            auto root=ChooseFolder();if(!root.empty())AddEngineRoot(root);
         }
+        if(!engine_registration_error_.empty())ImGui::TextWrapped("%s",engine_registration_error_.c_str());
     } else {
         const char* phase=!pending_capture_.empty()?"Preparing capture":native_.Busy()?native_.Importing()?"Building the timing index on disk":native_.DirectTiming()?"Decoding native Unreal timings":"Analyzing Unreal trace / exporting timings":"Loading visible interval / calculating statistics";
         ImGui::TextWrapped("%s",phase);ImGui::Text("Elapsed: %.1f s",ImGui::GetTime()-load_started_);
@@ -961,7 +1064,7 @@ void Application::LoadStatus() {
     ImGui::End();
 }
 void Application::Messages() {
-    if (!ImGui::Begin("Messages", &show_messages_)) {
+    if (!BeginView("Messages", &show_messages_)) {
         ImGui::End();
         return;
     }
