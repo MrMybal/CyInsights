@@ -67,6 +67,27 @@ La molette zoome autour de la souris. Le déplacement par glissement conserve
 les interactions existantes ; Shift + glisser dans la règle sélectionne une plage.
 Le double-clic filtre une fonction par nom exact et le menu contextuel ouvre sa
 distribution, toujours liée à la sélection temporelle.
+Les raccourcis sont traités une seule fois par la fenêtre Timing, avec les mêmes
+gardes de focus, de saisie et de popup. Une pression sur une flèche passe ainsi
+à une seule frame voisine, y compris quand une piste enfant a le focus.
+
+## Soumission du graphe
+
+Les libellés des scopes utilisent le découpage des glyphes sur le CPU proposé
+par Dear ImGui. Ils restent contenus dans leur barre et dans la fenêtre, tout
+en conservant le même rectangle de clipping GPU pour plusieurs libellés.
+Cela évite une paire de changements de scissor par barre et permet de regrouper
+les commandes de dessin. Les événements, couleurs, filtres et calculs de coûts
+ne sont pas modifiés.
+
+Le test de navigation du 17 octobre sur une trace réelle de 8,16 millions
+d'événements mesure une médiane de **477 commandes de dessin avant, 20 après**
+pour le viewport principal (p95 : 495 puis 22). Le temps CPU médian reste proche
+de 0,25 ms (0,2523 puis 0,2474 ms) et son p95 ne diminue pas dans cet essai.
+Ce résultat établit une réduction des soumissions de l'interface, sans établir
+un gain de temps GPU ou de FPS. Le déplacement maintenu sur 133 publications,
+l'alignement des frames, les hauteurs dynamiques, les filtres et les histogrammes
+ont également été exercés sur cette trace.
 
 ## Mesurer
 
@@ -87,6 +108,8 @@ les frames chargées et celles pendant un grab. Il mesure le temps CPU de
 préparation et de soumission du viewport principal ; il exclut `Present`, le
 temps GPU et les fenêtres détachées. Le mode de mesure est facultatif et
 n'accumule aucune donnée lorsque son option est absente.
+Le champ `main_viewport_draw_commands` compte les commandes indexées visibles,
+hors callbacks. Il ne représente ni les draws du jeu ni leur durée GPU.
 
 Les tests de référence comparent les graphes d'activité et les requêtes de
 compteurs à des parcours complets, avec recouvrements, bornes, valeurs invalides,

@@ -253,7 +253,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
         auto args = CommandLineToArgvW(GetCommandLineW(), &count);
         std::filesystem::path snapshot;
         std::filesystem::path loading_snapshot;
-        std::filesystem::path ui_profile;std::vector<double> draw_profile,drag_profile;
+        std::filesystem::path ui_profile;std::vector<double> draw_profile,drag_profile,command_profile;
         bool vulkan_details_view=false,vulkan_details_focused=false;int vulkan_details_settle=0;
         bool navigation_smoke=false,drag_pan=false,drag_zoom=false,wheel_zoom=false;
         bool frame_stats_range_smoke=false,frame_stats_range_filtered=false;int frame_stats_step=0;uint64_t frame_stats_full=0;
@@ -536,7 +536,20 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             context->OMSetRenderTargets(1, &target, nullptr);
             context->ClearRenderTargetView(target, clear);
             ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-            if(!ui_profile.empty()&&app.NavigationView().model_version){double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-draw_begin).count();draw_profile.push_back(ms);if(app.NavigationView().dragging)drag_profile.push_back(ms);}
+            if(!ui_profile.empty()&&app.NavigationView().model_version){
+                double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-draw_begin).count();
+                draw_profile.push_back(ms);if(app.NavigationView().dragging)drag_profile.push_back(ms);
+                // Count visible indexed submissions in the main viewport only.
+                // This is not a GPU duration or a count of game draw calls.
+                const auto* data=ImGui::GetDrawData();size_t commands=0;
+                for(const auto* list:data->CmdLists)for(const auto& command:list->CmdBuffer){
+                    if(command.UserCallback||!command.ElemCount)continue;
+                    if(std::min(command.ClipRect.z,data->DisplayPos.x+data->DisplaySize.x)<=std::max(command.ClipRect.x,data->DisplayPos.x)||
+                       std::min(command.ClipRect.w,data->DisplayPos.y+data->DisplaySize.y)<=std::max(command.ClipRect.y,data->DisplayPos.y))continue;
+                    ++commands;
+                }
+                command_profile.push_back(static_cast<double>(commands));
+            }
             if(!loading_snapshot.empty()&&frames>5&&app.AnalysisBusy()) {
                 SaveSnapshot(loading_snapshot);loading_snapshot.clear();
             }
@@ -575,7 +588,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
         if(!ui_profile.empty()){
             std::ofstream report(ui_profile);report<<"{\"measurement\":\"CPU main viewport frame preparation; Present and detached windows excluded\",";
             auto write=[&](const char* name,std::vector<double>& times){std::sort(times.begin(),times.end());report<<'"'<<name<<"\":{\"samples\":"<<times.size();if(!times.empty())report<<",\"median_ms\":"<<times[times.size()/2]<<",\"p95_ms\":"<<times[static_cast<size_t>((times.size()-1)*.95)]<<",\"maximum_ms\":"<<times.back();report<<'}';};
-            write("loaded",draw_profile);report<<',';write("dragging",drag_profile);report<<'}';
+            write("loaded",draw_profile);report<<',';write("dragging",drag_profile);
+            std::sort(command_profile.begin(),command_profile.end());
+            report<<",\"main_viewport_draw_commands\":{\"samples\":"<<command_profile.size();
+            if(!command_profile.empty())report<<",\"median\":"<<command_profile[command_profile.size()/2]<<",\"p95\":"<<command_profile[static_cast<size_t>((command_profile.size()-1)*.95)]<<",\"maximum\":"<<command_profile.back();
+            report<<"}}";
         }
     }
     ImGui_ImplDX11_Shutdown();

@@ -779,15 +779,18 @@ void Application::Timing() {
                 d->AddRect(ImVec2(x, y), ImVec2(std::max(x + 1, x2), y + scope_height),
                            IM_COL32(255, 255, 255, 255), 0.0f, 2.0f * scale, ImDrawFlags_None);
             if (glyph.count == 1 && x2 - x > 16 * scale) {
-                d->PushClipRect(ImVec2(x, y), ImVec2(x2, y + scope_height), true);
                 const char* label = e.name.c_str();std::string duration_label;
                 if (x2 - x > 200 * scale && !e.open_ended) {
                     char duration[48];
                     std::snprintf(duration, sizeof(duration), " (%.2f ms)", (e.end - e.start) * 1000);
                     duration_label=e.name+duration;label=duration_label.c_str();
                 }
-                d->AddText(ImVec2(x + 2 * scale, y - scale), IM_COL32(24, 24, 24, 255), label);
-                d->PopClipRect();
+                // Clip glyph geometry on the CPU, retaining the shared window
+                // scissor. A separate GPU scissor for every label would split
+                // the timeline into hundreds of draw submissions.
+                const ImVec4 text_clip(x,y,x2,y+scope_height);
+                d->AddText(ImGui::GetFont(),ImGui::GetFontSize(),ImVec2(x+2*scale,y-scale),
+                           IM_COL32(24,24,24,255),label,nullptr,0,&text_clip);
             }
             if (laneHovered &&
                 ImGui::IsMouseHoveringRect(ImVec2(x, y), ImVec2(std::max(x + 1, x2), y + scope_height))) {
@@ -879,21 +882,8 @@ void Application::Timing() {
         if(drag_surface_==DragSurface::None&&ImGui::IsMouseClicked(ImGuiMouseButton_Middle))
             BeginTimingDrag(DragSurface::Tracks,ImGuiMouseButton_Middle,w,false);
     }
-    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !ImGui::GetIO().WantTextInput) {
-        if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
-            StepFrame(-1);
-        if (ImGui::IsKeyPressed(ImGuiKey_RightArrow))
-            StepFrame(1);
-        if (ImGui::IsKeyPressed(ImGuiKey_Escape))
-            range_start_ = range_end_ = 0;
-        if (ImGui::IsKeyPressed(ImGuiKey_F)) {
-            if (range_start_ != range_end_) {
-                view_start_ = std::min(range_start_, range_end_);
-                view_end_ = std::max(range_start_, range_end_);
-            } else
-                FitTiming();
-        }
-    }
+    // Keyboard navigation is handled once by Timing above, including focus,
+    // popup and text-input guards. Repeating it here used to step two frames.
     ImGui::EndChild();
     ImGui::End();
     ImGui::PopStyleVar();
