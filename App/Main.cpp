@@ -3,6 +3,7 @@
 #include "Application.hpp"
 #include "DocumentWorkspace.hpp"
 #include "Branding.hpp"
+#include "UiTheme.hpp"
 #include "ResourceIds.h"
 #include <chrono>
 #include <algorithm>
@@ -201,43 +202,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
     GetModuleFileNameW(nullptr, path, 32768);
     static auto ini = (std::filesystem::path(path).parent_path() / "CyInsights-layout-v2.ini").u8string();
     io.IniFilename = ini.c_str();
-    // Read the Windows UI font at runtime; no system font is redistributed.
-    wchar_t windows[32768]{};
-    GetWindowsDirectoryW(windows, 32768);
-    auto font = (std::filesystem::path(windows) / "Fonts/segoeui.ttf").u8string();
-    if (std::filesystem::is_regular_file(font))
-        io.Fonts->AddFontFromFileTTF(font.c_str(), 14.f);
-    ImGui::StyleColorsDark();
-    auto &style = ImGui::GetStyle();
-    style.WindowRounding = 0;
-    style.FrameRounding = 3;
-    style.TabRounding = 0;
-    style.ScrollbarSize = 11;
-    style.WindowPadding = ImVec2(5, 4);
-    style.FramePadding = ImVec2(5, 3);
-    style.ItemSpacing = ImVec2(5, 3);
-    float dpi_scale = ImGui_ImplWin32_GetDpiScaleForHwnd(window);
-    style.ScaleAllSizes(dpi_scale);
-    style.FontScaleDpi = dpi_scale;
-    style.Colors[ImGuiCol_WindowBg] = ImVec4(.12f, .12f, .12f, 1);
-    style.Colors[ImGuiCol_ChildBg] = ImVec4(0, 0, 0, 0);
-    style.Colors[ImGuiCol_MenuBarBg] = ImVec4(.10f, .10f, .10f, 1);
-    style.Colors[ImGuiCol_Header] = ImVec4(.16f, .29f, .42f, 1);
-    style.Colors[ImGuiCol_Tab] = ImVec4(.09f, .09f, .09f, 1);
-    style.Colors[ImGuiCol_TabSelected] = ImVec4(.22f, .22f, .22f, 1);
-    style.Colors[ImGuiCol_DockingEmptyBg] = ImVec4(.28f, .28f, .28f, 1);
-    style.Colors[ImGuiCol_TableRowBgAlt] = ImVec4(.18f, .18f, .18f, 1);
-    style.Colors[ImGuiCol_TitleBg] = ImVec4(.12f, .12f, .12f, 1);
-    style.Colors[ImGuiCol_TitleBgActive] = ImVec4(.16f, .16f, .16f, 1);
-    style.Colors[ImGuiCol_TabHovered] = ImVec4(.25f, .25f, .25f, 1);
-    style.Colors[ImGuiCol_TabDimmed] = ImVec4(.10f, .10f, .10f, 1);
-    style.Colors[ImGuiCol_TabDimmedSelected] = ImVec4(.19f, .19f, .19f, 1);
-    style.Colors[ImGuiCol_TabSelectedOverline] = ImVec4(.15f, .48f, .78f, 1);
-    style.Colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(.28f, .28f, .28f, 1);
-    style.Colors[ImGuiCol_Border] = ImVec4(.22f, .22f, .22f, 1);
-    style.Colors[ImGuiCol_Separator] = ImVec4(.22f, .22f, .22f, 1);
-    style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(.17f, .17f, .17f, 1);
-    style.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(.40f, .40f, .40f, 1);
+    cyinsights::InitializeUi(ImGui_ImplWin32_GetDpiScaleForHwnd(window));
     ImGui_ImplWin32_Init(window);
     ImGui_ImplDX11_Init(device, context);
     ShowWindow(window, SW_MAXIMIZE);
@@ -273,6 +238,15 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             std::wstring argument = args[i];
             if (argument == L"--snapshot" && i + 1 < count)
                 snapshot = args[++i];
+            else if(argument==L"--ui-theme"&&i+1<count){auto theme=std::filesystem::path(args[++i]).u8string();if(!cyui::setTheme(theme.c_str()))return 23;}
+            else if(argument==L"--ui-comfortable")cyui::setDensity(cyui::Density::comfortable);
+            else if(argument==L"--ui-size"&&i+1<count){
+                unsigned client_width=0,client_height=0;
+                if(swscanf_s(args[++i],L"%ux%u",&client_width,&client_height)!=2||client_width<800||client_height<600||client_width>7680||client_height>4320)return 23;
+                RECT rect{0,0,static_cast<LONG>(client_width),static_cast<LONG>(client_height)};
+                AdjustWindowRect(&rect,WS_OVERLAPPEDWINDOW,FALSE);
+                ShowWindow(window,SW_RESTORE);SetWindowPos(window,nullptr,0,0,rect.right-rect.left,rect.bottom-rect.top,SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE);
+            }
             else if(argument==L"--profile-ui"&&i+1<count)ui_profile=args[++i];
             else if(argument==L"--loading-snapshot"&&i+1<count)
                 loading_snapshot=args[++i];
@@ -333,6 +307,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
                 width = height = 0;
                 Target();
             }
+            const float dpi=ImGui_ImplWin32_GetDpiScaleForHwnd(window);
+            if(std::abs(cyui::dpi()-dpi)>.01f)cyui::applyDpi(dpi);
             ImGui_ImplDX11_NewFrame();
             ImGui_ImplWin32_NewFrame();
             if(frame_stats_range_smoke){
@@ -531,8 +507,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             if(inspect_task&&!task_inspected&&frames>20&&!app.AnalysisBusy()){
                 task_inspected=app.InspectFirstTask();if(!task_inspected)return 6;
             }
+            cyinsights::RenderUiExtras();
             ImGui::Render();
-            float clear[] = {.06f, .06f, .065f, 1};
+            auto background=cyui::vec(cyui::palette().bg0);
+            float clear[] = {background.x, background.y, background.z, 1};
             context->OMSetRenderTargets(1, &target, nullptr);
             context->ClearRenderTargetView(target, clear);
             ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());

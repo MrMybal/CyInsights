@@ -8,7 +8,12 @@ MOCK_DISPATCH(vkBeginCommandBuffer) MOCK_DISPATCH(vkFreeCommandBuffers)
 MOCK_DISPATCH(vkAllocateCommandBuffers) MOCK_DISPATCH(vkDestroyCommandPool)
 MOCK_DISPATCH(vkCmdBeginRenderPass)
 PFN_vkCmdBeginRenderPass2KHR vkCmdBeginRenderPass2KHR=nullptr;
+#ifndef CYINSIGHTS_VULKAN_END_PASS2
+#define CYINSIGHTS_VULKAN_END_PASS2 1
+#endif
+#if CYINSIGHTS_VULKAN_END_PASS2
 PFN_vkCmdEndRenderPass2KHR vkCmdEndRenderPass2KHR=nullptr;
+#endif
 MOCK_DISPATCH(vkCmdEndRenderPass) MOCK_DISPATCH(vkCmdNextSubpass)
 MOCK_DISPATCH(vkQueueSubmit)
 PFN_vkQueueSubmit2KHR vkQueueSubmit2KHR=nullptr;
@@ -24,7 +29,9 @@ MOCK_DISPATCH(vkCmdDrawIndirect) MOCK_DISPATCH(vkCmdDrawIndexedIndirect) MOCK_DI
 #define vkCmdBeginRenderPass VulkanDynamicAPI::vkCmdBeginRenderPass
 #define vkCmdBeginRenderPass2KHR VulkanDynamicAPI::vkCmdBeginRenderPass2KHR
 #define vkCmdEndRenderPass VulkanDynamicAPI::vkCmdEndRenderPass
+#if CYINSIGHTS_VULKAN_END_PASS2
 #define vkCmdEndRenderPass2KHR VulkanDynamicAPI::vkCmdEndRenderPass2KHR
+#endif
 #define vkCmdNextSubpass VulkanDynamicAPI::vkCmdNextSubpass
 #define vkQueueSubmit VulkanDynamicAPI::vkQueueSubmit
 #define vkQueueSubmit2KHR VulkanDynamicAPI::vkQueueSubmit2KHR

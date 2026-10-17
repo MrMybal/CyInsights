@@ -43,6 +43,10 @@ inline std::string Config(uint32_t duration_ms){
 }
 struct Clock {uint64_t source=0,mono=0,multiplier=1;};
 struct Stage {uint64_t mono_ns=0,duration_ns=0,context=0,surface=0,submission=0;int32_t pid=0;std::string name,queue;};
+// Surface envelopes overlap their measured hardware stages. Keep them on a
+// separate display track so they cannot paint over Binning/Render/Load/Store.
+// This groups source labels for display, never infers an Unreal pass identity.
+inline std::string StageLane(const Stage& s){return s.name.rfind("surface#",0)==0?"Surfaces":s.name;}
 struct Counter {uint64_t mono_ns=0;uint32_t id=0;double value=0;std::string name;};
 struct Counts {uint64_t stages=0,counters=0,unavailable=0,stage_packets=0,timed_stage_packets=0,unaligned_stages=0;};
 class Decoder {

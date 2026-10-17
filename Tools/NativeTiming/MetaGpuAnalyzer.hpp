@@ -49,7 +49,7 @@ public:
         decoder.Read(file); // Validate the entire auxiliary source before appending any cache records.
         auto counts=decoder.Read(file,[&](const cymeta::Stage& s){const double a=Seconds(s.mono_ns),b=a+double(s.duration_ns)*1e-9;if(a<0||!std::isfinite(b)||b<a){++unavailable;return;}
             const auto process=s.pid?(gamePids.count(s.pid)?"Game":"Other process "+std::to_string(s.pid)):"Process unknown";
-            const auto key=process+std::string(" / ")+s.queue;auto inserted=tracks.try_emplace(key);auto& t=inserted.first->second;
+            const auto key=process+std::string(" / ")+s.queue+" / "+cymeta::StageLane(s);auto inserted=tracks.try_emplace(key);auto& t=inserted.first->second;
             if(inserted.second){t.name="GPU / Meta "+key+" (measured hardware stages)";auto path=directory/("meta-stage-"+std::to_string(tracks.size())+".raw");t.file=_wfopen(path.c_str(),L"w+b");if(!t.file)throw std::runtime_error("Meta GPU spool unavailable");setvbuf(t.file,nullptr,_IOFBF,1024*1024);}
             auto timer=timers.try_emplace("Meta / "+s.name,uint32_t(names.size()));if(timer.second)names.push_back(timer.first->first);
             cyvp::WriteValue(t.file,Record{a,b,timer.first->second});++t.count;++recorded;

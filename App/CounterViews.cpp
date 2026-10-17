@@ -15,8 +15,7 @@ bool Match(std::string value,std::string query) {
     return value.find(query)!=std::string::npos;
 }
 ImU32 Colour(size_t i) {
-    static const ImU32 palette[]={IM_COL32(104,201,213,255),IM_COL32(209,163,224,255),IM_COL32(223,195,111,255),IM_COL32(136,200,142,255)};
-    return palette[i%4];
+    return cyui::categorical(static_cast<int>(i));
 }
 int Compare(const CounterSeries& a,const CounterSample& x,const CounterSeries& b,const CounterSample& y) {
     if(!a.floating&&!b.floating)return x.integer<y.integer?-1:x.integer>y.integer?1:0;
@@ -88,7 +87,7 @@ void Application::FrameStatsView() {
         for(size_t i=0;i<groups.size();++i)if(ImGui::Selectable(groups[i].c_str(),frame_stats_group_==static_cast<int>(i)))frame_stats_group_=static_cast<int>(i);
         ImGui::EndCombo();
     }
-    ImGui::SameLine();ImGui::SetNextItemWidth(240*UiScale());ImGui::InputTextWithHint("##frame_stat_search","Search statistics",frame_stats_search_,sizeof(frame_stats_search_));
+    ImGui::SameLine();ImGui::SetNextItemWidth(240*UiScale());cyui::searchField("##frame_stat_search",frame_stats_search_,sizeof(frame_stats_search_),"Search statistics");
     const auto filter=groups[frame_stats_group_]+"/"+frame_stats_search_;
     if(frame_stat_filter_key_!=filter){frame_stat_filter_key_=filter;frame_stat_metrics_.clear();
         for(size_t i=0;i<counters_->series.size();++i){const auto& c=counters_->series[i];if(!c.availability&&(frame_stats_group_==0||c.group==groups[frame_stats_group_])&&Match(c.name,frame_stats_search_))frame_stat_metrics_.push_back(i);}
@@ -165,7 +164,7 @@ void Application::Counters() {
     if(counter_reader_.Busy()){ImGui::Text("Loading counter samples...");ImGui::SameLine();if(ImGui::SmallButton("Cancel counters"))counter_reader_.Cancel();}
     ImGui::SetNextItemWidth(-1);
     if(ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)&&ImGui::GetIO().KeyCtrl&&ImGui::IsKeyPressed(ImGuiKey_F))ImGui::SetKeyboardFocusHere();
-    ImGui::InputTextWithHint("##counter_filter","Search counters (Ctrl+F)",counter_search_,sizeof(counter_search_));
+    cyui::searchField("##counter_filter",counter_search_,sizeof(counter_search_),"Search counters (Ctrl+F)");
     ImGui::Checkbox("Quest / Meta only",&meta_counters_only_);ImGui::SameLine();
     ImGui::Checkbox("Availability",&show_availability_);
     ImGui::Checkbox("Hide counters without values",&hide_empty_counters_);
@@ -254,7 +253,7 @@ void Application::CounterTracks(float width) {
         ImGui::PushID(static_cast<int>(i));const auto pos=ImGui::GetCursorScreenPos();
         ImGui::InvisibleButton("counter_lane",ImVec2(width,height));const bool hover=ImGui::IsItemHovered();
         if(pos.y+height<clip.Min.y||pos.y>clip.Max.y){ImGui::PopID();continue;}
-        draw->AddRectFilled(pos,ImVec2(pos.x+width,pos.y+header),IM_COL32(59,59,59,255));
+        draw->AddRectFilled(pos,ImVec2(pos.x+width,pos.y+header),cyui::palette().bg2);
         std::string label=c.name+(c.meta?"  [observation]":"");
         draw->PushClipRect(pos,ImVec2(pos.x+width,pos.y+header),true);
         draw->AddText(ImVec2(pos.x+4*scale,pos.y+2*scale),Colour(i),label.c_str());draw->PopClipRect();
@@ -277,11 +276,11 @@ void Application::CounterTracks(float width) {
         draw->PushClipRect(ImVec2(pos.x,pos.y+header),ImVec2(pos.x+width,pos.y+height),true);
         for(int tick=0;tick<9;++tick) {
             const float x=pos.x+width*static_cast<float>(tick)/8;
-            draw->AddLine(ImVec2(x,pos.y+header),ImVec2(x,pos.y+height),IM_COL32(79,79,79,255));
+            draw->AddLine(ImVec2(x,pos.y+header),ImVec2(x,pos.y+height),cyui::palette().grid);
         }
         if(any) {
             auto bounds="Min "+c.Text(c.samples[low_sample])+" / Max "+c.Text(c.samples[high_sample])+" "+(c.unit.empty()?"(unit unavailable)":c.unit);
-            draw->AddText(ImVec2(pos.x+5*scale,pos.y+header+2*scale),IM_COL32(183,183,183,255),bounds.c_str());
+            draw->AddText(ImVec2(pos.x+5*scale,pos.y+header+2*scale),cyui::palette().textDim,bounds.c_str());
         }
         const CounterBucket* previous=nullptr;
         for(const auto& bucket:cache.buckets) {
@@ -297,22 +296,22 @@ void Application::CounterTracks(float width) {
             draw->AddCircleFilled(ImVec2(x,y(c.samples[bucket.last].Value(c.floating))),1.4f*scale,Colour(i),6);
             previous=&bucket;
         }
-        if(!any)draw->AddText(ImVec2(pos.x+5*scale,pos.y+header+8*scale),IM_COL32(160,160,160,255),"No available observations in this interval");
+        if(!any)draw->AddText(ImVec2(pos.x+5*scale,pos.y+header+8*scale),cyui::palette().textFaint,"No available observations in this interval");
         if(c.companion>=0) {
             const auto& flag=counters_->series[static_cast<size_t>(c.companion)];
             for(size_t j=flag.Lower(view_start_);j<flag.samples.size()&&flag.samples[j].time<=view_end_;++j) {
                 if(flag.samples[j].Value(flag.floating)==1&&flag.samples[j].valid)continue;
                 float x=pos.x+width*static_cast<float>((flag.samples[j].time-view_start_)/span);
-                draw->AddLine(ImVec2(x,pos.y+height-7*scale),ImVec2(x,pos.y+height-2*scale),IM_COL32(223,119,115,255),2*scale);
+                draw->AddLine(ImVec2(x,pos.y+height-7*scale),ImVec2(x,pos.y+height-2*scale),cyui::palette().error,2*scale);
             }
         }
         if(range_start_!=range_end_) {
             float a=pos.x+width*static_cast<float>((std::min(range_start_,range_end_)-view_start_)/span);
             float b=pos.x+width*static_cast<float>((std::max(range_start_,range_end_)-view_start_)/span);
-            draw->AddRectFilled(ImVec2(a,pos.y+header),ImVec2(b,pos.y+height),IM_COL32(88,143,195,35));
+            draw->AddRectFilled(ImVec2(a,pos.y+header),ImVec2(b,pos.y+height),cyui::palette().selection);
         }
         draw->PopClipRect();
-        draw->AddLine(ImVec2(pos.x,pos.y+height-1),ImVec2(pos.x+width,pos.y+height-1),IM_COL32(54,54,54,255));
+        draw->AddLine(ImVec2(pos.x,pos.y+height-1),ImVec2(pos.x+width,pos.y+height-1),cyui::palette().lineStrong);
         if(hover) {
             double t=view_start_+span*std::clamp(double((ImGui::GetIO().MousePos.x-pos.x)/width),0.,1.);
             const auto* sample=counters_->At(i,t);

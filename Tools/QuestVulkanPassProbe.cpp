@@ -31,11 +31,14 @@ int main(){
     VkDevice device{};Check(vkCreateDevice(gpu,&dc,nullptr,&device));VkQueue queue{};vkGetDeviceQueue(device,family,0,&queue);
 #if CY_TEST_COLLECTOR
     MockRHI={instance,device,gpu,queue,family};
-    // The Meta UE 5.5 render-pass-2 path uses KHR dispatch slots. Vulkan 1.2
-    // promotes those commands; point the test slots at the real core functions.
+    // The Meta fork exports both KHR slots; stock UE 5.5 exports only Begin2.
+    // Vulkan 1.2 promotes those commands; use the real core functions.
     vkCmdBeginRenderPass2KHR=(PFN_vkCmdBeginRenderPass2KHR)vkGetDeviceProcAddr(device,"vkCmdBeginRenderPass2");
+    if(!vkCmdBeginRenderPass2KHR)throw std::runtime_error("Begin-render-pass-2 unavailable");
+#if CYINSIGHTS_VULKAN_END_PASS2
     vkCmdEndRenderPass2KHR=(PFN_vkCmdEndRenderPass2KHR)vkGetDeviceProcAddr(device,"vkCmdEndRenderPass2");
-    if(!vkCmdBeginRenderPass2KHR||!vkCmdEndRenderPass2KHR)throw std::runtime_error("Render-pass-2 commands unavailable");
+    if(!vkCmdEndRenderPass2KHR)throw std::runtime_error("End-render-pass-2 unavailable");
+#endif
     if(!CyInsightsVulkanPasses::Enable())throw std::runtime_error("Actual collector did not start");
 #endif
     VkImageCreateInfo ii{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};ii.imageType=VK_IMAGE_TYPE_2D;ii.format=VK_FORMAT_R8G8B8A8_UNORM;ii.extent={1536,1536,1};ii.mipLevels=ii.arrayLayers=1;ii.samples=VK_SAMPLE_COUNT_1_BIT;ii.tiling=VK_IMAGE_TILING_OPTIMAL;ii.usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;VkImage image{};Check(vkCreateImage(device,&ii,nullptr,&image));
@@ -73,7 +76,11 @@ int main(){
         for(uint32_t i=0;i<64;++i){VkClearAttachment a{};a.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;a.clearValue.color.float32[0]=float(i)/64;a.clearValue.color.float32[3]=1;VkClearRect rect{};rect.rect.offset={int32_t(i%8)*128,int32_t(i/8)*128};rect.rect.extent={128,128};rect.layerCount=1;vkCmdClearAttachments(cmd,1,&a,1,&rect);}
         vkCmdWriteTimestamp(cmd,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,queries,pass*4+2);
 #if CY_TEST_COLLECTOR
+#if CYINSIGHTS_VULKAN_END_PASS2
         if(pass){VkSubpassEndInfo subpassEnd{VK_STRUCTURE_TYPE_SUBPASS_END_INFO};vkCmdEndRenderPass2KHR(cmd,&subpassEnd);}
+#else
+        if(pass)vkCmdEndRenderPass(cmd);
+#endif
         else
 #endif
         vkCmdEndRenderPass(cmd);

@@ -10,6 +10,11 @@
 #include <unordered_map>
 #include <stdexcept>
 namespace cyinsights {
+bool IsGpuTimingTrack(const std::string& name) {
+    return name.size()>=3&&std::tolower(static_cast<unsigned char>(name[0]))=='g'&&
+        std::tolower(static_cast<unsigned char>(name[1]))=='p'&&std::tolower(static_cast<unsigned char>(name[2]))=='u'&&
+        (name.size()==3||std::isspace(static_cast<unsigned char>(name[3]))||std::isdigit(static_cast<unsigned char>(name[3])));
+}
 int TimingTrackRank(const TimingTrack& t) {
     if(t.gpu)return 0;
     if(t.name=="GameThread"||t.name.rfind("GameThread [#",0)==0)return 1;
@@ -125,7 +130,9 @@ void TimingModel::Build(const std::vector<TimingEvent> &events, bool aggregate_a
             track.name = e.thread;
             track.id = e.thread_id;
             track.has_id = e.has_thread_id;
-            track.gpu = DiagnosticDomain(e.thread)==FrameDomain::Gpu;
+            // Display every GPU source above CPU threads. Attribution remains
+            // separate: an unknown/other Meta process is not game GPU work.
+            track.gpu = IsGpuTimingTrack(e.thread);
             tracks.push_back(std::move(track));
         }
         tracks[track_index].events.push_back(i);

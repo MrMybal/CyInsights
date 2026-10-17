@@ -378,7 +378,7 @@ void Application::Tick() {
             std::swap(timing_model_,result.model);
             ++model_version_;
             timer_colours_.clear();timer_colours_.reserve(timing_model_.names.size());
-            for(const auto& name:timing_model_.names)timer_colours_.push_back(TimerColour(name));
+            for(const auto& name:timing_model_.names)timer_colours_.push_back(ScopeColour(name));
             std::swap(comparison_index_,result.comparison);
             comparison_a_summary_.swap(result.summary);
             comparison_a_start_=comparison_a_end_=-1;
@@ -409,10 +409,30 @@ void Application::Tick() {
         previous_message_ = message_;
     }
 }
+void Application::PanelMenu() {
+            ImGui::MenuItem("Frames", nullptr, &show_frames_);
+            ImGui::MenuItem("Timing", nullptr, &show_timing_);
+            ImGui::MenuItem("Timers", nullptr, &show_timers_);
+            ImGui::MenuItem("Callers", nullptr, &show_callers_);
+            ImGui::MenuItem("Callees", nullptr, &show_callees_);
+            ImGui::MenuItem("GPU frame", nullptr, &show_gpu_);
+            ImGui::MenuItem("Selection", nullptr, &show_details_);
+            ImGui::MenuItem("Platform metrics", nullptr, &show_metrics_);
+            if(ImGui::MenuItem("Frame stats",nullptr,&show_frame_stats_)&&show_frame_stats_)frame_stats_dock_pending_=true;
+            ImGui::MenuItem("Counters", nullptr, &show_counters_);
+            ImGui::MenuItem("Capture comparison", nullptr, &show_comparison_);
+            ImGui::MenuItem("Distributions", nullptr, &show_distribution_);
+            ImGui::MenuItem("Tasks", nullptr, &show_tasks_);
+            if(ImGui::MenuItem("Network / storage / memory", nullptr, &show_activities_)&&show_activities_)FocusActivities();
+            ImGui::MenuItem("AI Inspector", nullptr, &show_ai_);
+            ImGui::MenuItem("Messages", nullptr, &show_messages_);
+            if (ImGui::MenuItem("Reset Insights layout"))
+                reset_layout_ = true;
+}
 void Application::DrawMenuBar() {
     if (ImGui::BeginMainMenuBar()) {
         if(brand_logo_)ImGui::Image(brand_logo_,ImVec2(ImGui::GetFontSize(),ImGui::GetFontSize()));
-        else ImGui::TextColored(ImVec4(.75f, .85f, .93f, 1), "Cy");
+        else cyui::textColoured(cyui::palette().accent, "Cy");
         ImGui::SameLine();
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Open capture...", "Ctrl+O")) {
@@ -433,24 +453,7 @@ void Application::DrawMenuBar() {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("View")) {
-            ImGui::MenuItem("Frames", nullptr, &show_frames_);
-            ImGui::MenuItem("Timing", nullptr, &show_timing_);
-            ImGui::MenuItem("Timers", nullptr, &show_timers_);
-            ImGui::MenuItem("Callers", nullptr, &show_callers_);
-            ImGui::MenuItem("Callees", nullptr, &show_callees_);
-            ImGui::MenuItem("GPU frame", nullptr, &show_gpu_);
-            ImGui::MenuItem("Selection", nullptr, &show_details_);
-            ImGui::MenuItem("Platform metrics", nullptr, &show_metrics_);
-            if(ImGui::MenuItem("Frame stats",nullptr,&show_frame_stats_)&&show_frame_stats_)frame_stats_dock_pending_=true;
-            ImGui::MenuItem("Counters", nullptr, &show_counters_);
-            ImGui::MenuItem("Capture comparison", nullptr, &show_comparison_);
-            ImGui::MenuItem("Distributions", nullptr, &show_distribution_);
-            ImGui::MenuItem("Tasks", nullptr, &show_tasks_);
-            if(ImGui::MenuItem("Network / storage / memory", nullptr, &show_activities_)&&show_activities_)FocusActivities();
-            ImGui::MenuItem("AI Inspector", nullptr, &show_ai_);
-            ImGui::MenuItem("Messages", nullptr, &show_messages_);
-            if (ImGui::MenuItem("Reset Insights layout"))
-                reset_layout_ = true;
+            PanelMenu();
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Analysis")) {
@@ -494,6 +497,7 @@ void Application::DrawMenuBar() {
             }
             ImGui::EndMenu();
         }
+        AppearanceMenu();
         ImGui::SameLine();
         auto project = capture_.manifest["metadata"]["project"].AsString();
         ImGui::TextDisabled("  %s  —  CyInsights", project.empty() ? "Unreal capture" : project.c_str());
@@ -572,24 +576,39 @@ void Application::DrawPanels() {
     if(document_visible_){LoadStatus();NativeSetupView();}
 }
 void Application::Session() {
-    if(hosted_)ImGui::BeginChild("Session",ImVec2(0,0));
-    else BeginView("Session", nullptr,
-                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDocking);
-    if(brand_logo_){ImGui::Image(brand_logo_,ImVec2(80*UiScale(),80*UiScale()));ImGui::SameLine();}
-    ImGui::BeginGroup();
-    ImGui::TextColored(ImVec4(.4f, .8f, 1.f, 1), "CyInsights");
-    ImGui::TextUnformatted("Unreal & GPU profiling");
-    ImGui::EndGroup();
-    ImGui::Separator();
-    ImGui::TextUnformatted("Capture session");
-    ImGui::TextWrapped("%s", message_.c_str());
-    if (AnalysisBusy())
-        ImGui::TextDisabled("Native analysis in progress");
-    ImGui::SeparatorText("Remote capture - PC / Quest");
+    cyui::ScopedVar padding(ImGuiStyleVar_WindowPadding,cyui::dp(20,16));
+    if(hosted_)ImGui::BeginChild("Session",ImVec2(0,0),ImGuiChildFlags_AlwaysUseWindowPadding);
+    else BeginView("Session",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoDocking);
+    const float content_width=std::min(ImGui::GetContentRegionAvail().x,cyui::dp(1440));
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX()+std::max(0.f,(ImGui::GetContentRegionAvail().x-content_width)*.5f));
+    ImGui::BeginChild("##SessionContent",ImVec2(content_width,0));
+    if(brand_logo_){ImGui::Image(brand_logo_,cyui::dp(56,56));ImGui::SameLine(0,cyui::dp(14));}
+    ImGui::BeginGroup();cyui::heading("CyInsights",1);
+    cyui::textDim("Explore CPU, GPU, network, storage and memory on one timeline.");ImGui::EndGroup();
+    cyui::space(12);
+    const bool wide=ImGui::GetContentRegionAvail().x>=cyui::dp(1020);
+    if(ImGui::BeginTable("##session_columns",wide?2:1,ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableNextRow();ImGui::TableSetColumnIndex(0);
+        cyui::beginCard("##open_capture","Analyze a capture");
+        cyui::textDim("Open one or several Unreal traces or CyInsights archives.");
+        cyui::space(4);
+        if(cyui::iconTextButton(cyui::icon::folder,"Open captures...",cyui::Variant::primary))ChooseAndOpenCaptures();
+        ImGui::SameLine();cyui::kbd("Ctrl+O");
+        if(!document_path_.empty()) {
+            cyui::textDim("%s",document_path_.filename().u8string().c_str());
+            if(cyui::ghostButton("Return to timeline"))session_view_=false;
+        }
+        if(AnalysisBusy())cyui::progressBar(-1,ImVec2(-1,cyui::dp(16)),"Analyzing capture...");
+        cyui::endCard();cyui::space(10);
+        cyui::beginCard("##remote_capture","Record from a device");
+        cyui::textDim("Development / Debug game with the CyInsights plugin.");
     const auto remote = remote_.Snapshot();
     ImGui::BeginDisabled(remote.Busy());
-    ImGui::SetNextItemWidth(250);
-    ImGui::InputTextWithHint("##remoteip", "Device IPv4 address", remote_ip_, sizeof(remote_ip_));
+    if(cyui::beginProperties("##remote_connection",100)) {
+        cyui::property("Device IP","LAN IPv4 of the game or standalone Quest running the CyInsights plugin.");
+        ImGui::InputTextWithHint("##remoteip", "192.168.1.40", remote_ip_, sizeof(remote_ip_));
+        cyui::endProperties();
+    }
     RemoteOptions options;
     options.ipv4 = remote_ip_;
     options.control_port = static_cast<uint16_t>(remote_port_);
@@ -600,11 +619,11 @@ void Application::Session() {
     wchar_t app_path[32768]{};
     GetModuleFileNameW(nullptr, app_path, 32768);
     options.output_directory = fs::path(app_path).parent_path() / "Captures";
-    if (ImGui::Button("Connect to device")) remote_.Probe(options);
+    if (cyui::iconTextButton(cyui::icon::connect,"Connect to device")) remote_.Probe(options);
     ImGui::SameLine();
-    if (ImGui::Button("Start remote trace")) remote_.Start(options);
+    if (cyui::iconTextButton(cyui::icon::record,"Start remote trace",cyui::Variant::primary)) remote_.Start(options);
     if(focus_capture_options_){ImGui::SetNextItemOpen(true);focus_capture_options_=false;}
-    if (ImGui::TreeNode("Capture options")) {
+    if (cyui::beginSection("Capture options",false)) {
         ImGui::Checkbox("Use plugin project defaults",&remote_use_defaults_);
         if(remote_use_defaults_&&!remote.capture_defaults.IsNull()){
             std::string error;if(ReadCaptureOptions(remote.capture_defaults,remote_capture_,error))std::snprintf(remote_stat_groups_,sizeof(remote_stat_groups_),"%s",remote_capture_.stat_groups.c_str());
@@ -645,24 +664,28 @@ void Application::Session() {
         ImGui::Checkbox("Record Meta render stages and counters (test default)",&remote_meta_.enabled);
         ImGui::BeginDisabled(!remote_meta_.enabled);
         ImGui::Checkbox("Restart the Quest game before capture (optional)",&remote_meta_.restart_game);
-        ImGui::SetNextItemWidth(430);ImGui::InputTextWithHint("ADB executable","Automatic, or path to adb.exe",remote_adb_,sizeof(remote_adb_));
-        ImGui::SetNextItemWidth(300);ImGui::InputTextWithHint("ADB device","Automatic match by game IP",remote_adb_device_,sizeof(remote_adb_device_));
-        ImGui::SetNextItemWidth(300);ImGui::InputTextWithHint("Android package","Automatic from updated plugin",remote_android_package_,sizeof(remote_android_package_));
+        if(cyui::beginProperties("##meta_connection",130)) {
+            cyui::property("ADB executable");ImGui::InputTextWithHint("##adb_path","Automatic, or path to adb.exe",remote_adb_,sizeof(remote_adb_));
+            cyui::property("ADB device");ImGui::InputTextWithHint("##adb_device","Automatic match by game IP",remote_adb_device_,sizeof(remote_adb_device_));
+            cyui::property("Android package");ImGui::InputTextWithHint("##android_package","Automatic from updated plugin",remote_android_package_,sizeof(remote_android_package_));
+            cyui::endProperties();
+        }
         ImGui::TextWrapped("Detailed Meta GPU profiling is enabled before launching the game. Restart resets the current game session. An authorized ADB connection is required; USB or ADB over Wi-Fi. Meta hardware events are saved in the same .cycapture. No texture or buffer copies.");
         ImGui::EndDisabled();
-        ImGui::SetNextItemWidth(150);
-        ImGui::InputInt("Control port", &remote_port_);
-        remote_port_ = std::clamp(remote_port_, 1, 65535);
-        ImGui::SetNextItemWidth(150);
-        ImGui::InputFloat("Duration (seconds, 0 = manual)", &remote_seconds_);
+        if(cyui::beginProperties("##capture_duration",130)) {
+            cyui::property("Control port");ImGui::InputInt("##remote_port",&remote_port_);
+            remote_port_=std::clamp(remote_port_,1,65535);
+            cyui::property("Duration (seconds)","0 records until Stop is pressed.");ImGui::InputFloat("##remote_seconds",&remote_seconds_);
+            cyui::endProperties();
+        }
         if (!std::isfinite(remote_seconds_)) remote_seconds_ = 0;
         remote_seconds_ = std::clamp(remote_seconds_, 0.f, 3600.f);
         ImGui::TextWrapped("Saved on PC: %s", options.output_directory.u8string().c_str());
-        ImGui::TreePop();
+        cyui::endSection();
     }
     ImGui::EndDisabled();
     if (remote.state == RemoteState::starting || remote.state == RemoteState::recording) {
-        if (ImGui::Button("Stop remote trace")) remote_.Stop();
+        if (cyui::dangerButton("Stop remote trace")) remote_.Stop();
     }
     if(remote.state==RemoteState::recording&&ImGui::TreeNode("Request extra GPU snapshot")){
         ImGui::SetNextItemWidth(110);ImGui::InputInt("Snapshot frames",&remote_gpu_options_.gpu_frames);remote_gpu_options_.gpu_frames=std::clamp(remote_gpu_options_.gpu_frames,1,8);
@@ -679,7 +702,7 @@ void Application::Session() {
     if(!remote.meta_message.empty())ImGui::TextWrapped("Meta GPU: %s",remote.meta_message.c_str());
     for(const auto& source:remote.manifest["sources"].Items())if(source["id"].AsString()=="unreal.gpu.scopes"&&source.Has("timestamp_queries_available")) {
         const bool ready=source["trace_compiled"].AsBool()&&source["timestamp_queries_available"].AsBool();
-        ImGui::TextColored(ready?ImVec4(.45f,.85f,.6f,1):ImVec4(1,.65f,.3f,1),"Native GPU groups: %s",ready?"timestamps supported (events verified after analysis)":"unavailable on this running target");
+        ImGui::TextColored(ready?cyui::vec(cyui::palette().success):cyui::vec(cyui::palette().warning),"Native GPU groups: %s",ready?"timestamps supported (events verified after analysis)":"unavailable on this running target");
         if(source.Has("vulkan_timestamp_stage")) {
             ImGui::TextWrapped("GPU timestamp mode: %s",source["vulkan_timestamp_stage_meaning"].AsString().c_str());
             if(source["completion_timestamps_requested"].AsBool()&&source["vulkan_timestamp_stage"].AsNumber()!=1)
@@ -699,8 +722,8 @@ void Application::Session() {
     ImGui::Text("%s | %.1f MiB | %.1f s", RemoteStateName(remote.state),
                 double(remote.bytes) / (1024 * 1024), remote.state==RemoteState::starting||remote.state==RemoteState::probing?remote.startup_elapsed:remote.elapsed);
     if((remote.state==RemoteState::starting||remote.state==RemoteState::probing)&&remote.session_id.empty())ImGui::TextWrapped("Waiting for capture startup; no trace data has been received yet.");
-    if (!remote.message.empty()) ImGui::TextWrapped("%s", remote.message.c_str());
-    if(!remote.diagnostic_log.empty())ImGui::TextWrapped("Capture diagnostics: %s",remote.diagnostic_log.u8string().c_str());
+    if (!remote.message.empty()) cyui::callout(remote.state==RemoteState::failed?cyui::Tone::error:cyui::Tone::neutral,remote.message.c_str());
+    if(!remote.diagnostic_log.empty()){cyui::textFaint("Capture diagnostics available");cyui::tooltip(remote.diagnostic_log.u8string().c_str());}
     if (!remote.archive.empty()) {
         ImGui::BeginDisabled(AnalysisBusy());
         if (ImGui::Button("Open received capture")) RequestOpen(remote.archive);
@@ -711,17 +734,13 @@ void Application::Session() {
         ImGui::TextWrapped("Partial data retained: %s", remote.partial_trace.u8string().c_str());
     ImGui::TextWrapped("Launch the game with the plugin in Development/Debug. Enter its LAN IPv4 address; "
                        "Unreal and available Quest GPU metrics travel in the same trace. Analyze after stop.");
-    ImGui::SeparatorText("Capture");
-    if(capture_.file.empty())ImGui::TextDisabled("No capture loaded.");
-    if(!capture_.file.empty())for (const auto &kv : capture_.manifest["metadata"].Members())
-        ImGui::TextWrapped("%s: %s", kv.first.c_str(), kv.second.Write().c_str());
-    ImGui::SeparatorText("Sources");
-    for (const auto &s : capture_.manifest["sources"].Items()) {
-        ImGui::TextWrapped("%s  [%s]", s["id"].AsString().c_str(), s["status"].AsString().c_str());
-        if (s.Has("reason"))
-            ImGui::TextDisabled("%s", s["reason"].AsString().c_str());
-    }
-    ImGui::SeparatorText("Native analyzer");
+
+        cyui::endCard();
+        if(wide)ImGui::TableSetColumnIndex(1);else {ImGui::TableNextRow();ImGui::TableSetColumnIndex(0);}
+        cyui::beginCard("##analyzer_settings","Unreal trace reader");
+        cyui::badge(native_setup_.installations.empty()?"Engine required":"Engine registered",native_setup_.installations.empty()?cyui::Tone::warning:cyui::Tone::success);
+        cyui::textDim("Register your Unreal installation once. Readers are then cached.");
+        if(cyui::beginSection("Engines & analysis settings",native_setup_.installations.empty())) {
     auto worker_setting=AnalysisWorkerSetting();
     char worker_label[64];
     if(worker_setting)std::snprintf(worker_label,sizeof(worker_label),"%u workers",worker_setting);
@@ -761,9 +780,26 @@ void Application::Session() {
     }
     ImGui::EndDisabled();
     ImGui::EndDisabled();
-    if(!engine_registration_error_.empty())ImGui::TextColored(ImVec4(1,.45f,.4f,1),"%s",engine_registration_error_.c_str());
+    if(!engine_registration_error_.empty())cyui::textColoured(cyui::palette().error,"%s",engine_registration_error_.c_str());
     if(exe_[0])ImGui::TextWrapped("Analyzer: %s",exe_);
-    ImGui::SeparatorText("Windows collector");
+
+            cyui::endSection();
+        }
+        cyui::endCard();cyui::space(10);
+        cyui::beginCard("##capture_metadata","Capture information");
+    if(capture_.file.empty())cyui::textDim("Open a .utrace or .cycapture to inspect its sources.");
+    if(!capture_.file.empty())for (const auto &kv : capture_.manifest["metadata"].Members())
+        ImGui::TextWrapped("%s: %s", kv.first.c_str(), kv.second.Write().c_str());
+    cyui::sectionTitle("Recorded sources");
+    for (const auto &s : capture_.manifest["sources"].Items()) {
+        ImGui::TextWrapped("%s  [%s]", s["id"].AsString().c_str(), s["status"].AsString().c_str());
+        if (s.Has("reason"))
+            ImGui::TextDisabled("%s", s["reason"].AsString().c_str());
+    }
+
+        cyui::endCard();cyui::space(10);
+        cyui::beginCard("##windows_collector","Optional Windows GPU collector");
+        if(cyui::beginSection("Advanced GPU collection",false)) {
     ImGui::TextWrapped("Optional CyInsights collector for extra command detail. Native .utrace GPU groups do not require it.");
     if (ImGui::Button("Discover sessions")) {
         sessions_.Open();
@@ -791,8 +827,16 @@ void Application::Session() {
     ImGui::InputTextWithHint("##search", "Search...", search_, sizeof(search_));
     ImGui::TextWrapped("Measured: solid bars. Derived: reconstructed passes/frame candidates. Unavailable: "
                        "missing channel, collector or calibration.");
+
+            cyui::endSection();
+        }
+        cyui::endCard();
+        ImGui::EndTable();
+    }
+    ImGui::EndChild();
     if(hosted_)ImGui::EndChild();else ImGui::End();
 }
+
 bool Application::Connect(uint32_t pid) {
     if (!sessions_.Open()) {
         message_ = "No Windows collector session";
@@ -952,10 +996,10 @@ void Application::Gpu() {
         float a = p.x + width * static_cast<float>(s.start / length),
               b = p.x + width * static_cast<float>(s.end / length);
         draw->AddRectFilled(ImVec2(a, p.y), ImVec2(b, p.y + 30),
-                            s.measured ? IM_COL32(111, 148, 70, 255) : IM_COL32(125, 103, 61, 255));
+                            s.measured ? cyui::palette().success : cyui::palette().warning);
         if (b - a > 50) {
             draw->PushClipRect(ImVec2(a, p.y), ImVec2(b, p.y + 30), true);
-            draw->AddText(ImVec2(a + 3, p.y + 5), IM_COL32(255, 255, 255, 255), pass.name.c_str());
+            draw->AddText(ImVec2(a + 3, p.y + 5), ScopeTextColour(s.measured?cyui::palette().success:cyui::palette().warning), pass.name.c_str());
             draw->PopClipRect();
         }
         if (ImGui::IsMouseHoveringRect(ImVec2(a, p.y), ImVec2(b, p.y + 30)))
@@ -1023,20 +1067,20 @@ void Application::Gpu() {
                 ImVec2 start(a->second.x + nodeW, a->second.y + nodeH / 2),
                     end(b->second.x, b->second.y + nodeH / 2);
                 canvas->AddBezierCubic(start, ImVec2(start.x + 35, start.y), ImVec2(end.x - 35, end.y), end,
-                                       IM_COL32(101, 130, 144, 150), 1.5f);
+                                       cyui::alpha(cyui::palette().lineStrong,.6f), 1.5f);
             }
             for (const auto &pass : graph_.Passes()) {
                 auto pos = positions[pass.id];
-                canvas->AddRectFilled(pos, ImVec2(pos.x + nodeW, pos.y + nodeH), IM_COL32(39, 50, 59, 255),
+                canvas->AddRectFilled(pos, ImVec2(pos.x + nodeW, pos.y + nodeH), cyui::palette().bg2,
                                       4);
-                canvas->AddRect(pos, ImVec2(pos.x + nodeW, pos.y + nodeH), IM_COL32(87, 124, 147, 255), 4);
+                canvas->AddRect(pos, ImVec2(pos.x + nodeW, pos.y + nodeH), cyui::palette().lineStrong, 4);
                 canvas->PushClipRect(pos, ImVec2(pos.x + nodeW, pos.y + nodeH), true);
-                canvas->AddText(ImVec2(pos.x + 7, pos.y + 7), IM_COL32(220, 225, 230, 255),
+                canvas->AddText(ImVec2(pos.x + 7, pos.y + 7), cyui::palette().text,
                                 pass.name.c_str());
                 char label[128];
                 std::snprintf(label, sizeof(label), "%u draws / %u dispatches\nDerived, confidence %.0f%%",
                               pass.draw_count, pass.dispatch_count, pass.confidence * 100);
-                canvas->AddText(ImVec2(pos.x + 7, pos.y + 27), IM_COL32(160, 175, 185, 255), label);
+                canvas->AddText(ImVec2(pos.x + 7, pos.y + 27), cyui::palette().textDim, label);
                 canvas->PopClipRect();
                 if (ImGui::IsWindowHovered() &&
                     ImGui::IsMouseHoveringRect(pos, ImVec2(pos.x + nodeW, pos.y + nodeH)) &&

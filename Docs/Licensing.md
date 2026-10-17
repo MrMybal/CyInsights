@@ -15,6 +15,7 @@ ne révoque pas les autorisations AGPL déjà accordées et ne couvre aucun code
 | Collecteur ReShade `ThirdParty/CyGPUInspector/CyGPUInspectorRS` | MIT | `CyGPUInspectorRS/LICENSE` |
 | Adaptateurs facultatifs `Tools/NativeTasks`, `Tools/NativeActivities`, `Tools/NativeTiming` et build du collecteur `Tools/WindowsCollector` | MIT | `LICENSE` dans chaque dossier |
 | Dear ImGui, API ReShade et dépendances Python | Licences tierces inchangées | `LICENCES/`, voir `THIRD-PARTY-CyGPUInspector.md` |
+| CyUI, couche de thème et widgets `ThirdParty/CyUI` | MIT | `ThirdParty/CyUI/LICENSE`, `LICENCES/CyUI-MIT.txt` |
 
 La licence racine AGPL s'applique par défaut à notre code sans licence plus
 spécifique. Les sous-dossiers MIT sont des composants séparés ; ils n'importent

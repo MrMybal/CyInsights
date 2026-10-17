@@ -1,4 +1,7 @@
 Current CyInsights inventory (2026-10-10):
+CyUI 1.0.0: owned semantic Dear ImGui UI library, source snapshot 2026-10-17.
+Source: ThirdParty/CyUI; full MIT grant: CyUI-MIT.txt.
+Uses the application's existing ImGui target; no second ImGui or system fonts bundled.
 See ../THIRD-PARTY-CyGPUInspector.md and ../Docs/Licensing.md for actual scope.
 Application/analysis: AGPL; owned Unreal integrations/Core/collector: MIT.
 Full MIT grant: CyInsights-Integrations-MIT.txt. Third-party notices unchanged.

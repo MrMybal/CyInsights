@@ -93,8 +93,9 @@ void DocumentWorkspace::Draw(){
     if(ImGui::GetIO().KeyCtrl&&ImGui::IsKeyPressed(ImGuiKey_O))for(const auto& path:ChooseCaptures())pending_open_.push_back(path);
     const auto* main=ImGui::GetMainViewport();
     const float header=ImGui::GetFrameHeight()*2+ImGui::GetStyle().ItemSpacing.y+ImGui::GetStyle().WindowPadding.y*2;
-    ImGui::SetNextWindowViewport(main->ID);ImGui::SetNextWindowPos(main->WorkPos);ImGui::SetNextWindowSize(ImVec2(main->WorkSize.x,header));
-    ImGui::Begin("##CaptureDocuments",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoDocking|ImGuiWindowFlags_NoBringToFrontOnFocus);
+    cyui::beginTopBar("##CaptureDocuments",header);
+    // TopBar centers a single row by default; this strip also contains tabs.
+    ImGui::SetCursorPosY(cyui::dp(5));
     size_t close=SIZE_MAX;bool has_embedded=false;
     if(ImGui::BeginTabBar("Capture tabs",ImGuiTabBarFlags_Reorderable|ImGuiTabBarFlags_AutoSelectNewTabs|ImGuiTabBarFlags_FittingPolicyScroll)){
         for(size_t i=0;i<documents_.size();++i){auto& doc=documents_[i];if(doc.detached)continue;has_embedded=true;bool open=true;
@@ -107,11 +108,17 @@ void DocumentWorkspace::Draw(){
         ImGui::EndTabBar();
         select_pending_=false;
     }
-    if(ImGui::Button("Open captures..."))for(const auto& path:ChooseCaptures())pending_open_.push_back(path);
-    ImGui::SameLine();if(ImGui::Button("New capture session")){auto& doc=Create();selected_=menu_owner_=doc.id;select_pending_=true;doc.app->FocusSession();}
-    for(size_t i=0;i<documents_.size();++i)if(!documents_[i].detached&&documents_[i].id==selected_){ImGui::SameLine();if(ImGui::Button("Detach capture"))Detach(i);break;}
+    if(cyui::iconTextButton(cyui::icon::folder,"Open captures..."))for(const auto& path:ChooseCaptures())pending_open_.push_back(path);
+    cyui::tooltip("Open several captures in separate tabs (Ctrl+O)");
+    ImGui::SameLine();if(cyui::ghostButton("New capture session")){auto& doc=Create();selected_=menu_owner_=doc.id;select_pending_=true;doc.app->FocusSession();}
+    for(size_t i=0;i<documents_.size();++i)if(!documents_[i].detached&&documents_[i].id==selected_){ImGui::SameLine();if(cyui::iconButton(cyui::icon::newWindow,"Detach this capture to a native window (tab context menu)"))Detach(i);break;}
     if(!has_embedded){ImGui::SameLine();ImGui::TextDisabled("Captures are open in separate windows. Use Return to main window to restore a tab.");}
-    auto pos=ImGui::GetCursorScreenPos();auto size=ImVec2(std::max(1.f,main->WorkSize.x-ImGui::GetStyle().WindowPadding.x*2),std::max(1.f,main->WorkPos.y+main->WorkSize.y-pos.y));ImGui::End();
+    cyui::endTopBar();
+    cyui::beginStatusBar("##WorkspaceStatus");
+    cyui::statusText(Busy()?cyui::Tone::accent:cyui::Tone::neutral,"%s | %zu capture%s",Busy()?"Analyzing":"Ready",documents_.size(),documents_.size()>1?"s":"");
+    ImGui::SameLine(0,cyui::dp(24));cyui::statusText(cyui::Tone::neutral,"Right-drag: pan  |  Wheel: zoom  |  Lower ruler: measure  |  F: fit selection");
+    cyui::endStatusBar();
+    auto pos=main->WorkPos;auto size=main->WorkSize;
     for(size_t i=0;i<documents_.size();++i){auto& doc=documents_[i];bool open=true;
         if(!doc.detached&&doc.id!=selected_){doc.app->DrawInactive();continue;}
         if(!doc.detached){ImGui::SetNextWindowViewport(main->ID);ImGui::SetNextWindowPos(pos);ImGui::SetNextWindowSize(size);}

@@ -1,6 +1,8 @@
 # CyInsights
 
 Native interface navigation, query preparation and performance measurements are documented in [InterfacePerformance](Docs/InterfacePerformance.md).
+The native [CyUI interface](Docs/Interface.md) provides five themes, compact or
+comfortable controls, grouped analysis tools and a responsive capture session.
 
 Native C++ / Dear ImGui profiler for Unreal Engine traces, with an Insights-style
 continuous CPU/GPU timeline and optional extra GPU capture data. The interface

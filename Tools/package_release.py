@@ -88,7 +88,9 @@ def main():
         'This preparation requires licensed UE 5.5-5.8 and VS C++/CMake tools.\n'
         'UE 5.8 needs MSVC 14.44. Unreal is not rebuilt. The CSV bridge remains available\n'
         'if preparation is cancelled or dependencies are missing. Open a .utrace or .cycapture.\n'
-        'Optional AI companion: Python 3.11 x64, then powershell -File AI/SetupRuntime.ps1.\n'
+        'The native AI Inspector, tools and analysis method are built into the app.\n'
+        'Only the optional external AI/SDK companion needs Python 3.11 x64 and\n'
+        'powershell -File AI/SetupRuntime.ps1.\n'
         'Native Unreal adapters are supplied as sources, not prebuilt Engine Tools.\n'
         'See Docs/Licensing.md, Docs/NativeTiming.md and the matching release sources.\n'
     ).encode()

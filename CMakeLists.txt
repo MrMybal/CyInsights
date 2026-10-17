@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(CyInsights VERSION 0.1.1 LANGUAGES CXX)
+project(CyInsights VERSION 0.2.0 LANGUAGES CXX)
 enable_language(RC)
 # French MSVC emits UTF-8 NBSP in /showIncludes. CMake's OEM decoding can
 # corrupt it to "┬á", preventing Ninja from tracking header dependencies.
@@ -51,6 +51,9 @@ add_library(CyImGui STATIC "${IMGUI}/imgui.cpp" "${IMGUI}/imgui_draw.cpp"
     "${IMGUI}/imgui_tables.cpp" "${IMGUI}/imgui_widgets.cpp"
     "${IMGUI}/backends/imgui_impl_dx11.cpp" "${IMGUI}/backends/imgui_impl_win32.cpp")
 target_include_directories(CyImGui PUBLIC "${IMGUI}" "${IMGUI}/backends")
+set(CYUI_IMGUI_TARGET CyImGui CACHE STRING "Dear ImGui target used by CyUI" FORCE)
+set(CYUI_BUILD_DEMO OFF CACHE BOOL "Build the separate CyUI gallery host" FORCE)
+add_subdirectory(ThirdParty/CyUI)
 add_library(CyAnalysisWorkers STATIC App/AnalysisWorkers.cpp)
 target_include_directories(CyAnalysisWorkers PUBLIC App)
 add_library(CyTimingModel STATIC App/TimingModel.cpp App/TimingViewport.cpp App/FrameDiagnostics.cpp App/Distribution.cpp)
@@ -67,6 +70,8 @@ target_include_directories(CyTimingModel PUBLIC App)
 add_library(CyInsightsUi OBJECT App/Main.cpp App/DocumentWorkspace.cpp App/Branding.cpp App/Application.cpp App/InsightsViews.cpp App/NativeTrace.cpp App/NativeSetup.cpp App/NativeSetupViews.cpp App/CounterTrace.cpp App/CounterViews.cpp App/ComparisonTrace.cpp App/ComparisonViews.cpp App/AnalysisViews.cpp App/TaskTrace.cpp App/ActivityTrace.cpp App/ActivityViews.cpp App/AiViews.cpp)
 target_link_libraries(CyInsightsUi PRIVATE CyCapture CyGpuAnalysis CyImGui CyTimingModel CyRemoteCapture CyCounterModel CyTimingComparison CyNativeStorage)
 target_sources(CyInsightsUi PRIVATE App/AiTools.cpp App/AiResources.cpp App/AiMethodView.cpp)
+target_sources(CyInsightsUi PRIVATE App/UiTheme.cpp)
+target_link_libraries(CyInsightsUi PRIVATE CyUI::CyUI)
 target_link_libraries(CyInsightsUi PRIVATE CyAiAnalysis)
 add_executable(CyInsightsApp WIN32 $<TARGET_OBJECTS:CyInsightsUi> App/CyInsights.rc)
 set_property(SOURCE App/CyInsights.rc PROPERTY OBJECT_DEPENDS
@@ -75,6 +80,7 @@ target_include_directories(CyInsightsApp PRIVATE App Assets/Branding AI/app AI/a
 target_link_libraries(CyInsightsApp PRIVATE windowscodecs ole32)
 target_link_libraries(CyInsightsApp PRIVATE CyCapture CyGpuAnalysis CyImGui CyTimingModel CyRemoteCapture CyCounterModel CyTimingComparison CyNativeStorage d3d11 dxgi user32 gdi32 shell32 comdlg32 dwmapi)
 target_link_libraries(CyInsightsApp PRIVATE CyAiAnalysis)
+target_link_libraries(CyInsightsApp PRIVATE CyUI::CyUI)
 add_executable(CyCaptureTool Tools/CaptureTool.cpp)
 target_link_libraries(CyCaptureTool PRIVATE CyCapture)
 set(CYINSIGHTS_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin/$<CONFIG>" CACHE STRING

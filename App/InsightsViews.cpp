@@ -9,146 +9,55 @@
 #include <imgui_internal.h>
 namespace cyinsights {
 namespace {
-ImU32 CauseColour(FrameCause cause,int alpha=255) {
-    switch(cause){case FrameCause::Game:return IM_COL32(234,130,170,alpha);
-        case FrameCause::Render:return IM_COL32(103,171,239,alpha);
-        case FrameCause::Gpu:return IM_COL32(135,214,134,alpha);
-        case FrameCause::Mixed:return IM_COL32(186,146,232,alpha);
-        case FrameCause::Wait:return IM_COL32(230,184,98,alpha);
-        case FrameCause::Unknown:return IM_COL32(170,170,170,alpha);
-        default:return IM_COL32(209,205,135,alpha);}
+ImU32 CauseColour(FrameCause cause,int opacity=255) {
+    ImU32 colour;
+    switch(cause){case FrameCause::Game:colour=cyui::categorical(1);break;
+        case FrameCause::Render:colour=cyui::categorical(0);break;
+        case FrameCause::Gpu:colour=cyui::palette().success;break;
+        case FrameCause::Mixed:colour=cyui::categorical(3);break;
+        case FrameCause::Wait:colour=cyui::palette().warning;break;
+        default:colour=cyui::palette().textDim;break;}
+    return cyui::alpha(colour,float(opacity)/255);
 }
-enum class ViewIcon { Frames, Timing, Timers, Callers, Callees, Counters, Log, Gpu, Folder, Session };
-void Icon(ViewIcon icon, ImVec2 p, ImU32 colour) {
-    auto *draw = ImGui::GetWindowDrawList();
-    int first_vertex = draw->VtxBuffer.Size;
-    const float x = p.x, y = p.y;
-    if (icon == ViewIcon::Timing || icon == ViewIcon::Timers) {
-        draw->AddCircle(ImVec2(x + 7, y + 8), 5.5f, colour, 16, 1.2f);
-        draw->AddLine(ImVec2(x + 7, y + 8), ImVec2(x + 7, y + 4), colour, 1.2f);
-        draw->AddLine(ImVec2(x + 7, y + 8), ImVec2(x + 10, y + 9), colour, 1.2f);
-        draw->AddLine(ImVec2(x + 5, y), ImVec2(x + 9, y), colour, 1.2f);
-    } else if (icon == ViewIcon::Frames) {
-        draw->AddRect(ImVec2(x, y + 1), ImVec2(x + 14, y + 14), colour);
-        for (int i = 0; i < 3; ++i)
-            draw->AddRectFilled(ImVec2(x + 3 + i * 3, y + 11 - i * 3), ImVec2(x + 5 + i * 3, y + 12), colour);
-    } else if (icon == ViewIcon::Gpu) {
-        draw->AddRect(ImVec2(x + 3, y + 3), ImVec2(x + 11, y + 11), colour);
-        for (int i = 0; i < 3; ++i) {
-            float a = 4.f + i * 3;
-            draw->AddLine(ImVec2(x + a, y), ImVec2(x + a, y + 3), colour);
-            draw->AddLine(ImVec2(x + a, y + 11), ImVec2(x + a, y + 14), colour);
-            draw->AddLine(ImVec2(x, y + a), ImVec2(x + 3, y + a), colour);
-            draw->AddLine(ImVec2(x + 11, y + a), ImVec2(x + 14, y + a), colour);
-        }
-    } else if (icon == ViewIcon::Callers || icon == ViewIcon::Callees) {
-        float a = icon == ViewIcon::Callers ? 1.f : 10.f, b = icon == ViewIcon::Callers ? 10.f : 1.f;
-        draw->AddRectFilled(ImVec2(x + a, y + 5), ImVec2(x + a + 4, y + 9), colour);
-        for (float z : {1.f, 11.f}) {
-            draw->AddRectFilled(ImVec2(x + b, y + z), ImVec2(x + b + 4, y + z + 3), colour);
-            draw->AddLine(ImVec2(x + a + 2, y + 7), ImVec2(x + b + 2, y + z + 1), colour);
-        }
-    } else if (icon == ViewIcon::Counters) {
-        draw->AddLine(ImVec2(x, y + 14), ImVec2(x, y), colour);
-        draw->AddLine(ImVec2(x, y + 14), ImVec2(x + 14, y + 14), colour);
-        draw->AddLine(ImVec2(x + 1, y + 10), ImVec2(x + 5, y + 5), colour, 1.4f);
-        draw->AddLine(ImVec2(x + 5, y + 5), ImVec2(x + 9, y + 9), colour, 1.4f);
-        draw->AddLine(ImVec2(x + 9, y + 9), ImVec2(x + 14, y + 2), colour, 1.4f);
-    } else if (icon == ViewIcon::Folder) {
-        draw->AddRect(ImVec2(x, y + 4), ImVec2(x + 14, y + 13), colour, 1);
-        draw->AddLine(ImVec2(x, y + 4), ImVec2(x, y + 1), colour);
-        draw->AddLine(ImVec2(x, y + 1), ImVec2(x + 6, y + 1), colour);
-        draw->AddLine(ImVec2(x + 6, y + 1), ImVec2(x + 8, y + 4), colour);
-    } else {
-        draw->AddRect(ImVec2(x + 1, y), ImVec2(x + 13, y + 14), colour, 1);
-        for (float z : {4.f, 7.f, 10.f})
-            draw->AddLine(ImVec2(x + 4, y + z), ImVec2(x + 10, y + z), colour);
-    }
-    // Scale the small vector glyph as a unit, including its stroke vertices.
-    float scale = UiScale();
-    for (int i = first_vertex; i < draw->VtxBuffer.Size; ++i) {
-        auto &pos = draw->VtxBuffer[i].pos;
-        pos = ImVec2(p.x + (pos.x - p.x) * scale, p.y + (pos.y - p.y) * scale);
-    }
-}
-bool NativeButton(const char *label, ViewIcon icon, bool active, bool enabled = true, float width = 0,
-                  bool tab = false) {
-    auto p = ImGui::GetCursorScreenPos();
-    float scale = UiScale(), height = 27 * scale;
-    if (width == 0)
-        width = ImGui::CalcTextSize(label).x + 37 * scale;
-    else
-        width *= scale;
-    ImGui::BeginDisabled(!enabled);
-    bool pressed = ImGui::InvisibleButton(label, ImVec2(width, height), ImGuiButtonFlags_EnableNav);
-    ImGui::EndDisabled();
-    bool hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled);
-    auto *draw = ImGui::GetWindowDrawList();
-    auto fill = tab ? (active ? IM_COL32(47, 47, 47, 255) : IM_COL32(24, 24, 24, 255))
-                    : (active ? IM_COL32(0, 101, 194, 255) : IM_COL32(43, 43, 43, 255));
-    if (hovered && enabled)
-        fill = active && !tab ? IM_COL32(14, 122, 215, 255) : IM_COL32(61, 61, 61, 255);
-    draw->AddRectFilled(p, ImVec2(p.x + width, p.y + height), fill, tab ? 0.0f : 3.0f * scale);
-    if (tab && active)
-        draw->AddLine(ImVec2(p.x, p.y + height - scale), ImVec2(p.x + width, p.y + height - scale),
-                      IM_COL32(48, 148, 232, 255), 2 * scale);
-    auto colour = enabled ? IM_COL32(230, 234, 238, 255) : IM_COL32(112, 112, 112, 255);
-    Icon(icon, ImVec2(p.x + 7 * scale, p.y + 6 * scale), colour);
-    draw->AddText(ImVec2(p.x + 28 * scale, p.y + 5 * scale), colour, label);
-    return pressed;
-}
-void Toggle(const char *label, ViewIcon icon, bool &visible) {
-    if (NativeButton(label, icon, visible))
-        visible = !visible;
-    ImGui::SameLine(0, 5 * UiScale());
-}
-void Unavailable(const char *label, ViewIcon icon, const char *explanation) {
-    NativeButton(label, icon, false, false);
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        ImGui::SetTooltip("%s", explanation);
-    ImGui::SameLine(0, 5 * UiScale());
+void PanelToggle(const char* icon,const char* label,bool& open) {
+    cyui::ScopedID id(label);
+    if(cyui::iconButton(icon,label,open))open=!open;
+    ImGui::SameLine(0,cyui::dp(2));
 }
 } // namespace
 void Application::Toolbar() {
-    const auto *v = WorkspaceViewport();
-    if(!hosted_){ImGui::SetNextWindowPos(v->WorkPos);ImGui::SetNextWindowSize(ImVec2(v->WorkSize.x, NavigationHeight()));}
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5 * UiScale(), 2 * UiScale()));
-    if(hosted_)ImGui::BeginChild("##InsightsNavigation",ImVec2(0,NavigationHeight()),0,ImGuiWindowFlags_NoScrollbar);
-    else BeginView("##InsightsNavigation", nullptr,
-                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoMove |
-                     ImGuiWindowFlags_NoScrollbar);
-    if (NativeButton("Session", ViewIcon::Session, session_view_, true, 150, true))
-        session_view_ = true;
-    ImGui::SameLine(0, 1);
-    if (NativeButton("Timing Insights", ViewIcon::Timing, !session_view_, true, 185, true))
-        session_view_ = false;
+    const auto* viewport=WorkspaceViewport();
+    if(!hosted_){ImGui::SetNextWindowPos(viewport->WorkPos);ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x,NavigationHeight()));}
+    cyui::ScopedVar padding(ImGuiStyleVar_WindowPadding,cyui::dp(8,4));
+    if(hosted_)ImGui::BeginChild("##InsightsNavigation",ImVec2(0,NavigationHeight()),ImGuiChildFlags_AlwaysUseWindowPadding,ImGuiWindowFlags_NoScrollbar);
+    else BeginView("##InsightsNavigation",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoDocking|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoScrollbar);
+    const char* modes[]={"Session & capture","Timing Insights"};int mode=session_view_?0:1;
+    if(cyui::segmented("##workspace_mode",modes,2,&mode,cyui::dp(290)))session_view_=mode==0;
+    ImGui::SameLine(0,cyui::dp(12));
+    const bool updating=native_.store&&(model_task_.valid()||loaded_start_!=view_start_||loaded_end_!=view_end_);
+    if(AnalysisBusy()||updating){cyui::spinner("##analysis",6);ImGui::SameLine();}
+    cyui::textDim("%s",AnalysisBusy()?"Analyzing capture...":updating?"Updating visible interval...":native_.store?"Ready to explore":native_.events.empty()?"Open a capture or connect a device":"Native timing ready");
     ImGui::Separator();
-    Toggle("Frames", ViewIcon::Frames, show_frames_);
-    Toggle("Timing", ViewIcon::Timing, show_timing_);
-    Toggle("Timers", ViewIcon::Timers, show_timers_);
-    Toggle("Callers", ViewIcon::Callers, show_callers_);
-    Toggle("Callees", ViewIcon::Callees, show_callees_);
-    Toggle("Counters", ViewIcon::Counters, show_counters_);
-    if(NativeButton("Frame stats",ViewIcon::Counters,show_frame_stats_)){show_frame_stats_=!show_frame_stats_;if(show_frame_stats_)frame_stats_dock_pending_=true;}ImGui::SameLine(0,5*UiScale());
-    Toggle("Distributions", ViewIcon::Counters, show_distribution_);
-    Toggle("Tasks", ViewIcon::Callers, show_tasks_);
-    if(NativeButton("Activities",ViewIcon::Counters,show_activities_)){show_activities_=!show_activities_;if(show_activities_)FocusActivities();}ImGui::SameLine(0,5*UiScale());
-    if(NativeButton("AI Inspector",ViewIcon::Session,show_ai_)){show_ai_=!show_ai_;if(show_ai_)FocusAi();}ImGui::SameLine(0,5*UiScale());
-    Toggle("Compare", ViewIcon::Timers, show_comparison_);
-    Unavailable("Log", ViewIcon::Log,
-                "The native Unreal log provider has not been integrated yet. Application messages are "
-                "available below.");
-    Toggle("GPU frame", ViewIcon::Gpu, show_gpu_);
-    if (NativeButton("Open capture", ViewIcon::Folder, false)) {
-        ChooseAndOpenCaptures();
-    }
-    ImGui::SameLine();
-    ImGui::TextDisabled("%s", native_.store&&(model_task_.valid()||loaded_start_!=view_start_||loaded_end_!=view_end_)?"Updating visible interval..."
-                              : AnalysisBusy()           ? "Analyzing..."
-                              : native_.store ? "Native timing / disk index"
-                              : native_.events.empty() ? "No timing data" : "Native timing");
+    cyui::textDim("Tracks");ImGui::SameLine();
+    PanelToggle(cyui::icon::grid,"Frames - show / hide (View menu)",show_frames_);
+    PanelToggle(cyui::icon::clock,"Timing - show / hide (View menu)",show_timing_);
+    PanelToggle(cyui::icon::equalizer,"Counters - show / hide (View menu)",show_counters_);
+    {bool old=show_frame_stats_;PanelToggle(cyui::icon::ruler,"Frame stats - show / hide (View menu)",show_frame_stats_);if(show_frame_stats_&&!old)frame_stats_dock_pending_=true;}
+    cyui::toolbarSeparator();
+    cyui::textDim("Analyze");ImGui::SameLine();
+    PanelToggle(cyui::icon::list,"Timers - show / hide (View menu)",show_timers_);
+    PanelToggle(cyui::icon::back,"Callers - show / hide (View menu)",show_callers_);
+    PanelToggle(cyui::icon::forward,"Callees - show / hide (View menu)",show_callees_);
+    PanelToggle(cyui::icon::sort,"Distributions / function histogram (scope context menu)",show_distribution_);
+    PanelToggle(cyui::icon::shuffle,"Tasks - show / hide (View menu)",show_tasks_);
+    {bool old=show_activities_;PanelToggle(cyui::icon::globe,"Network, storage & memory (View menu)",show_activities_);if(show_activities_&&!old)FocusActivities();}
+    PanelToggle(cyui::icon::viewAll,"Compare captures (Analysis menu)",show_comparison_);
+    PanelToggle(cyui::icon::code,"Detailed GPU frame (View menu)",show_gpu_);
+    cyui::toolbarSeparator();
+    {bool old=show_ai_;PanelToggle(cyui::icon::lightbulb,"AI Inspector / standalone tools (View menu)",show_ai_);if(show_ai_&&!old)FocusAi();}
+    if(cyui::ghostButton("Panels"))ImGui::OpenPopup("##panel_picker");
+    if(ImGui::BeginPopup("##panel_picker")){PanelMenu();ImGui::EndPopup();}
     if(hosted_)ImGui::EndChild();else ImGui::End();
-    ImGui::PopStyleVar();
 }
 void Application::FitTiming() {
     view_start_ = timing_model_.start;
@@ -302,7 +211,7 @@ void Application::MeasurementRuler(float width) {
     measure_x_=p.x;measure_y_=p.y;measure_width_=width;measure_height_=height;
     const double span=std::max(.000001,view_end_-view_start_);
     auto* draw=ImGui::GetWindowDrawList();
-    draw->AddRectFilled(p,ImVec2(p.x+width,p.y+height),IM_COL32(43,47,51,255));
+    draw->AddRectFilled(p,ImVec2(p.x+width,p.y+height),cyui::palette().bg1);
     ImGui::InvisibleButton("measurement_ruler",ImVec2(width,height));
     const bool hovered=ImGui::IsItemHovered();
     if(hovered)ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
@@ -321,21 +230,21 @@ void Application::MeasurementRuler(float width) {
     if(range_start_!=range_end_) {
         const float a=p.x+width*float((std::min(range_start_,range_end_)-view_start_)/span),
                     b=p.x+width*float((std::max(range_start_,range_end_)-view_start_)/span);
-        draw->AddRectFilled(ImVec2(a,p.y),ImVec2(b,p.y+height),IM_COL32(65,137,192,72));
-        for(float x:{a,b}){draw->AddLine(ImVec2(x,p.y),ImVec2(x,p.y+height),IM_COL32(129,199,248,255),2*scale);draw->AddTriangleFilled(ImVec2(x-4*scale,p.y),ImVec2(x+4*scale,p.y),ImVec2(x,p.y+5*scale),IM_COL32(129,199,248,255));}
+        draw->AddRectFilled(ImVec2(a,p.y),ImVec2(b,p.y+height),cyui::palette().selection);
+        for(float x:{a,b}){draw->AddLine(ImVec2(x,p.y),ImVec2(x,p.y+height),cyui::palette().accent,2*scale);draw->AddTriangleFilled(ImVec2(x-4*scale,p.y),ImVec2(x+4*scale,p.y),ImVec2(x,p.y+5*scale),cyui::palette().accent);}
     }
     for(int i=0;i<ticks;++i) {
         const double index=first+i,t=index*minor;if(t>view_end_)break;
         const float x=p.x+width*float((t-view_start_)/span);
         const bool large=std::abs(std::remainder(index,5.))<.1;
-        draw->AddLine(ImVec2(x,p.y),ImVec2(x,p.y+(large?10:5)*scale),large?IM_COL32(183,189,196,255):IM_COL32(98,110,121,255));
-        if(large){char text[96];std::snprintf(text,sizeof(text),"%.*f s",precision,t);draw->AddText(ImVec2(x+3*scale,p.y+11*scale),IM_COL32(218,223,227,255),text);}
+        draw->AddLine(ImVec2(x,p.y),ImVec2(x,p.y+(large?10:5)*scale),large?cyui::palette().textDim:cyui::palette().gridStrong);
+        if(large){char text[96];std::snprintf(text,sizeof(text),"%.*f s",precision,t);draw->AddText(ImVec2(x+3*scale,p.y+11*scale),cyui::palette().text,text);}
     }
     char label[256];
     if(range_start_!=range_end_)std::snprintf(label,sizeof(label),"Range: %.6f - %.6f s  |  %.3f ms",std::min(range_start_,range_end_),std::max(range_start_,range_end_),std::abs(range_end_-range_start_)*1000);
     else std::snprintf(label,sizeof(label),"Measure interval: drag here with the left mouse button");
-    draw->AddText(ImVec2(p.x+7*scale,p.y+31*scale),IM_COL32(161,205,238,255),label);
-    draw->AddLine(ImVec2(p.x,p.y+height-1),ImVec2(p.x+width,p.y+height-1),IM_COL32(75,91,106,255));
+    draw->AddText(ImVec2(p.x+7*scale,p.y+31*scale),cyui::palette().accent,label);
+    draw->AddLine(ImVec2(p.x,p.y+height-1),ImVec2(p.x+width,p.y+height-1),cyui::palette().lineStrong);
     draw->PopClipRect();
     if(hovered&&drag_surface_!=DragSurface::Measurement)ImGui::SetTooltip("Drag to measure a time range. The view stays fixed; statistics and histograms use this selection. Escape clears the range.");
 }
@@ -368,7 +277,7 @@ void Application::Frames() {
     const float w=std::max(1.f,ImGui::GetContentRegionAvail().x-ImGui::GetStyle().ScrollbarSize),
                 h=std::max(35.f*scale,ImGui::GetContentRegionAvail().y);
     auto* d=ImGui::GetWindowDrawList();
-    d->AddRectFilled(p,ImVec2(p.x+w,p.y+h),IM_COL32(69,69,69,255));
+    d->AddRectFilled(p,ImVec2(p.x+w,p.y+h),cyui::palette().bg0);
     navigation_x_=p.x;navigation_y_=p.y;navigation_width_=w;navigation_height_=h;
     frames_start_=view_start_;frames_end_=view_end_;
     ImGui::InvisibleButton("frame_navigation",ImVec2(w,h));
@@ -381,7 +290,7 @@ void Application::Frames() {
         frames_start_=view_start_;frames_end_=view_end_;
     }
     if(cpu_frames_.empty()) {
-        d->AddText(ImVec2(p.x+7,p.y+7),IM_COL32(185,185,185,255),"CPU frame durations unavailable");
+        d->AddText(ImVec2(p.x+7,p.y+7),cyui::palette().textDim,"CPU frame durations unavailable");
         ImGui::End();ImGui::PopStyleVar();return;
     }
     FrameGlyphs(w);
@@ -389,19 +298,19 @@ void Application::Frames() {
     for(auto pair:{std::pair<double,const char*>{.0166667,"16.7ms / 60fps"},{.0333333,"33.3ms / 30fps"},
                    {.05,"50ms / 20fps"},{.0666667,"66.7ms / 15fps"}}) {
         float y=baseline-graphH*static_cast<float>(pair.first/.075);
-        d->AddLine(ImVec2(p.x,y),ImVec2(p.x+w,y),IM_COL32(94,94,94,255));
+        d->AddLine(ImVec2(p.x,y),ImVec2(p.x+w,y),cyui::palette().gridStrong);
     }
     for(const auto& glyph:frame_glyphs_) {
         const size_t i=glyph.frame;const auto f=cpu_frames_[i];const double duration=f.second-f.first;
         float x=p.x+glyph.left,x2=p.x+glyph.right,y=baseline-graphH*static_cast<float>(std::min(.075,duration)/.075);
         const auto cause=Cause(i);
         const bool attributed=cause==FrameCause::Game||cause==FrameCause::Render||cause==FrameCause::Gpu||cause==FrameCause::Mixed;
-        auto colour=show_frame_causes_&&attributed?CauseColour(cause):IM_COL32(192,192,181,255);
+        auto colour=show_frame_causes_&&attributed?CauseColour(cause):cyui::palette().textDim;
         d->AddRectFilled(ImVec2(x,y),ImVec2(x2,baseline),colour);
         if(glyph.count==1) {
             char label[64];std::snprintf(label,sizeof(label),timing_model_.frames_native?"Frame %llu":"Tick %llu",
                 static_cast<unsigned long long>(timing_model_.frames_native?timing_model_.frame_ids[i]:i));
-            if(x2-x>ImGui::CalcTextSize(label).x+8*scale)d->AddText(ImVec2(x+3*scale,p.y+18*scale),IM_COL32(214,214,214,255),label);
+            if(x2-x>ImGui::CalcTextSize(label).x+8*scale)d->AddText(ImVec2(x+3*scale,p.y+18*scale),cyui::palette().textDim,label);
         }
         if(hovered&&ImGui::IsMouseHoveringRect(ImVec2(x,p.y),ImVec2(x2,baseline))) {
             ImGui::BeginTooltip();
@@ -434,12 +343,13 @@ void Application::Frames() {
     }
     if(show_frame_causes_&&native_.store) {
         char legend[180];std::snprintf(legend,sizeof(legend),"Probable cause | %.0f fps |",frame_target_fps_);
-        float x=p.x+5*scale;d->AddRectFilled(p,ImVec2(p.x+w,p.y+16*scale),IM_COL32(38,38,38,245));
-        d->AddText(ImVec2(x,p.y+scale),IM_COL32(215,215,215,255),legend);x+=ImGui::CalcTextSize(legend).x+8*scale;
+        float x=p.x+5*scale;d->AddRectFilled(p,ImVec2(p.x+w,p.y+16*scale),cyui::alpha(cyui::palette().bg1,0.961f));
+        d->AddText(ImVec2(x,p.y+scale),cyui::palette().textDim,legend);x+=ImGui::CalcTextSize(legend).x+8*scale;
         for(auto item:{std::pair<FrameCause,const char*>{FrameCause::Game,"GameThread"},{FrameCause::Render,"RenderThread"},
             {FrameCause::Gpu,"GPU"},{FrameCause::Mixed,"Mixed"},{FrameCause::Unknown,"No attributed cause = neutral"}}) {
-            auto length=ImGui::CalcTextSize(item.second).x;if(x+length>p.x+w)break;
-            d->AddText(ImVec2(x,p.y+scale),CauseColour(item.first),item.second);x+=length+12*scale;
+            auto length=ImGui::CalcTextSize(item.second).x;if(x+length+10*scale>p.x+w)break;
+            d->AddRectFilled(ImVec2(x,p.y+4*scale),ImVec2(x+5*scale,p.y+10*scale),CauseColour(item.first));
+            d->AddText(ImVec2(x+9*scale,p.y+scale),cyui::palette().textDim,item.second);x+=length+21*scale;
         }
     }
     // Paint scale labels above the bars so a slow frame cannot obscure them.
@@ -447,13 +357,13 @@ void Application::Frames() {
                    {.05,"50ms / 20fps"},{.0666667,"66.7ms / 15fps"}}) {
         float y=baseline-graphH*static_cast<float>(pair.first/.075);
         auto size=ImGui::CalcTextSize(pair.second);const float x=p.x+w-size.x-5*scale;
-        d->AddRectFilled(ImVec2(x-2*scale,y-7*scale),ImVec2(p.x+w,y+7*scale),IM_COL32(57,57,57,210));
-        d->AddText(ImVec2(x,y-6*scale),IM_COL32(202,198,159,255),pair.second);
+        d->AddRectFilled(ImVec2(x-2*scale,y-7*scale),ImVec2(p.x+w,y+7*scale),cyui::alpha(cyui::palette().bg2,0.824f));
+        d->AddText(ImVec2(x,y-6*scale),cyui::palette().textDim,pair.second);
     }
     ImGui::End();ImGui::PopStyleVar();
 }
 void Application::Timing() {
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(.28f, .28f, .28f, 1));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, cyui::vec(cyui::palette().bg0));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     if (!BeginView("Timing", &show_timing_)) {
         ImGui::End();
@@ -487,7 +397,7 @@ void Application::Timing() {
         ImGui::EndCombo();
     }
     ImGui::SameLine();
-    if (ImGui::SmallButton("CPU/GPU"))
+    if (cyui::iconButton(cyui::icon::list,"Choose visible CPU / GPU tracks"))
         ImGui::OpenPopup("track_visibility");
     if (ImGui::BeginPopup("track_visibility")) {
         for (auto &track : timing_model_.tracks)
@@ -495,7 +405,7 @@ void Application::Timing() {
         ImGui::EndPopup();
     }
     ImGui::SameLine();
-    if (ImGui::SmallButton("View Mode"))
+    if (cyui::iconButton(cyui::icon::settings,"Timeline options: depth, frame guides and cause colors"))
         ImGui::OpenPopup("timing_view_mode");
     if (ImGui::BeginPopup("timing_view_mode")) {
         bool all_depths = depth_levels_ == 0;
@@ -530,25 +440,29 @@ void Application::Timing() {
         ImGui::EndPopup();
     }
     ImGui::SameLine();
-    if (ImGui::Button("Fit"))
+    if (cyui::iconButton(cyui::icon::fullScreen,"Focus three frames (Home fits the entire capture)"))
         FitTiming();
     if(ImGui::IsItemHovered())ImGui::SetTooltip("Focus three frames. F fits the selection, Home fits the capture, Left/Right step frames, Escape clears the time selection.");
-    ImGui::SameLine();ImGui::BeginDisabled(range_start_==range_end_);if(ImGui::SmallButton("Fit selection"))fitSelection();ImGui::EndDisabled();
+    ImGui::SameLine();ImGui::BeginDisabled(range_start_==range_end_);if(cyui::iconButton(cyui::icon::ruler,"Fit selected interval (F)"))fitSelection();ImGui::EndDisabled();
     ImGui::SameLine();
     ImGui::BeginDisabled(cpu_frames_.empty());
-    if (ImGui::SmallButton("< Frame"))
+    if (cyui::iconButton(cyui::icon::previous,"Previous frame (Left arrow)"))
         StepFrame(-1);
     ImGui::SameLine();
-    if (ImGui::SmallButton("Frame >"))
+    if (cyui::iconButton(cyui::icon::next,"Next frame (Right arrow)"))
         StepFrame(1);
     ImGui::EndDisabled();
     ImGui::SameLine();
     ImGui::SetNextItemWidth(175 * scale);
     if(ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)&&ImGui::GetIO().KeyCtrl&&ImGui::IsKeyPressed(ImGuiKey_F))ImGui::SetKeyboardFocusHere();
-    if(ImGui::InputTextWithHint("##timing_search", "Search timing events (Ctrl+F)", search_, sizeof(search_)))timing_exact_name_.clear();
+    if(cyui::searchField("##timing_search", search_, sizeof(search_), "Find a timing event (Ctrl+F)",cyui::dp(230)))timing_exact_name_.clear();
     ImGui::SameLine();
-    if(ImGui::SmallButton("Next slow frame"))FocusSlowFrame();
-    if(!timing_exact_name_.empty()){ImGui::TextWrapped("Exact function: %s",timing_exact_name_.c_str());ImGui::SameLine();if(ImGui::SmallButton("Clear function filter"))FilterFunction({});}
+    if(cyui::iconTextButton(cyui::icon::warning,"Next slow frame",cyui::Variant::ghost))FocusSlowFrame();
+    if(!timing_exact_name_.empty()){
+        if(cyui::iconButton(cyui::icon::close,"Clear exact function filter (double-click an empty timeline area)"))FilterFunction({});
+        ImGui::SameLine();cyui::badge("Exact function",cyui::Tone::accent);ImGui::SameLine();
+        ImGui::TextWrapped("%s",timing_exact_name_.c_str());
+    }
     if (timing_model_.timers.size()!=native_.events.size()||(native_.events.empty() && counters_->series.empty() && !activity_store_)) {
         ImGui::Spacing();
         ImGui::TextWrapped("  %s", AnalysisBusy() ? message_.c_str()
@@ -590,26 +504,26 @@ void Application::Timing() {
             if(cpu_frames_[i].first>=view_start_)guides.emplace_back(i,glyph.left);
         }
     }
-    d->AddRectFilled(p, ImVec2(p.x + w, p.y + ruler_height), IM_COL32(57, 57, 57, 255));
+    d->AddRectFilled(p, ImVec2(p.x + w, p.y + ruler_height), cyui::palette().bg2);
     ImGui::InvisibleButton("time_ruler", ImVec2(w, ruler_height));
     double power = std::pow(10., std::floor(std::log10(span / 8))),
            step = power * std::ceil(span / (8 * power));
     for (double t = std::ceil(view_start_ / step) * step; t < view_end_; t += step) {
         float x = p.x + w * static_cast<float>((t - view_start_) / span);
         auto label = TimingLabel(t);
-        d->AddLine(ImVec2(x, p.y), ImVec2(x, p.y + time_ruler_height), IM_COL32(130, 130, 130, 255));
-        d->AddText(ImVec2(x + 3 * scale, p.y + 9 * scale), IM_COL32(206, 206, 206, 255), label.c_str());
+        d->AddLine(ImVec2(x, p.y), ImVec2(x, p.y + time_ruler_height), cyui::palette().gridStrong);
+        d->AddText(ImVec2(x + 3 * scale, p.y + 9 * scale), cyui::palette().textDim, label.c_str());
     }
     float previous_label = -10000;
     for (const auto &guide : guides) {
         float x = p.x + guide.second;
         d->AddLine(ImVec2(x, p.y + time_ruler_height), ImVec2(x, p.y + ruler_height),
-                   IM_COL32(177, 123, 139, 255));
+                   cyui::palette().gridStrong);
         if (x >= previous_label) {
             char label[48];
             std::snprintf(label,sizeof(label),timing_model_.frames_native?"Frame %llu":"Tick %llu",
                 static_cast<unsigned long long>(timing_model_.frames_native?timing_model_.frame_ids[guide.first]:guide.first));
-            d->AddText(ImVec2(x + 2 * scale, p.y + time_ruler_height), IM_COL32(209, 173, 187, 255), label);
+            d->AddText(ImVec2(x + 2 * scale, p.y + time_ruler_height), cyui::palette().textDim, label);
             previous_label = x + ImGui::CalcTextSize(label).x + 8 * scale;
         }
         if (ImGui::IsItemHovered() &&
@@ -703,23 +617,23 @@ void Application::Timing() {
             // Use lane padding, which survives integer mouse coordinates at any DPI.
             timing_blank_x_=pos.x+w*.5f;timing_blank_y_=pos.y+height-2*scale;
         }
-        d->AddRectFilled(pos, ImVec2(pos.x + w, pos.y + height), IM_COL32(72, 72, 72, 255));
-        const auto domain=track.gpu?FrameDomain::Gpu:DiagnosticDomain(track.events.empty()?track.name:native_.events[track.events.front()].thread);
+        d->AddRectFilled(pos, ImVec2(pos.x + w, pos.y + height), cyui::palette().bg0);
+        const auto domain=DiagnosticDomain(track.events.empty()?track.name:native_.events[track.events.front()].thread);
         FrameBackground(pos.x,pos.y+header_height,height-header_height,domain);
         if(tracks_y_==0&&rows>0&&!track.collapsed) {tracks_x_=pos.x;tracks_y_=pos.y+header_height+scope_height*.5f;}
         d->AddLine(ImVec2(pos.x, pos.y + height - 1), ImVec2(pos.x + w, pos.y + height - 1),
-                   IM_COL32(54, 54, 54, 255));
+                   cyui::palette().lineStrong);
         for (double t = std::ceil(view_start_ / step) * step; t < view_end_; t += step) {
             float x = pos.x + w * static_cast<float>((t - view_start_) / span);
             d->AddLine(ImVec2(x, pos.y + header_height), ImVec2(x, pos.y + height),
-                       IM_COL32(79, 79, 79, 255));
+                       cyui::palette().grid);
         }
         for (const auto &guide : guides)
             d->AddLine(ImVec2(pos.x + guide.second, pos.y + header_height),
-                       ImVec2(pos.x + guide.second, pos.y + height), IM_COL32(121, 93, 101, 180));
-        d->AddRectFilled(pos, ImVec2(pos.x + w, pos.y + header_height - scale), IM_COL32(61, 61, 61, 255));
+                       ImVec2(pos.x + guide.second, pos.y + height), cyui::alpha(cyui::palette().gridStrong,0.706f));
+        d->AddRectFilled(pos, ImVec2(pos.x + w, pos.y + header_height - scale), cyui::palette().bg2);
         auto header = std::string(track.collapsed ? "> " : "v ") + track.name;
-        d->AddText(ImVec2(pos.x + 4 * scale, pos.y + 2 * scale), IM_COL32(220, 220, 220, 255),
+        d->AddText(ImVec2(pos.x + 4 * scale, pos.y + 2 * scale), cyui::palette().text,
                    header.c_str());
         if (laneHovered && ImGui::GetIO().MousePos.y < pos.y + header_height - scale &&
             ImGui::IsMouseClicked(0))
@@ -734,7 +648,7 @@ void Application::Timing() {
         if(track.gpu_detail.Limited()) {
             const char* warning="GPU group costs unresolved";
             const float warning_x=pos.x+w-ImGui::CalcTextSize(warning).x-8*scale;
-            d->AddText(ImVec2(warning_x,pos.y+2*scale),IM_COL32(239,188,107,255),warning);
+            d->AddText(ImVec2(warning_x,pos.y+2*scale),cyui::palette().warning,warning);
             if(ImGui::IsMouseHoveringRect(ImVec2(warning_x,pos.y),ImVec2(pos.x+w,pos.y+header_height))) {
                 ImGui::BeginTooltip();
                 ImGui::TextUnformatted("Derived diagnostic in the loaded timing interval");
@@ -755,12 +669,12 @@ void Application::Timing() {
         }
         if (track.glyphs.empty())
             d->AddText(ImVec2(pos.x + 5 * scale, pos.y + header_height + 2 * scale),
-                       IM_COL32(145, 145, 145, 255), "No timing scopes in this interval");
+                       cyui::palette().textFaint, "No timing scopes in this interval");
         if (depth_levels_ > 0 && query_rows < track.RowCount(0)) {
             char label[64];
             std::snprintf(label, sizeof(label), "%d depth levels hidden", track.RowCount(0) - query_rows);
             float label_x = pos.x + w - ImGui::CalcTextSize(label).x - 5 * scale;
-            d->AddText(ImVec2(label_x, pos.y + 2 * scale), IM_COL32(206, 172, 125, 255), label);
+            d->AddText(ImVec2(label_x, pos.y + 2 * scale), cyui::palette().textDim, label);
         }
         for (const auto &glyph : track.glyphs) {
             auto i = glyph.event;
@@ -777,7 +691,7 @@ void Application::Timing() {
             d->AddRectFilled(ImVec2(x, y), ImVec2(std::max(x + 1, x2), y + scope_height), colour);
             if (glyph.selected)
                 d->AddRect(ImVec2(x, y), ImVec2(std::max(x + 1, x2), y + scope_height),
-                           IM_COL32(255, 255, 255, 255), 0.0f, 2.0f * scale, ImDrawFlags_None);
+                           cyui::palette().accent, 0.0f, 2.0f * scale, ImDrawFlags_None);
             if (glyph.count == 1 && x2 - x > 16 * scale) {
                 const char* label = e.name.c_str();std::string duration_label;
                 if (x2 - x > 200 * scale && !e.open_ended) {
@@ -790,7 +704,7 @@ void Application::Timing() {
                 // the timeline into hundreds of draw submissions.
                 const ImVec4 text_clip(x,y,x2,y+scope_height);
                 d->AddText(ImGui::GetFont(),ImGui::GetFontSize(),ImVec2(x+2*scale,y-scale),
-                           IM_COL32(24,24,24,255),label,nullptr,0,&text_clip);
+                           ScopeTextColour(colour),label,nullptr,0,&text_clip);
             }
             if (laneHovered &&
                 ImGui::IsMouseHoveringRect(ImVec2(x, y), ImVec2(std::max(x + 1, x2), y + scope_height))) {
@@ -841,11 +755,11 @@ void Application::Timing() {
                   b = pos.x +
                       w * static_cast<float>((std::max(range_start_, range_end_) - view_start_) / span);
             d->AddRectFilled(ImVec2(a, pos.y + header_height), ImVec2(b, pos.y + height),
-                             IM_COL32(88, 143, 195, 35));
+                             cyui::palette().selection);
             d->AddLine(ImVec2(a, pos.y + header_height), ImVec2(a, pos.y + height),
-                       IM_COL32(153, 201, 230, 255));
+                       cyui::palette().accent);
             d->AddLine(ImVec2(b, pos.y + header_height), ImVec2(b, pos.y + height),
-                       IM_COL32(153, 201, 230, 255));
+                       cyui::palette().accent);
         }
     }
     // A right click opens the menu only after release. Held input remains a pan,
@@ -943,14 +857,14 @@ void Application::TimerTable(const char *id, const std::vector<TimerTotal> &rows
                 ImGui::TableNextRow();
                 ImGui::TableNextColumn();
                 ImGui::PushID(static_cast<int>(row.timer));
-                ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(timer_colours_[row.timer]));
+                cyui::colourChip("##timer_colour",timer_colours_[row.timer],cyui::dp(4,12));
+                ImGui::SameLine(0,cyui::dp(4));
                 if (ImGui::Selectable(name.c_str(), selected_timer_ == static_cast<int>(row.timer),
                                       ImGuiSelectableFlags_SpanAllColumns) &&
                     selectable)
                     selected_timer_ = static_cast<int>(row.timer);
                 if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0))
                     FocusTimer(row.timer);
-                ImGui::PopStyleColor();
                 if (ImGui::IsItemHovered())
                     ImGui::SetTooltip("%s\nInclusive sum in interval; nested scopes overlap.\nExclusive is "
                                       "derived from contained immediate children.",
@@ -985,7 +899,7 @@ void Application::Statistics() {
         return;
     }
     ImGui::SetNextItemWidth(-1);
-    ImGui::InputTextWithHint("##timer_search", "Search timers", search_, sizeof(search_));
+    cyui::searchField("##timer_search", search_, sizeof(search_),"Search timers",-1);
     ImGui::TextDisabled("Flat / selected interval");
     if(native_.store&&(statistics_start_!=(range_start_==range_end_?view_start_:std::min(range_start_,range_end_))||
                       statistics_end_!=(range_start_==range_end_?view_end_:std::max(range_start_,range_end_))))
@@ -1030,7 +944,7 @@ void Application::LoadStatus() {
     BeginView(load_error_.empty()?"Loading capture":"Capture could not be opened",nullptr,
         ImGuiWindowFlags_NoDocking|ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoCollapse|ImGuiWindowFlags_AlwaysAutoResize|ImGuiWindowFlags_NoFocusOnAppearing);
     if(!load_error_.empty()) {
-        ImGui::TextColored(ImVec4(1,.45f,.4f,1),"Analysis error");ImGui::TextWrapped("%s",load_error_.c_str());
+        cyui::heading("Capture could not be opened",2);ImGui::TextWrapped("%s",load_error_.c_str());
         ImGui::TextWrapped("Trace: %s",trace_.u8string().c_str());ImGui::TextWrapped("Analyzer: %s",exe_);
         ImGui::TextWrapped("Log: %s",native_.LogPath().u8string().c_str());
         if(ImGui::Button("Copy details")){auto details=load_error_+"\n"+trace_.u8string()+"\n"+native_.LogPath().u8string();ImGui::SetClipboardText(details.c_str());}
@@ -1044,7 +958,7 @@ void Application::LoadStatus() {
         ImGui::TextWrapped("%s",phase);ImGui::Text("Elapsed: %.1f s",ImGui::GetTime()-load_started_);
         const auto& progress=native_.Progress();uint64_t total=progress.total.load(),bytes=progress.bytes.load();
         float fraction=native_.Importing()&&total?static_cast<float>(double(bytes)/double(total)):-static_cast<float>(ImGui::GetTime());
-        ImGui::ProgressBar(fraction,ImVec2(-1,18*UiScale()),native_.Importing()&&total?nullptr:"Working...");
+        cyui::progressBar(fraction,ImVec2(-1,cyui::dp(18)),native_.Importing()&&total?nullptr:"Working...",cyui::Tone::accent);
         if(native_.Importing())ImGui::Text("%llu events indexed | %.1f / %.1f MiB",static_cast<unsigned long long>(progress.events.load()),double(bytes)/(1024*1024),double(total)/(1024*1024));
         else if(native_.Busy())ImGui::Text("%s: %.1f MiB",native_.DirectTiming()?"Compact binary timings":"Intermediate CSV export",double(native_.ExportBytes())/(1024*1024));
         ImGui::TextWrapped("%s",pending_capture_.empty()?trace_.filename().u8string().c_str():pending_capture_.filename().u8string().c_str());

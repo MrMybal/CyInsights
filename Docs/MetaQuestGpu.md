@@ -48,12 +48,16 @@ PC receipt time and GPU-result delivery frames are never substituted for
 execution times. A snapshot-based relation is still subject to source clock
 accuracy; it does not establish a unique Unreal frame or pass identity.
 
-Available hardware stages appear as `GPU / Meta Game / <queue>` tracks above
+Available hardware stages appear as `GPU / Meta Game / <queue> / <stage>` tracks above
 CPU threads. Other processes and unknown contexts have separate GPU tracks;
 they do not participate in the game's bottleneck attribution. Names such as
 Binning, Render, Load or Store are retained when the producer supplies them.
 These are hardware stages, not reconstructed Unreal groups or shader costs.
 Context, surface and submission information remains in the raw source.
+Surface envelopes have a separate `Surfaces` display track. Unknown process
+identity remains unknown even when a queue label contains the application name.
+These tracks remain GPU tracks for display, but do not establish a measured
+game bottleneck or an Unreal pass identity.
 
 System counter samples appear under **Meta GPU system** in Counters. They have
 source observation timestamps and unknown execution-frame identity; they are
@@ -126,6 +130,40 @@ must precede adding advanced per-stage/per-draw metric selection.
 
 See [Meta's prerequisites](https://developers.meta.com/vr/documentation/native/android/ts-perfettoguide/)
 and [profiler activation](https://developers.meta.com/vr/documentation/native/android/ts-ovrgpuprofiler/).
+
+## Isolated rendered test, 17 October 2026
+
+The separate Development project described in [QuestGpuTestProject.md](QuestGpuTestProject.md)
+was packaged against installed stock UE 5.5.4 libraries and run on Quest 3.
+A 25-second recording contained 219,366 timed Meta stage packets and 20,204 valid
+system counter samples. The actual stage names were `Workload`, `Dispatch`,
+`Blit`, `Preempt` and surface envelopes. **Binning, Render and separate load/store
+stages were not present in this recording**, despite the requested detailed
+configuration. The native reader aligned 213,791 Meta intervals with the Unreal
+timeline, and their separate GPU tracks were inspected in the native app.
+This proves received stage display; it does not prove the missing fine stages
+or unique correspondence with Unreal groups.
+
+That recording exposed an ADB cleanup bug: a nested `sh -c` lost its script
+argument boundary, preventing automatic retrieval. The raw file was recovered
+manually for the analysis above. Cleanup now sends the complete polling script
+directly to `adb shell`, with a regression fixture reproducing the original
+failure. The recovered archive is not evidence of automatic retrieval success.
+
+The stock UE 5.5 Vulkan loader also lacks the exported `EndRenderPass2KHR` slot
+present in the Meta fork. Requiring it disabled the entire optional pass
+collector. The build now treats this slot independently and observes stock
+5.5's `BeginRenderPass2KHR` / classic end pair. A production-collector hardware
+probe with the EndPass2 symbol omitted resolved both legacy and stock-5.5 pairs
+on Adreno 740: two resolved, zero pending/dropped. Blocked-generation tests also
+rejected stale query values. The test APK compiles and links with this change;
+its packaged capture validation remains necessary.
+
+During an additional direct profiler cross-check, the test process crashed
+through the Meta/Adreno profiling layer. Another instrumented startup also
+crashed before capture. Preserve the driver stack and compare with profiling
+disabled; do not report a complete stable hardware workflow from compilation
+or a manually recovered recording alone.
 
 ## SDK/MCP
 

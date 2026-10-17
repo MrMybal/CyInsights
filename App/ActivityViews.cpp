@@ -87,7 +87,7 @@ void Application::ActivitiesView(){
  if(ImGui::BeginCombo("Track",activity_store_->lanes[activity_lane_].label.c_str())){ImGuiListClipper clip;clip.Begin(static_cast<int>(activity_store_->lanes.size()));while(clip.Step())for(int i=clip.DisplayStart;i<clip.DisplayEnd;++i)if(ImGui::Selectable(activity_store_->lanes[i].label.c_str(),i==activity_lane_)){activity_lane_=i;activity_page_=0;}ImGui::EndCombo();}
  bool pin=activity_pinned_[activity_lane_]!=0;if(ImGui::Checkbox("Show track in Timing",&pin)){activity_pinned_[activity_lane_]=pin;++activity_revision_;}
  if(ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)&&ImGui::GetIO().KeyCtrl&&ImGui::IsKeyPressed(ImGuiKey_F))ImGui::SetKeyboardFocusHere();
- if(ImGui::InputTextWithHint("##activity_search","Search event / file / packet content (Ctrl+F)",activity_search_,sizeof(activity_search_)))activity_page_=0;
+ if(cyui::searchField("##activity_search",activity_search_,sizeof(activity_search_),"Search event / file / packet content (Ctrl+F)"))activity_page_=0;
  ImGui::TextDisabled(range_start_==range_end_?"Details follow visible interval":"Details follow selected timeline interval (Shift + drag ruler)");
  if(activity_query_.valid()||activity_pending_)ImGui::TextDisabled("Updating interval... previous result retains its displayed time bounds");
  if(activity_result_.details.lanes.empty()){ImGui::End();return;}
@@ -120,8 +120,8 @@ void Application::ActivityTracks(float width){
   if(hover&&ImGui::IsMouseClicked(0)&&ImGui::GetIO().MousePos.y>=pos.y+header)BeginTimingDrag(DragSurface::Tracks,0,width,false);
   if(hover&&ImGui::IsMouseClicked(0)&&ImGui::GetIO().MousePos.y<pos.y+header){activity_lane_=static_cast<int>(lane);activity_page_=0;FocusActivities();}
   ImGui::PopID();if(pos.y+height<clip.Min.y||pos.y>clip.Max.y)continue;
-  auto& meta=activity_store_->lanes[lane];auto colour=meta.kind=="network"?IM_COL32(94,201,222,255):meta.kind=="memory"?IM_COL32(169,131,216,255):IM_COL32(225,178,101,255);
-  draw->AddRectFilled(pos,ImVec2(pos.x+width,pos.y+height),IM_COL32(67,67,67,255));draw->AddRectFilled(pos,ImVec2(pos.x+width,pos.y+header),IM_COL32(58,58,58,255));
+  auto& meta=activity_store_->lanes[lane];auto colour=meta.kind=="network"?cyui::palette().info:meta.kind=="memory"?cyui::categorical(3):cyui::categorical(2);
+  draw->AddRectFilled(pos,ImVec2(pos.x+width,pos.y+height),cyui::palette().bg0);draw->AddRectFilled(pos,ImVec2(pos.x+width,pos.y+header),cyui::palette().bg2);
   draw->PushClipRect(pos,ImVec2(pos.x+width,pos.y+height),true);draw->AddText(ImVec2(pos.x+4*scale,pos.y+2*scale),colour,meta.label.c_str());
   auto& window=activity_result_.visible;auto found=std::find_if(window.lanes.begin(),window.lanes.end(),[&](auto& l){return l.lane==lane;});
   if(window.end>window.start&&window.start<view_end_&&window.end>view_start_&&found!=window.lanes.end()&&!found->bins.empty()){
@@ -132,14 +132,14 @@ void Application::ActivityTracks(float width){
     float px=pos.x+width*float((t-view_start_)/span),right=pos.x+width*float((t+column-view_start_)/span),y=base-float((meta.kind=="memory"?(bin.maximum-low)/(peak-low):double(bin.count)/peak))*(height-header-12*scale);
     draw->AddRectFilled(ImVec2(px,y),ImVec2(std::max(px+1,right),base),colour);
    }
-   if(window.start!=view_start_||window.end!=view_end_)draw->AddText(ImVec2(pos.x+5*scale,pos.y+header+2*scale),IM_COL32(220,220,220,255),"Updating... last completed density reprojected");
+   if(window.start!=view_start_||window.end!=view_end_)draw->AddText(ImVec2(pos.x+5*scale,pos.y+header+2*scale),cyui::palette().text,"Updating... last completed density reprojected");
    double hoveredTime=view_start_+(ImGui::GetIO().MousePos.x-pos.x)/width*span;
    if(hover&&hoveredTime>=window.start&&hoveredTime<window.end){auto x=static_cast<size_t>(std::clamp((hoveredTime-window.start)/column,0.,double(found->bins.size()-1)));auto& bin=found->bins[x];
     if(meta.kind=="memory")ImGui::SetTooltip("%s\n%llu native samples in column\nMin / max: %.0f / %.0f %s\nSample intervals are not execution durations.",meta.label.c_str(),bin.count,bin.minimum,bin.maximum,meta.unit.c_str());
     else ImGui::SetTooltip("%s\n%llu observations intersect this time column\nDerived density display of measured events; open Activities for exact observations.",meta.label.c_str(),bin.count);
    }
-  }else draw->AddText(ImVec2(pos.x+5*scale,pos.y+header+6*scale),IM_COL32(180,180,180,255),"Updating activity interval...");
-  if(range_start_!=range_end_){double span=std::max(.000001,view_end_-view_start_);float a=pos.x+width*float((std::min(range_start_,range_end_)-view_start_)/span),b=pos.x+width*float((std::max(range_start_,range_end_)-view_start_)/span);draw->AddRectFilled(ImVec2(a,pos.y+header),ImVec2(b,pos.y+height),IM_COL32(88,143,195,35));}
+  }else draw->AddText(ImVec2(pos.x+5*scale,pos.y+header+6*scale),cyui::palette().textDim,"Updating activity interval...");
+  if(range_start_!=range_end_){double span=std::max(.000001,view_end_-view_start_);float a=pos.x+width*float((std::min(range_start_,range_end_)-view_start_)/span),b=pos.x+width*float((std::max(range_start_,range_end_)-view_start_)/span);draw->AddRectFilled(ImVec2(a,pos.y+header),ImVec2(b,pos.y+height),cyui::palette().selection);}
   draw->PopClipRect();
  }
 }

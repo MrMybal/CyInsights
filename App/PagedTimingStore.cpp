@@ -137,7 +137,7 @@ std::shared_ptr<PagedTimingStore> PagedTimingStore::Build(const std::filesystem:
             if(e.has_thread_id) {
                 auto n=thread_ids.try_emplace(e.thread_id,static_cast<uint32_t>(result->tracks.size()));track=n.first->second;
             } else {auto n=thread_names.try_emplace(e.thread,static_cast<uint32_t>(result->tracks.size()));track=n.first->second;}
-            if(track==result->tracks.size()){result->tracks.push_back({e.thread,e.thread_id,e.has_thread_id,e.depth,TimingMatches(e.thread,"gpu")});stacks.emplace_back();last_start.push_back(-INFINITY);coverage.emplace_back(DiagnosticDomain(e.thread));}
+            if(track==result->tracks.size()){result->tracks.push_back({e.thread,e.thread_id,e.has_thread_id,e.depth,IsGpuTimingTrack(e.thread)});stacks.emplace_back();last_start.push_back(-INFINITY);coverage.emplace_back(DiagnosticDomain(e.thread));}
             result->tracks[track].max_depth=std::max(result->tracks[track].max_depth,e.depth);
             uint32_t timer;
             if(e.frame_type>=0){auto n=frame_timers.try_emplace(std::make_pair(e.frame_type,e.frame_index),static_cast<uint32_t>(result->timers.size()));timer=n.first->second;}
@@ -373,7 +373,7 @@ void PagedTimingStore::ApplyTotals(const TimingWindow& window,TimingModel& model
     std::sort(model.totals.begin(),model.totals.end(),[](const auto& x,const auto& y){return x.inclusive>y.inclusive;});
     for(const auto& track:tracks) {
         auto found=std::find_if(model.tracks.begin(),model.tracks.end(),[&](const auto& t){return track.has_id?t.has_id&&t.id==track.id:!t.has_id&&t.name==track.name;});
-        if(found==model.tracks.end()){TimingTrack lane;lane.name=track.name;lane.id=track.id;lane.has_id=track.has_id;lane.gpu=TimingMatches(track.name,"gpu");lane.depths.resize(static_cast<size_t>(track.max_depth)+1);model.tracks.push_back(std::move(lane));}
+        if(found==model.tracks.end()){TimingTrack lane;lane.name=track.name;lane.id=track.id;lane.has_id=track.has_id;lane.gpu=IsGpuTimingTrack(track.name);lane.depths.resize(static_cast<size_t>(track.max_depth)+1);model.tracks.push_back(std::move(lane));}
         else found->depths.resize(std::max(found->depths.size(),static_cast<size_t>(track.max_depth)+1));
     }
     std::unordered_map<uint64_t,size_t> track_ids;std::unordered_map<std::string,size_t> track_names;

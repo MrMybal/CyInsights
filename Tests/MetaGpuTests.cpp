@@ -41,7 +41,12 @@ int Fake(int argc,char** argv,const fs::path& dir){
     if(a[0]=="cat"){std::cout<<"perfetto "<<Read(dir/"remote-config");return 0;}
     if(a[0]=="kill"){Write(dir/"stopped",a.back());return 0;}
     if(a[0]=="test")return 1;
-    if(a[0]=="sh"){std::cout<<"gone\n";return 0;}
+    // Emulate adb's remote command parsing: an argv-style `sh -c if ...`
+    // loses the script boundary and must not silently pass this test double.
+    if(a[0]=="sh")return 2;
+    if(a.size()==1&&a[0]=="if test -d /proc/987; then echo alive; else echo gone; fi"){
+        Write(dir/"flush-script",a[0]);std::cout<<"gone\n";return 0;
+    }
     if(a[0]=="rm")return 0;return 2;
 }
 int main(int argc,char** argv){
@@ -55,6 +60,8 @@ int main(int argc,char** argv){
         check(counts.stage_packets==3&&counts.timed_stage_packets==3&&counts.unaligned_stages==1,"Missing hardware events are distinct from rejected clock alignment");
         check(events[0].mono_ns==5000000000ull&&events[1].mono_ns==5000300000ull,"Late realtime/monotonic clock snapshot alignment");
         check(events[0].name=="Binning"&&events[1].name=="Render"&&events[0].queue=="graphics","Hardware stage and queue dictionary");
+        {Stage surface=events[0];surface.name="surface#123 | 1024x1024";
+         check(StageLane(surface)=="Surfaces"&&StageLane(events[0])=="Binning"&&StageLane(events[1])=="Render","Surface envelopes and distinct measured stages have separate display tracks without renaming source events");}
         check(events[0].pid==123&&events[0].context==43&&events[0].surface==22&&events[0].submission==77,"Process/context/surface provenance");
         check(samples[0].value==42&&samples[0].name=="GPU Busy %","Invalid hardware values are excluded");
         {auto interrupted=Fixture();std::string packet,event;Integer(packet,10,1);Integer(packet,13,2);Integer(packet,42,1);Integer(packet,8,5001000000ull);Integer(packet,58,3);Integer(event,2,100);Message(packet,53,event);Message(interrupted,1,packet);Write(dir/"loss.pftrace",interrupted);auto loss=decoder.Read(dir/"loss.pftrace");check(loss.stages==2&&loss.unavailable==3,"Lost incremental dictionaries never assign stale stage identities");}
@@ -85,6 +92,7 @@ int main(int argc,char** argv){
             else{check(result.state==cyinsights::RemoteState::complete&&game.start_count==1&&(preparation_failed||game.ready_polls>=3),"Reconnect to current process waits for readiness and records once");cyinsights::Capture archived;std::string why;check(cyinsights::Inspect(result.archive,archived,why),"Combined native/Meta archive validates after startup");check(result.manifest["metadata"]["process_id"].AsUInt()==(preparation_failed?122u:123u)&&result.bytes==264,"Final identity and native bytes come from current process");if(preparation_failed)check(result.meta_message.find("not prepared")!=std::string::npos,"Failed Meta preparation preserves native recording and reports unavailable GPU source");}
             check(fs::exists(result.diagnostic_log)&&Read(result.diagnostic_log).find(stall?"Capture stopped":"Capture saved")!=std::string::npos,"Durable capture phase/error journal available");
             if(running_game)check(!fs::exists(dir/"enabled")&&!fs::exists(dir/"launch-component")&&result.meta_message.find("2 hardware stages")!=std::string::npos,"Default running-game capture records native/Meta sources without reactivation, force-stop or relaunch");
+            if(running_game)check(Read(dir/"flush-script")=="if test -d /proc/987; then echo alive; else echo gone; fi","ADB flush polling uses one intact remote script, not an argv-style nested shell");
             if(preparation_failed)fs::remove(dir/"disabled");
         }
         WSACleanup();

@@ -30,7 +30,7 @@ void Application::NativeSetupView() {
     ImGui::TextWrapped("%s",native_setup_.message.c_str());
     if(!native_setup_.selected.empty())ImGui::TextWrapped("Unreal analyzer: %s",native_setup_.selected.u8string().c_str());
     if(busy) {
-        ImGui::ProgressBar(-static_cast<float>(ImGui::GetTime()),ImVec2(-1,18*UiScale()),"Working in background...");
+        cyui::progressBar(-1,ImVec2(-1,cyui::dp(18)),"Working in background...",cyui::Tone::accent);
         ImGui::Text("Elapsed: %.1f s | Reader: %u / 3",native_setup_.Elapsed(),native_setup_.phase.load());
         ImGui::TextWrapped("First launch: compiling our readers with your installed Unreal libraries. The engine is not rebuilt. Results are cached for subsequent launches.");
         if(!pending_capture_.empty())ImGui::TextWrapped("Queued capture: %s",pending_capture_.filename().u8string().c_str());

@@ -211,7 +211,7 @@ void Application::DistributionView() {
     ImGui::SameLine();if(ImGui::Button("Analyze"))StartDistribution();ImGui::EndDisabled();
     ImGui::SameLine();ImGui::Checkbox("Log counts",&distribution_log_y_);
     if(distribution_task_.valid()){ImGui::SameLine();if(ImGui::Button("Cancel"))distribution_cancel_.store(true);ImGui::ProgressBar(-static_cast<float>(ImGui::GetTime()),ImVec2(-1,12*scale),"Preparing distribution...");}
-    ImGui::TextWrapped("%s",distribution_message_.c_str());if(distribution_dirty_)ImGui::TextColored(ImVec4(1,.7f,.3f,1),distribution_pending_?"Updating from timeline selection... Previous result keeps its original interval.":"Settings changed; press Analyze. Existing result keeps its original interval.");
+    ImGui::TextWrapped("%s",distribution_message_.c_str());if(distribution_dirty_)ImGui::TextColored(cyui::vec(cyui::palette().warning),distribution_pending_?"Updating from timeline selection... Previous result keeps its original interval.":"Settings changed; press Analyze. Existing result keeps its original interval.");
     ImGui::TextWrapped("%s | %.6f - %.6f s",distribution_label_.c_str(),distribution_a_,distribution_b_);
     if(!distribution_.count){ImGui::Text("Unavailable/incomplete samples: %llu",distribution_.unavailable);ImGui::End();return;}
     ImGui::Text("%llu samples | %llu unavailable/incomplete | min %.3f | mean %.3f | max %.3f ms",distribution_.count,distribution_.unavailable,distribution_.min*1000,distribution_.mean*1000,distribution_.max*1000);
@@ -219,18 +219,18 @@ void Application::DistributionView() {
     if(ImGui::IsItemHovered()){ImGui::BeginTooltip();ImGui::TextUnformatted(distribution_.exact_percentiles?"Exact nearest-rank quantiles of all valid frame samples":"Estimated quantiles; the exact value is bounded by the histogram bin:");for(size_t q=0;q<4;++q)ImGui::Text("P%d: [%.6f, %.6f] ms",q==0?50:q==1?90:q==2?95:99,distribution_.percentile_bounds[q].first*1000,distribution_.percentile_bounds[q].second*1000);ImGui::EndTooltip();}
     auto p=ImGui::GetCursorScreenPos();float width=std::max(1.f,ImGui::GetContentRegionAvail().x),height=175*scale;
     hist_probe_x_=p.x;hist_probe_y_=p.y;hist_probe_width_=width;
-    ImGui::InvisibleButton("histogram",ImVec2(width,height));bool hover=ImGui::IsItemHovered();auto* draw=ImGui::GetWindowDrawList();draw->AddRectFilled(p,ImVec2(p.x+width,p.y+height),IM_COL32(48,48,48,255));
+    ImGui::InvisibleButton("histogram",ImVec2(width,height));bool hover=ImGui::IsItemHovered();auto* draw=ImGui::GetWindowDrawList();draw->AddRectFilled(p,ImVec2(p.x+width,p.y+height),cyui::palette().bg0);
     uint64_t largest=*std::max_element(distribution_.bins.begin(),distribution_.bins.end()),cumulative=0;ImVec2 previous(p.x,p.y+height-22*scale);int clicked=-1;
     for(size_t bin=0;bin<Distribution::bin_count;++bin) {
         auto n=distribution_.bins[bin];float left=p.x+width*static_cast<float>(bin)/Distribution::bin_count,right=p.x+width*static_cast<float>(bin+1)/Distribution::bin_count;
         double fraction=distribution_log_y_?std::log1p(double(n))/std::log1p(double(largest)):double(n)/double(largest);
-        float base=p.y+height-22*scale;draw->AddRectFilled(ImVec2(left,base-(height-38*scale)*static_cast<float>(fraction)),ImVec2(std::max(left+1,right-1),base),distribution_.selected_bin==static_cast<int>(bin)?IM_COL32(226,177,93,255):IM_COL32(104,169,227,255));
-        cumulative+=n;ImVec2 current(right,base-(height-38*scale)*static_cast<float>(double(cumulative)/distribution_.count));draw->AddLine(previous,current,IM_COL32(233,210,128,255),1.5f*scale);previous=current;
+        float base=p.y+height-22*scale;draw->AddRectFilled(ImVec2(left,base-(height-38*scale)*static_cast<float>(fraction)),ImVec2(std::max(left+1,right-1),base),distribution_.selected_bin==static_cast<int>(bin)?cyui::palette().accent:cyui::palette().info);
+        cumulative+=n;ImVec2 current(right,base-(height-38*scale)*static_cast<float>(double(cumulative)/distribution_.count));draw->AddLine(previous,current,cyui::palette().textDim,1.5f*scale);previous=current;
         if(hover&&ImGui::IsMouseHoveringRect(ImVec2(left,p.y),ImVec2(right,p.y+height))) {auto bounds=distribution_.Bounds(bin);ImGui::SetTooltip("%.6f - %.6f ms%s\n%llu samples | %.2f%% | cumulative %.2f%%\nClick to browse every sample in this bin",bounds.first*1000,bounds.second*1000,(distribution_.min==distribution_.max||bin+1==Distribution::bin_count)?" (upper inclusive)":" (upper exclusive)",n,double(n)*100/distribution_.count,double(cumulative)*100/distribution_.count);
             if(ImGui::IsMouseClicked(0)&&!distribution_task_.valid()&&!distribution_dirty_)clicked=static_cast<int>(bin);}
     }
-    char label[80];std::snprintf(label,sizeof(label),"%.3f ms",distribution_.min*1000);draw->AddText(ImVec2(p.x+4*scale,p.y+height-18*scale),IM_COL32(220,220,220,255),label);
-    std::snprintf(label,sizeof(label),"%.3f ms | CDF 100%%",distribution_.max*1000);draw->AddText(ImVec2(p.x+width-ImGui::CalcTextSize(label).x-4*scale,p.y+height-18*scale),IM_COL32(233,210,128,255),label);
+    char label[80];std::snprintf(label,sizeof(label),"%.3f ms",distribution_.min*1000);draw->AddText(ImVec2(p.x+4*scale,p.y+height-18*scale),cyui::palette().text,label);
+    std::snprintf(label,sizeof(label),"%.3f ms | CDF 100%%",distribution_.max*1000);draw->AddText(ImVec2(p.x+width-ImGui::CalcTextSize(label).x-4*scale,p.y+height-18*scale),cyui::palette().textDim,label);
     ImGui::TextDisabled("Each sample starts in the analysis interval; its complete duration is used. Missing endpoints are excluded. Scope samples are inclusive, not summed thread utilization.");
     if(distribution_.selected_bin<0)ImGui::Text("Slowest %zu of %llu samples; click a bin for all its values",distribution_.examples.size(),distribution_.count);
     else {ImGui::Text("Bin %d | %llu values | page %llu",distribution_.selected_bin,distribution_.matched,distribution_.page+1);
@@ -254,7 +254,7 @@ void Application::TasksView() {
     if(!tasks_store_&&!task_reader_.Busy()&&tasks_message_.empty())tasks_message_="Native tasks unavailable; CPU scopes can be inspected as candidates";
     ImGui::BeginDisabled(task_reader_.Busy()||tasks_query_.valid()||links_query_.valid());
     if(ImGui::Button("Load native task data"))StartNativeTasks();ImGui::SameLine();if(ImGui::Checkbox("CPU task scopes (candidates)",&tasks_candidates_)){tasks_thread_=-1;selected_task_.reset();task_links_.clear();}
-    ImGui::SetNextItemWidth(220*UiScale());ImGui::InputTextWithHint("##task_search","Search task name / native ID",tasks_search_,sizeof(tasks_search_));ImGui::SameLine();
+    ImGui::SetNextItemWidth(220*UiScale());cyui::searchField("##task_search",tasks_search_,sizeof(tasks_search_),"Search task name / native ID");ImGui::SameLine();
     std::string preview="All execution threads";
     if(tasks_thread_>=0){if(tasks_candidates_||!tasks_store_||!tasks_store_->count){if(static_cast<size_t>(tasks_thread_)<native_.store->tracks.size())preview=native_.store->tracks[static_cast<size_t>(tasks_thread_)].name;}
         else {auto t=tasks_store_->threads.find(static_cast<uint32_t>(tasks_thread_));preview=t!=tasks_store_->threads.end()?t->second:std::to_string(tasks_thread_);}}

@@ -10,7 +10,7 @@ namespace {
 void Cost(std::optional<double> cost,bool signed_value=false,bool percent=false) {
     if(!cost){ImGui::TextDisabled("N/A");return;}
     double value=percent?*cost:*cost*1000;
-    if(signed_value)ImGui::TextColored(value>0?ImVec4(.96f,.53f,.48f,1):value<0?ImVec4(.53f,.83f,.62f,1):ImVec4(.75f,.75f,.75f,1),percent?"%+.2f%%":"%+.3f",value);
+    if(signed_value)ImGui::TextColored(value>0?cyui::vec(cyui::palette().error):value<0?cyui::vec(cyui::palette().success):cyui::vec(cyui::palette().textDim),percent?"%+.2f%%":"%+.3f",value);
     else ImGui::Text("%.3f",value);
 }
 double SortValue(const ComparisonRow& row,int column,ComparisonMode mode) {
@@ -59,7 +59,7 @@ void Application::Comparison() {
     ImGui::TextDisabled("Analyzer B: %s",b.analyzer.u8string().c_str());
     for(const char* key:{"project","engine_version","platform","graphics_api","cpu","gpu"}) {
         auto a_value=capture_.manifest["metadata"][key].AsString(),b_value=b.metadata[key].AsString();
-        if(a_value!=b_value)ImGui::TextColored(ImVec4(.9f,.74f,.4f,1),"%s: A %s / B %s",key,
+        if(a_value!=b_value)ImGui::TextColored(cyui::vec(cyui::palette().warning),"%s: A %s / B %s",key,
             a_value.empty()?"unavailable":a_value.c_str(),b_value.empty()?"unavailable":b_value.c_str());
     }
     if(ImGui::IsItemHovered())ImGui::SetTooltip("Metadata differences can affect cost comparisons. Unknown metadata is not inferred.");
@@ -89,7 +89,7 @@ void Application::Comparison() {
         comparison_a_start_=timing_model_.aggregate_start;comparison_a_end_=timing_model_.aggregate_end;
     }
     ImGui::Separator();
-    ImGui::SetNextItemWidth(240*UiScale());ImGui::InputTextWithHint("##comparison_search","Search timer groups",comparison_search_,sizeof(comparison_search_));ImGui::SameLine();
+    ImGui::SetNextItemWidth(240*UiScale());cyui::searchField("##comparison_search",comparison_search_,sizeof(comparison_search_),"Search timer groups");ImGui::SameLine();
     ImGui::SetNextItemWidth(160*UiScale());ImGui::Combo("Cost",&comparison_mode_,"Totals\0Per second\0Per occurrence\0");ImGui::SameLine();
     ImGui::SetNextItemWidth(105*UiScale());ImGui::Combo("Tracks",&comparison_domain_,"CPU + GPU\0CPU\0GPU\0");
     ImGui::TextWrapped("Derived comparison by name and track domain. Native IDs belong to their own session; GPU domain follows track naming. All costs are clipped to the chosen interval; per-occurrence means use these clipped costs. Inclusive sums overlap; exclusive costs use contained children. Positive delta means B costs more than A.");

@@ -40,6 +40,7 @@ struct TimingTrack {
 };
 // Shared display order for in-memory and paged native traces.
 int TimingTrackRank(const TimingTrack& track);
+bool IsGpuTimingTrack(const std::string& name);
 struct TimerTotal {
     uint32_t timer = 0;
     size_t count = 0;

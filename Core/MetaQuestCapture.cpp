@@ -118,7 +118,10 @@ void MetaQuestCapture::End(){
         for(int i=0;i<100;++i){
             // The numeric PID is generated locally, never shell input from a client.
             const auto command=L"if test -d /proc/"+std::to_wstring(perfetto_pid_)+L"; then echo alive; else echo gone; fi";
-            auto state=Shell({L"sh",L"-c",command},5000,true);
+            // adb shell already sends a command string to the remote shell.
+            // An extra unquoted sh -c reparses `then` in the outer shell and
+            // aborts recovery of an otherwise valid GPU trace.
+            auto state=Shell({command},5000,true);
             if(state.find("gone")!=std::string::npos){flushed=true;break;}
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }

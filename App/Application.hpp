@@ -204,6 +204,7 @@ class Application {
     uint64_t links_request_id_=UINT64_MAX;
     void OpenComparison(const fs::path& file);
     void Toolbar();
+    void PanelMenu();
     void LoadStatus();
     void NativeSetupTick();
     void NativeSetupView();

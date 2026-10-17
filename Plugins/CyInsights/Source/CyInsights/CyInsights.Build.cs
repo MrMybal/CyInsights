@@ -38,8 +38,10 @@ public class CyInsights : ModuleRules
         PrivateDefinitions.Add("CYINSIGHTS_VULKAN_DISPATCH="+(VulkanDispatch?"1":"0"));
         string VulkanPublic=Path.Combine(EngineDirectory,"Source","Runtime","VulkanRHI","Public","IVulkanDynamicRHI.h");
         string VulkanAPI=File.Exists(VulkanPublic)?File.ReadAllText(VulkanPublic):"";
+        bool VulkanEndPass2=File.Exists(Loader)&&File.ReadAllText(Loader).Contains("vkCmdEndRenderPass2KHR");
+        PrivateDefinitions.Add("CYINSIGHTS_VULKAN_END_PASS2="+(VulkanEndPass2?"1":"0"));
         bool VulkanPasses=VulkanDispatch&&VulkanAPI.Contains("RHIGetVkDeviceProcAddr")&&VulkanAPI.Contains("RHIGetLoadedDeviceExtensions")&&
-            File.ReadAllText(Loader).Contains("vkQueueSubmit2KHR")&&File.ReadAllText(Loader).Contains("vkCmdBeginRenderPass2KHR")&&File.ReadAllText(Loader).Contains("vkCmdEndRenderPass2KHR");
+            File.ReadAllText(Loader).Contains("vkQueueSubmit2KHR")&&File.ReadAllText(Loader).Contains("vkCmdBeginRenderPass2KHR");
         PrivateDefinitions.Add("CYINSIGHTS_VULKAN_PASSES="+(VulkanPasses?"1":"0"));
         if(VulkanDispatch){PrivateDependencyModuleNames.Add("VulkanRHI");AddEngineThirdPartyPrivateStaticDependencies(Target,"Vulkan");}
         bool WindowsCollector = Enabled && Target.Platform == UnrealTargetPlatform.Win64;

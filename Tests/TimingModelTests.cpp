@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
 #include "TimingModel.hpp"
 #include "AnalysisWorkers.hpp"
+#include "FrameDiagnostics.hpp"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -53,6 +54,11 @@ int main() {
                                        Event("Worker", "No immediate parent", 6, 7, 3, 1, 50)};
     events[4].open_ended = true;
     TimingModel model;
+    {TimingModel meta;
+     meta.Build({Event("GameThread","Tick",0,1,0,1,1),Event("GPU / Meta Process unknown / queue / Render","Render",0,1,0,2,2)});
+     Check(meta.tracks.front().gpu&&meta.tracks.front().name.find("Meta")!=std::string::npos,"Unknown-process Meta GPU tracks stay above GameThread");
+     Check(DiagnosticDomain(meta.tracks.front().name)==FrameDomain::Other,"GPU display ordering must not attribute unknown-process work to the game");
+     Check(!IsGpuTimingTrack("Foreground GPU worker"),"CPU workers mentioning GPU are not hardware GPU tracks");}
     model.Build(events);
     Check(model.tracks.size() == 2, "Same-name threads with different IDs must remain separate");
     Check(model.tracks[0].name != model.tracks[1].name, "Duplicate track labels must show distinct identity");

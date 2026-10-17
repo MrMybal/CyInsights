@@ -16,12 +16,21 @@
 #include <map>
 #include <vector>
 
+// The installed UE 5.5 RHI begins passes with RenderPass2 but ends them through
+// the original entry point. Meta's fork additionally exports the EndPass2 slot.
+#ifndef CYINSIGHTS_VULKAN_END_PASS2
+#define CYINSIGHTS_VULKAN_END_PASS2 1 // Standalone collector fixture.
+#endif
+
 namespace VulkanDynamicAPI {
 #define CY_VK_DECLARE(Name) extern VULKANRHI_API PFN_##Name Name;
 CY_VK_DECLARE(vkBeginCommandBuffer) CY_VK_DECLARE(vkFreeCommandBuffers)
 CY_VK_DECLARE(vkAllocateCommandBuffers) CY_VK_DECLARE(vkDestroyCommandPool)
 CY_VK_DECLARE(vkCmdBeginRenderPass) CY_VK_DECLARE(vkCmdBeginRenderPass2KHR)
-CY_VK_DECLARE(vkCmdEndRenderPass) CY_VK_DECLARE(vkCmdEndRenderPass2KHR) CY_VK_DECLARE(vkCmdNextSubpass)
+CY_VK_DECLARE(vkCmdEndRenderPass) CY_VK_DECLARE(vkCmdNextSubpass)
+#if CYINSIGHTS_VULKAN_END_PASS2
+CY_VK_DECLARE(vkCmdEndRenderPass2KHR)
+#endif
 CY_VK_DECLARE(vkQueueSubmit) CY_VK_DECLARE(vkQueueSubmit2KHR)
 CY_VK_DECLARE(vkResetFences) CY_VK_DECLARE(vkDestroyFence)
 CY_VK_DECLARE(vkCmdDraw) CY_VK_DECLARE(vkCmdDrawIndexed)
@@ -94,7 +103,10 @@ double LastClock=0;
 CY_VK_NEXT(vkBeginCommandBuffer) CY_VK_NEXT(vkFreeCommandBuffers)
 CY_VK_NEXT(vkAllocateCommandBuffers) CY_VK_NEXT(vkDestroyCommandPool)
 CY_VK_NEXT(vkCmdBeginRenderPass) CY_VK_NEXT(vkCmdBeginRenderPass2KHR)
-CY_VK_NEXT(vkCmdEndRenderPass) CY_VK_NEXT(vkCmdEndRenderPass2KHR) CY_VK_NEXT(vkCmdNextSubpass)
+CY_VK_NEXT(vkCmdEndRenderPass) CY_VK_NEXT(vkCmdNextSubpass)
+#if CYINSIGHTS_VULKAN_END_PASS2
+CY_VK_NEXT(vkCmdEndRenderPass2KHR)
+#endif
 CY_VK_NEXT(vkQueueSubmit) CY_VK_NEXT(vkQueueSubmit2KHR)
 CY_VK_NEXT(vkResetFences) CY_VK_NEXT(vkDestroyFence)
 CY_VK_NEXT(vkCmdDraw) CY_VK_NEXT(vkCmdDrawIndexed)
@@ -202,7 +214,9 @@ VKAPI_ATTR void VKAPI_CALL DestroyCommandPool(VkDevice D,VkCommandPool Pool,cons
 VKAPI_ATTR void VKAPI_CALL Begin(VkCommandBuffer Cmd,const VkRenderPassBeginInfo* Info,VkSubpassContents Contents){BeginPass(Cmd,Info);Next_vkCmdBeginRenderPass(Cmd,Info,Contents);}
 VKAPI_ATTR void VKAPI_CALL Begin2(VkCommandBuffer Cmd,const VkRenderPassBeginInfo* Info,const VkSubpassBeginInfo* Subpass){BeginPass(Cmd,Info);Next_vkCmdBeginRenderPass2KHR(Cmd,Info,Subpass);}
 VKAPI_ATTR void VKAPI_CALL End(VkCommandBuffer Cmd){Next_vkCmdEndRenderPass(Cmd);EndPass(Cmd);}
+#if CYINSIGHTS_VULKAN_END_PASS2
 VKAPI_ATTR void VKAPI_CALL End2(VkCommandBuffer Cmd,const VkSubpassEndInfo* Subpass){Next_vkCmdEndRenderPass2KHR(Cmd,Subpass);EndPass(Cmd);}
+#endif
 VKAPI_ATTR void VKAPI_CALL Subpass(VkCommandBuffer Cmd,VkSubpassContents Contents){Next_vkCmdNextSubpass(Cmd,Contents);FScopeLock Lock(&Mutex);auto F=Buffers.find(Cmd);if(F!=Buffers.end()&&F->second.inside){auto& P=F->second.passes.back();++P.subpasses;P.work.emplace_back();}}
 // CPU-side command metadata only: no resource reads or extra GPU queries.
 cyinsights_quest::PassWork* WorkOf(VkCommandBuffer Cmd){auto F=Buffers.find(Cmd);if(F==Buffers.end()||F->second.record_epoch!=Epoch)return nullptr;auto& B=F->second;if(!B.primary)return &B.secondary;if(B.inside&&!B.passes.empty())return &B.passes.back().work.back();return nullptr;}
@@ -240,7 +254,10 @@ void RemoveHooks() {
 CY_REMOVE(vkBeginCommandBuffer,BeginBuffer) CY_REMOVE(vkFreeCommandBuffers,FreeBuffers)
 CY_REMOVE(vkAllocateCommandBuffers,AllocateBuffers) CY_REMOVE(vkDestroyCommandPool,DestroyCommandPool)
 CY_REMOVE(vkCmdBeginRenderPass,Begin) CY_REMOVE(vkCmdBeginRenderPass2KHR,Begin2)
-CY_REMOVE(vkCmdEndRenderPass,End) CY_REMOVE(vkCmdEndRenderPass2KHR,End2) CY_REMOVE(vkCmdNextSubpass,Subpass)
+CY_REMOVE(vkCmdEndRenderPass,End) CY_REMOVE(vkCmdNextSubpass,Subpass)
+#if CYINSIGHTS_VULKAN_END_PASS2
+CY_REMOVE(vkCmdEndRenderPass2KHR,End2)
+#endif
 CY_REMOVE(vkQueueSubmit,Submit) CY_REMOVE(vkQueueSubmit2KHR,Submit2)
 CY_REMOVE(vkResetFences,ResetFences) CY_REMOVE(vkDestroyFence,DestroyFence)
 CY_REMOVE(vkCmdDraw,Draw) CY_REMOVE(vkCmdDrawIndexed,DrawIndexed)
@@ -283,9 +300,12 @@ bool CyInsightsVulkanPasses::Enable() {
         CY_INSTALL(vkResetFences,ResetFences) CY_INSTALL(vkDestroyFence,DestroyFence)
         CY_INSTALL(vkCmdDraw,Draw) CY_INSTALL(vkCmdDrawIndexed,DrawIndexed)
         CY_INSTALL(vkCmdDrawIndirect,DrawIndirect) CY_INSTALL(vkCmdDrawIndexedIndirect,DrawIndexedIndirect) CY_INSTALL(vkCmdExecuteCommands,Execute)
-        // Install both sides together: Unreal's render-pass-2 path never calls
-        // vkCmdEndRenderPass, so intercepting just its begin loses every cost.
-        if(VulkanDynamicAPI::vkCmdBeginRenderPass2KHR||VulkanDynamicAPI::vkCmdEndRenderPass2KHR){CY_INSTALL(vkCmdBeginRenderPass2KHR,Begin2) CY_INSTALL(vkCmdEndRenderPass2KHR,End2)}
+        // The Meta fork exports EndPass2; stock 5.5 pairs BeginPass2 with End.
+        // Observe whichever slots this installed RHI actually exports.
+        if(VulkanDynamicAPI::vkCmdBeginRenderPass2KHR){CY_INSTALL(vkCmdBeginRenderPass2KHR,Begin2)}
+#if CYINSIGHTS_VULKAN_END_PASS2
+        if(VulkanDynamicAPI::vkCmdEndRenderPass2KHR){CY_INSTALL(vkCmdEndRenderPass2KHR,End2)}
+#endif
         if(VulkanDynamicAPI::vkQueueSubmit2KHR){CY_INSTALL(vkQueueSubmit2KHR,Submit2)}
 #undef CY_INSTALL
         if(!Ok){RemoveHooks();Reason=TEXT("Vulkan pass dispatch unavailable or owned by another interceptor");return;}
