@@ -175,7 +175,22 @@ void RemoteCapture::Run(RemoteOptions options,bool probe) {
         if(!probe){Require(!options.output_directory.empty(),"Choose a capture output directory");fs::create_directories(options.output_directory);
             state.diagnostic_log=options.output_directory/("capture_control_"+std::to_string(Clock::now().time_since_epoch().count())+".jsonl");journal.open(state.diagnostic_log,std::ios::binary);Require(bool(journal),"Cannot create capture diagnostics");}
         state.phase="connect";state.message="Connecting to the capture plugin";publish();
-        Socket control;Connect(control,target,cancel_,&stop_,pulse);Rpc rpc(control.value,cancel_);rpc.Setup(stop_,pulse);
+        Socket control;
+        // A cold Android game can start its TCP listener several seconds after
+        // its launch activity appears. Keep this wait visible and cancellable.
+        const auto connect_deadline=Clock::now()+std::chrono::seconds(probe?3:30);
+        unsigned connect_attempt=0;
+        for(;;){
+            try{Connect(control,target,cancel_,&stop_,pulse);break;}
+            catch(const std::exception& e){
+                Require(!stop_.load()&&!cancel_.load(),"Capture stopped during startup");
+                Require(Clock::now()<connect_deadline,std::string("Capture service did not become reachable at ")+options.ipv4+":"+std::to_string(options.control_port)+". "+e.what());
+                control.Reset(INVALID_SOCKET);
+                state.message="Waiting for the game's capture service at "+options.ipv4+":"+std::to_string(options.control_port)+" (attempt "+std::to_string(++connect_attempt+1)+")";publish();
+                for(int i=0;i<10&&!stop_.load()&&!cancel_.load();++i)std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+        }
+        Rpc rpc(control.value,cancel_);rpc.Setup(stop_,pulse);
         state.phase="hello";state.message="Waiting for the game's capture service to respond";publish();
         auto hello=rpc.Call("hello");state.manifest=hello["manifest"];
         Require(state.manifest.IsObject()&&state.manifest["metadata"].IsObject(),"Capture plugin returned no device metadata");

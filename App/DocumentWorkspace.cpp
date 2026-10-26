@@ -15,7 +15,7 @@ std::vector<fs::path> ChooseCaptures(){
     IFileOpenDialog* dialog=nullptr;
     if(SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&dialog)))){
         DWORD options=0;dialog->GetOptions(&options);dialog->SetOptions(options|FOS_ALLOWMULTISELECT|FOS_FORCEFILESYSTEM|FOS_FILEMUSTEXIST);
-        COMDLG_FILTERSPEC filters[]={{L"Unreal / CyInsights captures",L"*.utrace;*.cycapture"}};
+        COMDLG_FILTERSPEC filters[]={{L"Unreal / CyInsights captures",L"*.utrace;*.cycapture;*.pftrace"}};
         dialog->SetFileTypes(1,filters);dialog->SetTitle(L"Open captures in separate tabs");
         if(SUCCEEDED(dialog->Show(GetActiveWindow()))){
             IShellItemArray* items=nullptr;

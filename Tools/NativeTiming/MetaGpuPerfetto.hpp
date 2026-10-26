@@ -35,12 +35,29 @@ inline void Var(std::string& out,uint64_t n){while(n>=128){out+=char((n&127)|128
 inline void Integer(std::string& out,uint32_t id,uint64_t n){Var(out,uint64_t(id)<<3);Var(out,n);}
 inline void Message(std::string& out,uint32_t id,std::string_view s){Var(out,(uint64_t(id)<<3)|2);Var(out,s.size());out.append(s);}
 // Streaming file config, never a whole-capture ring buffer or text-parser API.
-inline std::string Config(uint32_t duration_ms){
+// Current Quest runtimes select precision through TrackEvent categories. The
+// legacy gpu.renderstages.oculus source alone can return only Workload slices,
+// even with gpu_renderstages_config.low_overhead=false. Do not request both
+// render-stage transports: they share the producer's profiling mode.
+inline std::string Config(uint32_t duration_ms,bool track_event=true){
     std::string config,buffer;Integer(buffer,1,32768);Integer(buffer,4,2);Message(config,1,buffer);
-    for(const auto& name:{"gpu.renderstages.oculus","gpu.counters.oculus"}){std::string source,c;Message(c,1,name);if(std::string(name)=="gpu.renderstages.oculus"){std::string stages;Integer(stages,1,1);Integer(stages,2,0);Message(c,133,stages);}Message(source,1,c);Message(config,2,source);}
-    {std::string source,c,ftrace;Message(c,1,"linux.ftrace");Message(ftrace,1,"ftrace/print");Message(ftrace,2,"renderstage");Message(ftrace,2,"surfaceworkload");Message(ftrace,3,"*");Message(c,100,ftrace);Message(source,1,c);Message(config,2,source);}
+    auto source=[&](const std::string& c){std::string wrapper;Message(wrapper,1,c);Message(config,2,wrapper);};
+    if(track_event){
+        std::string c,track;Message(c,1,"track_event");Message(track,1,"*");
+        Message(track,2,"gpu_renderstage");Integer(track,5,1); // Absolute timestamps.
+        Message(c,113,track);source(c);
+    }else{
+        std::string c,stages;Message(c,1,"gpu.renderstages.oculus");
+        Integer(stages,1,1);Integer(stages,2,0);Message(c,133,stages);source(c);
+        std::string f,trace;Message(f,1,"linux.ftrace");Message(trace,1,"ftrace/print");
+        Message(trace,2,"renderstage");Message(trace,3,"*");Message(f,100,trace);source(f);
+    }
+    // Keep real-time counters independent of render-stage mode. Enabling the
+    // gpu_surface_workload category would request an aggregate, not fine stages.
+    std::string counters;Message(counters,1,"gpu.counters.oculus");source(counters);
     Integer(config,3,duration_ms);Integer(config,8,1);Integer(config,9,250);Integer(config,13,1000);return config;
 }
+
 struct Clock {uint64_t source=0,mono=0,multiplier=1;};
 struct Stage {uint64_t mono_ns=0,duration_ns=0,context=0,surface=0,submission=0;int32_t pid=0;std::string name,queue;};
 // Surface envelopes overlap their measured hardware stages. Keep them on a
@@ -48,7 +65,15 @@ struct Stage {uint64_t mono_ns=0,duration_ns=0,context=0,surface=0,submission=0;
 // This groups source labels for display, never infers an Unreal pass identity.
 inline std::string StageLane(const Stage& s){return s.name.rfind("surface#",0)==0?"Surfaces":s.name;}
 struct Counter {uint64_t mono_ns=0;uint32_t id=0;double value=0;std::string name;};
-struct Counts {uint64_t stages=0,counters=0,unavailable=0,stage_packets=0,timed_stage_packets=0,unaligned_stages=0;};
+inline bool FineStage(const Stage& s){
+    for(const char* name:{"Binning","Render","Load","Store","LoadColor","StoreColor","LoadDepthStencil","StoreDepthStencil","LoadDepth","StoreDepth","LoadStencil","StoreStencil"})
+        if(s.name==name)return true;
+    return false;
+}
+struct Counts {
+    uint64_t stages=0,counters=0,unavailable=0,stage_packets=0,timed_stage_packets=0,unaligned_stages=0,fine_stages=0;
+    std::map<std::string,uint64_t> stage_types;
+};
 class Decoder {
     struct Specs {std::vector<std::string> queues,stages;std::map<uint64_t,std::string> intern,names;std::map<uint64_t,int32_t> contexts;std::map<uint32_t,std::string> counters;bool valid=true;uint32_t clock=0;};
     std::map<uint32_t,Specs> sequences;
@@ -71,13 +96,13 @@ class Decoder {
     static void Intern(Specs& s,std::string_view data){Wire w(data);Field f;while(w.Next(f))if(f.wire==2){const auto id=Number(f.bytes,1);if(f.id==24)s.intern[id]=Text(f.bytes,2);else if(f.id==23)s.contexts[id]=int32_t(Number(f.bytes,2));else if(f.id==2)s.names[id]=Text(f.bytes,2);}}
     static void Legacy(Specs& s,std::string_view data){Wire w(data);Field f;std::vector<std::string> queues,stages;while(w.Next(f))if(f.wire==2){if(f.id==1)s.contexts[Number(f.bytes,1)]=int32_t(Number(f.bytes,2));else if(f.id==2)queues.push_back(Text(f.bytes,1));else if(f.id==3)stages.push_back(Text(f.bytes,1));}if(!queues.empty())s.queues=std::move(queues);if(!stages.empty())s.stages=std::move(stages);}
 public:
-    Counts Read(const std::filesystem::path& file,const std::function<void(const Stage&)>& stageSink={},const std::function<void(const Counter&)>& counterSink={}) {
+    Counts Read(const std::filesystem::path& file,const std::function<void(const Stage&)>& stageSink={},const std::function<void(const Counter&)>& counterSink={},const std::function<bool()>& cancelled={}) {
         clocks.clear();sequences.clear();primary=6;Counts count;
         // Clock snapshots can arrive after the packets whose timestamps they
         // explain. Retain only their small relation tables, never all events.
-        Packets(file,[&](std::string_view p){auto snap=Find(p,6);if(snap.id)Snapshot(snap.bytes);if(Find(p,50).id||Find(p,133).id)throw std::runtime_error("Compressed Perfetto packets unsupported; raw trace retained");auto event=Find(p,53);if(event.id){++count.stage_packets;if(Number(event.bytes,2))++count.timed_stage_packets;}});
+        Packets(file,[&](std::string_view p){if(cancelled&&cancelled())throw std::runtime_error("Analysis cancelled");auto snap=Find(p,6);if(snap.id)Snapshot(snap.bytes);if(Find(p,50).id||Find(p,133).id)throw std::runtime_error("Compressed Perfetto packets unsupported; raw trace retained");auto event=Find(p,53);if(event.id){++count.stage_packets;if(Number(event.bytes,2))++count.timed_stage_packets;}});
         for(auto& pair:clocks)std::stable_sort(pair.second.begin(),pair.second.end(),[](const Clock& a,const Clock& b){return a.source<b.source;});
-        Packets(file,[&](std::string_view p){const uint32_t seq=uint32_t(Number(p,10));auto& specs=sequences[seq];const auto flags=Number(p,13);if(Number(p,42)){specs={};specs.valid=false;}if((flags&1)||Number(p,41))specs={};if((flags&2)&&!specs.valid){++count.unavailable;return;}auto defaults=Find(p,59);if(defaults.id)specs.clock=uint32_t(Number(defaults.bytes,58));auto intern=Find(p,12);if(intern.id)Intern(specs,intern.bytes);
+        Packets(file,[&](std::string_view p){if(cancelled&&cancelled())throw std::runtime_error("Analysis cancelled");const uint32_t seq=uint32_t(Number(p,10));auto& specs=sequences[seq];const auto flags=Number(p,13);if(Number(p,42)){specs={};specs.valid=false;}if((flags&1)||Number(p,41))specs={};if((flags&2)&&!specs.valid){++count.unavailable;return;}auto defaults=Find(p,59);if(defaults.id)specs.clock=uint32_t(Number(defaults.bytes,58));auto intern=Find(p,12);if(intern.id)Intern(specs,intern.bytes);
             const auto ns=Number(p,8);const auto clock=uint32_t(Number(p,58,specs.clock?specs.clock:primary));uint64_t mono=0;const bool aligned=Mono(ns,clock,mono);
             auto event=Find(p,53);if(event.id){auto legacy=Find(event.bytes,7);if(legacy.id)Legacy(specs,legacy.bytes);auto dur=Find(event.bytes,2);
                 if(dur.id&&dur.number){if(!aligned){++count.unavailable;++count.unaligned_stages;return;}Stage s;s.mono_ns=mono;s.duration_ns=dur.number;s.context=Number(event.bytes,5);s.surface=Number(event.bytes,8);s.submission=Number(event.bytes,10);
@@ -85,7 +110,7 @@ public:
                     s.name=Text(event.bytes,17);if(s.name.empty()){auto iid=Number(event.bytes,20);auto f=specs.names.find(iid);if(iid&&f!=specs.names.end())s.name=f->second;}
                     if(s.name.empty()){auto iid=Number(event.bytes,14);auto f=specs.intern.find(iid);if(iid&&f!=specs.intern.end())s.name=f->second;else{auto id=Number(event.bytes,4,UINT64_MAX);s.name=id<specs.stages.size()?specs.stages[size_t(id)]:"Stage "+std::to_string(id);}}
                     auto iid=Number(event.bytes,13);auto q=specs.intern.find(iid);if(iid&&q!=specs.intern.end())s.queue=q->second;else{auto id=Number(event.bytes,3,UINT64_MAX);s.queue=id<specs.queues.size()?specs.queues[size_t(id)]:"Queue unknown";}
-                    ++count.stages;if(stageSink)stageSink(s);
+                    ++count.stages;++count.stage_types[StageLane(s)];if(FineStage(s))++count.fine_stages;if(stageSink)stageSink(s);
                 }
             }
             auto counters=Find(p,52);if(counters.id){auto desc=Find(counters.bytes,1);if(desc.id){Wire w(desc.bytes);Field f;while(w.Next(f))if(f.id==1&&f.wire==2)specs.counters[uint32_t(Number(f.bytes,1))]=Text(f.bytes,2);}

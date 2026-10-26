@@ -1,7 +1,7 @@
 {
   "FileVersion": 3,
-  "Version": 3,
-  "VersionName": "0.2.0",
+  "Version": 4,
+  "VersionName": "0.2.1",
   "FriendlyName": "CyInsights",
   "Description": "Native Unreal and optional GPU capture coordinator for Editor, Development, Debug and DebugGame only.",
   "Category": "Other",

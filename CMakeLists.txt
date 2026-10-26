@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(CyInsights VERSION 0.2.0 LANGUAGES CXX)
+project(CyInsights VERSION 0.2.1 LANGUAGES CXX)
 enable_language(RC)
 # French MSVC emits UTF-8 NBSP in /showIncludes. CMake's OEM decoding can
 # corrupt it to "┬á", preventing Ninja from tracking header dependencies.

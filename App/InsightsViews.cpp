@@ -656,6 +656,7 @@ void Application::Timing() {
                 ImGui::TextUnformatted("Near-zero timestamp differences do not prove negligible GPU cost.");
                 ImGui::TextUnformatted("Tile render passes can prevent meaningful per-group timing. Recorded values are preserved.");
                 ImGui::TextUnformatted("The updated Quest plugin can add measured Vulkan render-pass boundaries in a new capture. Shared tile subpass costs remain unresolved.");
+                ImGui::TextUnformatted("Meta hardware stages, when captured, appear on separate GPU / Meta tracks. They do not assign costs to Unreal groups.");
                 ImGui::EndTooltip();
             }
         }

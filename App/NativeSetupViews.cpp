@@ -19,6 +19,7 @@ void Application::NativeSetupTick() {
     if(native_import_pending_&&!native_setup_.Busy()) {native_import_pending_=false;ImportNative();}
 }
 void Application::NativeSetupView() {
+    if(trace_.extension()==L".pftrace"||pending_capture_.extension()==L".pftrace")return;
     const bool busy=native_setup_.Busy();
     const bool failed=native_setup_.state==NativeSetup::State::Failed;
     if((!busy&&!failed)||setup_dismissed_)return;

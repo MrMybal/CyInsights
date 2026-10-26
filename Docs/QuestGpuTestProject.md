@@ -23,6 +23,21 @@ BuildCookRun -project=<generated-project.uproject> -nop4 -platform=Android
 -archive -archivedirectory=<output> -map=/Engine/Maps/Entry -unattended -utf8output
 ```
 
+The test's Android manifest declares optional hands support and its permission.
+The rendering workload needs no controller or hand interaction. This lets the
+headset's hand-driven shell launch it without a controllers-required gate; it
+does not change the CyInsights plugin's permissions or the user's game.
+See [Meta input declarations](https://developers.meta.com/vr/essentials/app-compatibility/).
+
+The diagnostic project disables persisted Vulkan pipeline cache loading and
+chunked PSO caching (`r.Vulkan.PipelineCacheLoad=0`,
+`r.Vulkan.UseChunkedPSOCache=0`). On the tested Adreno/runtime combination,
+reloading this test's existing cache repeatedly crashed in `vkCmdBindPipeline`;
+starting without loading it rendered successfully. Two cold starts of the
+updated APK succeeded with existing cache files left in place. These settings
+apply only to this disposable workload, not to the plugin or the user's game,
+and its startup time is not a representative game-startup benchmark.
+
 The build compiles the project and plugin against installed engine libraries.
 The engine's basic shape and Entry map remain external licensed inputs; their
 cooked copies and the APK must stay outside Git. The generator refuses to

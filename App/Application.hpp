@@ -304,6 +304,8 @@ class Application {
          show_callees_ = true, show_gpu_ = false, show_messages_ = true;
     bool session_view_ = false, reset_layout_ = false;
     RemoteCapture remote_;
+    bool remote_auto_open_=true;
+    fs::path remote_opened_archive_;
     char remote_ip_[64]{};
     int remote_port_ = 41855;
     float remote_seconds_ = 0;

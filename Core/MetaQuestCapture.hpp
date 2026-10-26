@@ -2,6 +2,7 @@
 #pragma once
 #include "Capture.hpp"
 #include <atomic>
+#include <map>
 namespace cyinsights {
 struct MetaQuestOptions {
     bool enabled=true,restart_game=false; // Capture the running game; restart is explicit.
@@ -36,8 +37,9 @@ private:
     uint64_t stages_=0,counters_=0;std::string result_="unavailable";
     double cpu_frequency_=0;
     std::string activation_,profiling_state_,profiling_verification_="not_queried";
-    std::string launch_component_;
-    bool stage_source_advertised_=false,counter_source_advertised_=false;
+    std::string launch_component_,boot_id_,finished_boot_id_;
+    bool stage_source_advertised_=false,counter_source_advertised_=false,track_stage_source_=false;
+    uint64_t fine_stages_=0;std::map<std::string,uint64_t> stage_types_;
     uint64_t stage_packets_=0,timed_stage_packets_=0,unaligned_stages_=0;
 };
 }

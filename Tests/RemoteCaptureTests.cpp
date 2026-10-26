@@ -25,15 +25,19 @@ struct Game {
     std::atomic<bool> got_options{false},got_gpu{false},gpu_owned{false};
     cygi::Json applied;
     std::string payload;
-    explicit Game(Mode m):mode(m) {
+    explicit Game(Mode m,std::chrono::milliseconds startup_delay=0ms):mode(m) {
         listener=socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
         sockaddr_in addr{};addr.sin_family=AF_INET;addr.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
-        if(bind(listener,reinterpret_cast<sockaddr*>(&addr),sizeof(addr))||listen(listener,1))throw std::runtime_error("mock bind failed");
+        if(bind(listener,reinterpret_cast<sockaddr*>(&addr),sizeof(addr)))throw std::runtime_error("mock bind failed");
         int len=sizeof(addr);getsockname(listener,reinterpret_cast<sockaddr*>(&addr),&len);port=ntohs(addr.sin_port);
         payload=std::string("2CRT\0\0\4\7",8)+std::string(70000,'X');
         if(m==Mode::legacy)payload=std::string("ECRT\3\4",6)+std::string(70002,'X');
         if(m==Mode::bad_header)payload.replace(0,4,"FAIL");
-        control=std::thread([this](){Serve();});
+        control=std::thread([this,startup_delay](){
+            const auto ready=std::chrono::steady_clock::now()+startup_delay;
+            while(!finish.load()&&std::chrono::steady_clock::now()<ready)std::this_thread::sleep_for(10ms);
+            if(!finish.load()&&listen(listener,1)==0)Serve();
+        });
     }
     ~Game(){finish.store(true);closesocket(listener);if(control.joinable())control.join();}
     void Serve() {
@@ -127,6 +131,15 @@ int main(int argc,char** argv) {
             cygi::Json bad;cygi::Json::Parse(invalid,bad);auto previous=CaptureOptionsJson(parsed).Write(-1);
             test(!ReadCaptureOptions(bad,parsed,error)&&CaptureOptionsJson(parsed).Write(-1)==previous,"invalid options refused atomically");
         }
+    }
+    {
+        Game game(Mode::auto_stop,500ms);RemoteCapture capture;RemoteOptions o;o.meta_gpu.enabled=false;o.ipv4="127.0.0.1";o.control_port=game.port;o.output_directory=dir;o.seconds=.2;
+        capture.Start(o);test(Wait(capture).state==RemoteState::complete,"Cold game listener can appear after the capture request");
+    }
+    {
+        Game game(Mode::good,5s);RemoteCapture capture;RemoteOptions o;o.meta_gpu.enabled=false;o.ipv4="127.0.0.1";o.control_port=game.port;o.output_directory=dir;
+        capture.Start(o);std::this_thread::sleep_for(100ms);capture.Stop();const auto stopped=Wait(capture,1);
+        test(stopped.state==RemoteState::failed&&stopped.archive.empty(),"Stop interrupts cold startup without creating an empty capture");
     }
     for(bool per_frame:{true,false}){
         Game game(Mode::old_options);RemoteCapture capture;RemoteOptions o;o.meta_gpu.enabled=false;o.ipv4="127.0.0.1";o.control_port=game.port;o.output_directory=dir;o.override_capture_options=true;o.capture.quest_hz=per_frame?0:10;o.capture.quest_gpu_completion=false;

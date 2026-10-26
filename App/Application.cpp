@@ -112,10 +112,14 @@ bool Application::OpenNow(const fs::path &file) {
         analysis_a_=analysis_b_=NAN;analysis_whole_=true;distribution_label_.clear();distribution_dirty_=true;distribution_track_=0;distribution_task_thread_=-1;tasks_thread_=-1;tasks_page_=0;tasks_auto_started_=false;
         timing_exact_name_.clear();loaded_exact_name_.clear();timing_filter_key_.clear();timing_timer_matches_.clear();timing_name_matches_.clear();distribution_function_.clear();distribution_summary_.reset();distribution_summary_key_.clear();
         distribution_pending_=tasks_pending_=histogram_dock_pending_=false;observed_selection_a_=observed_selection_b_=0;
-        if (file.extension() == L".utrace") {
+        if (file.extension() == L".utrace" || file.extension() == L".pftrace") {
             capture_ = Capture{};
             root_.clear();
             trace_ = fs::absolute(file);
+            if(file.extension()==L".pftrace") {
+                capture_.manifest["metadata"]["project"]="Quest GPU only - no CPU/frame alignment";
+                show_frames_=false;
+            }
             cache_ = NewCache();
             gpu_.reset();
             gpu_frames_.clear();
@@ -220,8 +224,8 @@ void Application::LoadGpu(const fs::path &directory) {
     selected_event_ = -1;
 }
 void Application::ImportNative() {
-    if(native_setup_.Busy()){native_import_pending_=true;message_="Waiting for native reader preparation...";return;}
-    if(exe_[0]&&fs::u8path(exe_)!=native_setup_.selected) {
+    if(trace_.extension()!=L".pftrace"&&native_setup_.Busy()){native_import_pending_=true;message_="Waiting for native reader preparation...";return;}
+    if(trace_.extension()!=L".pftrace"&&exe_[0]&&fs::u8path(exe_)!=native_setup_.selected) {
         native_setup_.Prepare(fs::u8path(exe_));setup_dismissed_=false;native_import_pending_=true;return;
     }
     if (AnalysisBusy()) {
@@ -244,7 +248,7 @@ void Application::ImportNative() {
         statistics_start_ = -1;
         statistics_timer_ = -2;
         range_start_ = range_end_ = 0;
-        message_ = "Analyzing native trace with Epic's installed analyzer...";
+        message_ = trace_.extension()==L".pftrace"?"Opening measured Meta GPU stages; t=0 is first GPU event, CPU and Unreal frames unavailable":"Analyzing native trace with Epic's installed analyzer...";
     }
 }
 void Application::Layout(unsigned id) {
@@ -310,12 +314,18 @@ void Application::LoadWindow() {
     });
 }
 void Application::Tick() {
+    const auto received=remote_.Snapshot();
+    if(remote_auto_open_&&received.state==RemoteState::complete&&!received.Busy()&&
+       !received.archive.empty()&&received.archive!=remote_opened_archive_&&!AnalysisBusy()){
+        remote_opened_archive_=received.archive;
+        RequestOpen(received.archive);
+    }
     NativeSetupTick();
     AiTick();
     PollTraceAnalysis();
     AdvanceTimingDrag();
     ActivityTick();
-    if(!pending_capture_.empty()&&pending_shown_&&!native_setup_.Busy()) {
+    if(!pending_capture_.empty()&&pending_shown_&&(!native_setup_.Busy()||pending_capture_.extension()==L".pftrace")) {
         auto file=std::move(pending_capture_);pending_capture_.clear();
         if(!OpenNow(file)&&load_error_.empty())load_error_=message_;
     }
@@ -333,7 +343,7 @@ void Application::Tick() {
             cpu_frames_=native_.store->frames;timing_model_.start=native_.store->start;timing_model_.end=native_.store->end;
             timing_model_.frames_native=native_.store->frames_native;timing_model_.frame_ids=native_.store->frame_ids;
             if(!cpu_frames_.empty())FitTiming();
-            else {view_start_=(timing_model_.start+timing_model_.end)/2;view_end_=std::min(timing_model_.end,view_start_+.05);}
+            else {view_start_=trace_.extension()==L".pftrace"?timing_model_.start:(timing_model_.start+timing_model_.end)/2;view_end_=std::min(timing_model_.end,view_start_+.05);}
             overview_width_=0;
         }else if(native_.Error().empty())load_error_="The analyzer exported no CPU/GPU timing scopes. Check the capture channels and selected Unreal analyzer.";
     }
@@ -670,7 +680,7 @@ void Application::Session() {
             cyui::property("Android package");ImGui::InputTextWithHint("##android_package","Automatic from updated plugin",remote_android_package_,sizeof(remote_android_package_));
             cyui::endProperties();
         }
-        ImGui::TextWrapped("Detailed Meta GPU profiling is enabled before launching the game. Restart resets the current game session. An authorized ADB connection is required; USB or ADB over Wi-Fi. Meta hardware events are saved in the same .cycapture. No texture or buffer copies.");
+        ImGui::TextWrapped("High-precision Meta render stages are requested automatically when supported. Enable detailed profiling before launching the game. Restart resets the current game session. An authorized ADB connection is required; USB or ADB over Wi-Fi. Meta hardware events are saved in the same .cycapture. No texture or buffer copies.");
         ImGui::EndDisabled();
         if(cyui::beginProperties("##capture_duration",130)) {
             cyui::property("Control port");ImGui::InputInt("##remote_port",&remote_port_);
@@ -724,6 +734,7 @@ void Application::Session() {
     if((remote.state==RemoteState::starting||remote.state==RemoteState::probing)&&remote.session_id.empty())ImGui::TextWrapped("Waiting for capture startup; no trace data has been received yet.");
     if (!remote.message.empty()) cyui::callout(remote.state==RemoteState::failed?cyui::Tone::error:cyui::Tone::neutral,remote.message.c_str());
     if(!remote.diagnostic_log.empty()){cyui::textFaint("Capture diagnostics available");cyui::tooltip(remote.diagnostic_log.u8string().c_str());}
+    ImGui::Checkbox("Open completed capture automatically",&remote_auto_open_);
     if (!remote.archive.empty()) {
         ImGui::BeginDisabled(AnalysisBusy());
         if (ImGui::Button("Open received capture")) RequestOpen(remote.archive);

@@ -111,8 +111,9 @@ valid aligned stages and stages rejected for missing clock relations. Lost
 incremental dictionaries do not erase the raw packet counts. A counters-only
 capture no longer implies that hardware steps were received. The result message
 explains missing packets versus rejected packets, and the raw source is retained.
-Our existing config requests separate load/store stages (`full_loadstore=true`)
-and disables `low_overhead`, whose workload aggregation removes detail. Per-draw
+The legacy configuration requests separate load/store stages (`full_loadstore=true`)
+and disables `low_overhead`. This is insufficient for the high-precision path on
+the tested runtime; see the 26 October correction below. Per-draw
 capture remains off: it changes scheduling and is not a low-impact default.
 
 Read-only inspection of the connected Quest 3 on 13 October confirmed Android
@@ -164,6 +165,125 @@ through the Meta/Adreno profiling layer. Another instrumented startup also
 crashed before capture. Preserve the driver stack and compare with profiling
 disabled; do not report a complete stable hardware workflow from compilation
 or a manually recovered recording alone.
+
+## High-precision source correction, 26 October 2026
+
+The current Meta producer advertises the `gpu_renderstage` TrackEvent category.
+The previous CyInsights configuration selected only the legacy
+`gpu.renderstages.oculus` source and ATrace categories. Setting the modern
+`gpu_renderstages_config` flags there did not select the high-precision path on
+the tested Quest. Removing just `surfaceworkload` did not fix it.
+
+CyInsights now queries the full source/category inventory and selects
+`track_event` with only `gpu_renderstage` enabled when advertised. Other
+TrackEvent categories are disabled, absolute timestamps are requested, and
+real-time counters remain a separate source. It does not request the competing
+legacy render-stage transport in that mode. Headsets without that category use
+the explicit legacy fallback; availability is still determined from received
+packets, never the advertised name or the profiler toggle alone.
+
+A real five-second recording of the separate Development test on Quest 3
+(Adreno 740, runtime build 52433670048800520) produced **154,797 timed GPU stage
+packets**, all decoded with a clock relation. They include **1,287 Binning,
+41,195 Render, 12,076 LoadColor, 26,280 StoreColor, 4,890 LoadDepthStencil and
+11,450 StoreDepthStencil** intervals, plus Bin, Dispatch, Blit, Preempt and surface
+envelopes. This is hardware capture, not a synthetic fixture. The same test
+session's legacy-source captures contained only Workload/Dispatch/Blit/Preempt
+and surfaces. No test used or relaunched Beyond.
+The raw high-precision capture above was collected with an isolated Perfetto
+configuration. Its requested duration was five seconds, but the producer emitted
+separated timestamp batches spanning roughly 452 seconds. These raw counts do
+not establish a five-second execution window or alignment with Unreal frames. An earlier combined attempt was interrupted when the headset rebooted and
+produced no complete archive. The later real in-app validation below completes
+the native recording, auxiliary collection, common archive and timeline import;
+the isolated raw recording alone was not that validation.
+
+The manifest now records `render_stage_transport`, `stage_types`,
+`fine_stage_count` and `hardware_detail_status`. A nonempty coarse trace reports
+`coarse_only`, not measured fine rendering detail. Per-type counts describe the
+auxiliary source as a whole; they do not establish game process identity or
+mapping to Unreal groups. The existing decoder/importer retains the original
+labels and timestamps, so there is no reconstructed allocation of tile time to
+BasePass, translucency, shaders or individual subpasses.
+
+This correction is in the **desktop capture coordinator**. It requires a new
+capture from the updated app and opening the complete `.cycapture`; it cannot
+add absent Meta packets to an old `.utrace`. It does not itself require rebuilding
+the APK. Keep a current CyInsights plugin for native scopes, session clock anchors
+and Android process/package metadata. Profiling must still be active before GPU
+context creation; capture does not restart the game by default. Detailed profiling
+remains an opt-in source with measurable overhead outside this test default.
+
+## In-app validation and startup diagnostics, 26 October 2026
+
+The small test APK repeatedly crashed in Adreno `vkCmdBindPipeline` on startup,
+with detailed profiling both enabled and disabled. Moving only that test
+package's existing `RHICache` to a backup allowed the same installed APK to
+render and open TCP 41856. This is an observed recovery on that test package,
+not evidence that clearing users' game caches is generally required; CyInsights
+does not clear game caches.
+
+A recording requested through the actual desktop application's capture service
+received 1,833,341 Unreal bytes before control timed out and the Quest rebooted.
+It produced no complete `.cycapture`. Its raw hardware source and this failure
+must not be described as a successful combined on-device capture. The subsequent
+post-reboot Meta launch gate was removed from the unattended test package by
+declaring optional hands support; a separate start while asleep also produced
+an Android ANR before the first window. The successful runs below started the
+rendered game while awake.
+
+The coordinator now waits up to 30 seconds for a cold game's TCP listener,
+publishes its waiting status, and can be stopped during that wait. The app opens
+a successfully completed archive automatically; the capture view has a checkbox
+to keep manual opening instead. An incomplete recording never triggers opening.
+The Meta source records Android boot identity before and after recording when
+available. A changed identity reports a reboot and rejects that auxiliary data;
+it never signals a stale recorder PID or joins timestamps across device boots.
+
+## Complete desktop-owned Quest capture validated, 26 October 2026
+
+The native app's capture service recorded the running separate Development APK
+on Quest 3 (Adreno 740, runtime 52433670048800520). A first five-second native
+control recording was received, packaged and opened automatically: 3,014,943
+Unreal bytes, 507,186 indexed events and 414 native game frames. This control
+recording deliberately disabled Meta collection and the optional completion
+hook to isolate transport and opening.
+
+The following ten-second recording used the plugin's normal basic defaults,
+including completion timestamps, plus Meta high-precision collection. The game
+was not stopped or restarted between these captures. The app received 6,823,579
+Unreal bytes, collected the auxiliary data and wrote a single `.cycapture`:
+
+- Raw Meta source: 368,881 timed hardware stages, including 235,938
+  Binning/Render/Load/Store stages, and 13,521 valid counter samples.
+- The native reader imported 360,804 hardware stages and 13,521 counter samples
+  against the matching Unreal session's Sync anchor; 8,077 stage intervals were
+  rejected. No GPU frame IDs were invented.
+- The opened common timeline contained 1,376,407 events and 689 native game
+  frames. Both CPU tracks and the test queue's Binning, Render, LoadColor,
+  LoadDepthStencil, StoreColor and StoreDepthStencil tracks were present.
+- Desktop decoding took about 2.08 s and indexing 0.21 s on the validation PC.
+- Android boot identities before and after recording matched. The game was
+  still alive after transfer and the app reported a complete capture.
+
+The actual archive was reopened by a second normal app instance and its timing
+view was visually checked. This validates the integrated capture/open workflow,
+not just a developer probe or an independently recorded `.pftrace`.
+
+After disabling persisted Vulkan cache loading in only the diagnostic workload,
+two further cold starts rendered successfully without moving or clearing its
+existing cache files. A final five-second capture from that packaged version
+also completed through the desktop app: 630,034 indexed events, 360 native frames,
+181,911 raw hardware stages (121,953 Binning/Render/Load/Store stages) and 23,642
+valid counter samples. That common archive was opened automatically and remained
+open for user inspection.
+
+Counts include runtime/system GPU queues as well as the test queue. The producer
+supplied queue labels but no resolved PID for these stage packets, so the UI
+keeps **Process unknown** and the original queue label. Hardware execution is
+aligned with the CPU timeline through clock anchors; its exact Unreal pass,
+subpass, shader, actor and game-frame identity remains unavailable. Vulkan pass
+correlation retains its approximate-alignment label.
 
 ## SDK/MCP
 

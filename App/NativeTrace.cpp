@@ -11,6 +11,7 @@
 #include <set>
 #include <cstring>
 #include "../Tools/NativeTiming/Format.hpp"
+#include "../Tools/NativeTiming/MetaGpuStandalone.hpp"
 namespace cyinsights {
 std::wstring NativeTrace::Quote(const std::wstring &s) {
     std::wstring r = L"\"";
@@ -92,6 +93,19 @@ bool NativeTrace::Start(const std::filesystem::path &exe, const std::filesystem:
     if (std::filesystem::exists(cache / "frame-stats.cystats")) std::filesystem::remove(cache / "frame-stats.cystats");
     if (std::filesystem::exists(csv_))
         std::filesystem::remove(csv_);
+    if(trace.extension()==L".pftrace") {
+        csv_=cache/"timing.cynt";binary_source_=true;read_counters_=false;
+        csv_task_=std::async(std::launch::async,[this,trace,cache]{
+            CsvResult result;const auto began=std::chrono::steady_clock::now();
+            try {
+                cymeta::ExportStandalone(trace,csv_,[this]{return progress_.cancel.load();});
+                if(paged_){result.store=PagedTimingStore::Build(csv_,cache/"timing.cyindex",progress_,result.error,true);result.success=bool(result.store);}
+                else result.success=ScanBinary(csv_,[&](TimingEvent&& e){result.events.push_back(std::move(e));},result.error,&progress_);
+            }catch(const std::exception& e){result.error=e.what();}
+            result.seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-began).count();return result;
+        });
+        return true;
+    }
     // The matching local adapter is optional; the existing bridge covers
     // installations where no native reader has been built yet.
     auto binaries=exe.parent_path();std::ifstream version(binaries.parent_path().parent_path()/"Build/Build.version");
