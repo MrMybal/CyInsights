@@ -72,3 +72,11 @@ compilés. Les binaires gardent un nom de PDB relatif à la place du chemin du p
 de compilation. Le manifest du ZIP indique le commit et les empreintes des fichiers.
 Les binaires de cette preview ne sont pas signés. La préparation automatique
 ne rend pas l'analyseur indépendant d'une installation Unreal.
+
+## GitHub release descriptions
+
+Write release descriptions in English. Read Markdown explicitly as UTF-8,
+for example `Path(notes_path).read_text(encoding="utf-8")`, and send JSON as
+UTF-8. Do not rely on the Windows default code page. After updating a release,
+read it back through the GitHub API and verify that its body matches the
+expected text exactly.

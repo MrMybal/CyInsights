@@ -1,51 +1,51 @@
 # CyInsights 0.2.1
 
-## Capture GPU Quest intégrée
+## Integrated Quest GPU capture
 
-La capture réseau depuis CyInsights collecte maintenant les stages matériels
-Meta détaillés via `track_event/gpu_renderstage` quand cette source est disponible.
-Les timings Unreal, stages GPU, compteurs et métadonnées sont enregistrés dans
-une seule archive `.cycapture`, puis ouverts automatiquement dans l'application.
-Le jeu en cours reste actif ; son redémarrage est une option explicite.
+CyInsights now collects detailed Meta hardware GPU stages alongside Unreal
+traces and saves both in a single `.cycapture` archive. Completed captures open
+automatically in the desktop app. The running game is preserved; restarting it
+is an explicit option.
 
-Les pistes GPU montrent Binning, Render, LoadColor, LoadDepthStencil,
-StoreColor et StoreDepthStencil, ainsi que les autres événements disponibles.
-La timeline utilise les horloges Perfetto et l'ancre de session Unreal. Les
-sources grossières sont signalées comme telles ; un redémarrage du casque
-invalide les données de l'ancien démarrage.
+- Detailed GPU tracks: Binning, Render, LoadColor, LoadDepthStencil, StoreColor
+  and StoreDepthStencil, when available on the device.
+- CPU/GPU clock alignment using Perfetto clock snapshots and Unreal session
+  synchronization anchors.
+- Explicit reporting of measured detail, coarse events and unavailable data.
+- Reboot detection prevents combining timestamps from different headset boots.
 
-Le parcours complet a été testé sur Quest 3 avec le petit projet Development :
-deux captures combinées reçues et ouvertes dans CyInsights, dont une capture
-finale de cinq secondes contenant 630 034 événements indexés et 360 frames
-natives. Les sources et limites sont détaillées dans [les résultats Quest](MetaQuestGpu.md).
+The complete capture and analysis workflow was validated on Quest 3. The final
+five-second test capture contained 630,034 indexed events and 360 native frames.
+See [Quest GPU validation and limitations](MetaQuestGpu.md).
 
-## Application et diagnostic
+## Application improvements
 
-- Attente visible et annulable du service de capture au démarrage du jeu.
-- Ouverture automatique des captures terminées, désactivable dans Session.
-- Comptage des types de stages réellement reçus et distinction entre détails
-  mesurés, événements grossiers et données indisponibles.
-- Ouverture facultative des fichiers Meta `.pftrace` pour le diagnostic GPU
-  seul ; ce mode ne crée pas de pistes CPU ni de frames Unreal.
-- Petit projet Quest utilisable sans manettes ; sa configuration évite de
-  recharger les caches Vulkan qui faisaient planter le test sur le pilote testé.
+- Visible, cancellable waiting for the game's capture service during startup.
+- Automatic opening of completed captures, with a manual-opening option.
+- Diagnostics showing the GPU stage types actually received.
+- Optional `.pftrace` import for GPU-only diagnostics, without invented CPU
+  tracks or Unreal frame IDs.
+- A separate Quest test project that can launch without controllers and avoids
+  the persisted Vulkan cache loading that caused crashes on the tested driver.
 
-## Installation et limites
+## Getting started
 
-Extraire tout le ZIP Windows puis lancer `CyInsightsApp.exe`. Pour lire les
-traces Unreal, ajouter la racine d'une installation Unreal licenciée dans
-Session ; les lecteurs sont préparés avec les outils C++/CMake locaux.
-Unreal n'est pas recompilé. Les sources du plugin sont fournies séparément.
+Extract the complete Windows ZIP and run `CyInsightsApp.exe`. To analyze Unreal
+traces, register the root folder of your licensed Unreal installation in
+Session. Native readers are prepared using your local C++/CMake tools; Unreal
+itself is not rebuilt. Unreal plugin sources are available in the separate ZIP.
 
-La collecte Meta requiert un Quest autorisé dans ADB et le profiling GPU détaillé
-activé avant le lancement du jeu. Les étapes et réglages sont décrits dans
-[la documentation Quest](MetaQuestGpu.md). Aucune copie de texture ou de buffer
-n'est activée par défaut.
+Detailed Meta GPU capture requires an authorized ADB connection and GPU
+profiling enabled before the game starts. Start recording from CyInsights;
+a separate recording in Meta Quest Developer Hub is not required. Texture and
+buffer readbacks remain disabled by default.
 
-Les phases matérielles ne fournissent pas leur correspondance exacte avec les
-passes, shaders, objets ou frames Unreal. Les identités de processus inconnues
-et les associations approximatives restent signalées. Cette validation Quest 3
-ne constitue pas une validation de chaque casque, moteur ou pilote.
+## Limitations
 
-Les binaires Windows restent sans signature Authenticode de confiance. Les
-licences, sources des lecteurs et empreintes SHA-256 accompagnent la release.
+Hardware stages do not provide an exact mapping to Unreal passes, shaders,
+objects or game frames. Unknown process identities and approximate correlations
+remain explicitly labeled. Quest 3 validation does not cover every headset,
+engine version or driver. See the [Quest capture guide](MetaQuestGpu.md).
+
+Windows binaries are not Authenticode-signed. Component licenses, native reader
+sources and SHA-256 checksums are included with the release.
