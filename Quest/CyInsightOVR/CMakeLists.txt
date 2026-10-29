@@ -3,6 +3,8 @@ project(CyInsightOVR LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 get_filename_component(ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+# Keep developer workspace paths out of packaged assertion/source strings.
+add_compile_options("-ffile-prefix-map=${ROOT}=.")
 set(IMGUI "${ROOT}/ThirdParty/CyGPUInspector/ThirdParty/imgui")
 add_library(OvrImGui STATIC "${IMGUI}/imgui.cpp" "${IMGUI}/imgui_draw.cpp" "${IMGUI}/imgui_tables.cpp" "${IMGUI}/imgui_widgets.cpp" "${ROOT}/ThirdParty/ImGuiOpenGL/imgui_impl_opengl3.cpp")
 set_target_properties(OvrImGui PROPERTIES POSITION_INDEPENDENT_CODE ON)
