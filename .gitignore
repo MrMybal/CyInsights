@@ -33,6 +33,8 @@ AI/runtime/
 *.utrace
 *.ucache
 *.cycapture
+*.cyovr
+*.keystore
 *.cyindex
 *.pdb
 *.exe

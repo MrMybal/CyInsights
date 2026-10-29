@@ -31,8 +31,14 @@ public:
     void GetModuleInfo(TraceServices::FModuleInfo& i)override{i.Name=TEXT("CyInsights_MetaGpu");i.DisplayName=TEXT("Meta GPU hardware stages");}
     void OnAnalysisBegin(TraceServices::IAnalysisSession& s)override{s.AddAnalyzer(new Analyzer(*this));}
     double Seconds(uint64_t mono)const {return anchorSeconds+(mono>=anchorTicks?double(mono-anchorTicks):-double(anchorTicks-mono))*1e-9;}
+    void ExportTileClock(const std::filesystem::path& trace){
+        std::ifstream file(trace.parent_path()/"quest-tiles/info.json");if(!file)return;std::string text((std::istreambuf_iterator<char>(file)),{});std::smatch session,frequency,boot;
+        if(!std::regex_search(text,session,std::regex(R"regex("unreal_session_id"\s*:\s*"([^"]+)")regex"))||!std::regex_search(text,frequency,std::regex(R"regex("unreal_cpu_frequency_hz"\s*:\s*([0-9.eE+-]+))regex"))||!std::regex_search(text,boot,std::regex(R"regex("android_boot_id"\s*:\s*"([0-9a-fA-F-]+)")regex")))return;
+        auto match=anchors.find(session[1]);uint64_t mono=0;if(match==anchors.end()||!cymeta::MonoAnchorFromCycles(match->second.first,std::stod(frequency[1]),mono))return;
+        std::ofstream out(directory/"quest-tiles-clock.json");out<<"{\"android_boot_id\":\""<<boot[1]<<"\",\"mono_ns\":\""<<mono<<"\",\"native_seconds\":"<<std::setprecision(17)<<match->second.second<<",\"kind\":\"observation_not_execution\"}";
+    }
     void Read(const std::filesystem::path& trace,FrameStatsModule& stats){
-        try{ReadSource(trace,stats);}catch(const std::exception& e){
+        try{ExportTileClock(trace);ReadSource(trace,stats);}catch(const std::exception& e){
             if(recorded||counterSamples)throw; // A write failure must not publish a partial cache.
             error=std::string("Meta GPU unavailable: ")+e.what();fprintf(stdout,"%s\n",error.c_str());
         }

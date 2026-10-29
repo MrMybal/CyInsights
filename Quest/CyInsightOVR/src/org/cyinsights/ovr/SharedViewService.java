@@ -1,0 +1,27 @@
+// Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
+package org.cyinsights.ovr;
+import android.app.*;import android.content.*;import android.graphics.*;import android.hardware.display.*;import android.media.*;import android.media.projection.*;import android.os.*;import android.util.Base64;import java.io.*;import java.nio.*;import java.nio.charset.StandardCharsets;import org.json.*;
+/** User-consented screen sharing. Keeps one bounded latest JPEG; never captures audio. */
+public final class SharedViewService extends Service {
+    private HandlerThread thread;private Handler handler;private MediaProjection projection;private VirtualDisplay display;private ImageReader images;private long previous;private String boot="";private volatile boolean closing;
+    @Override public void onCreate(){super.onCreate();thread=new HandlerThread("CyOVR-Shared-View");thread.start();handler=new Handler(thread.getLooper());NotificationManager manager=getSystemService(NotificationManager.class);manager.createNotificationChannel(new NotificationChannel("cyovr-view","Quest view sharing",NotificationManager.IMPORTANCE_LOW));
+        PendingIntent stop=PendingIntent.getService(this,54,new Intent(this,SharedViewService.class).setAction("stop"),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);PendingIntent open=PendingIntent.getActivity(this,55,QuickAccess.configurationIntent(this),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        startForeground(5,new Notification.Builder(this,"cyovr-view").setSmallIcon(android.R.drawable.ic_menu_camera).setContentTitle("Sharing Quest view with CyInsights").setContentText("Optional images for the connected desktop capture. No audio.").setOngoing(true).setContentIntent(open).addAction(new Notification.Action.Builder(null,"Stop sharing",stop).build()).build());
+    }
+    private void write(JSONObject value)throws Exception{File temp=new File(getFilesDir(),"shared-view.tmp"),out=new File(getFilesDir(),"shared-view.json");try(FileOutputStream f=new FileOutputStream(temp)){f.write(value.toString().getBytes(StandardCharsets.UTF_8));}if(!temp.renameTo(out))throw new IOException("Cannot publish shared view");}
+    @Override public int onStartCommand(Intent intent,int flags,int id){if(intent==null||"stop".equals(intent.getAction())){stopSelf();return START_NOT_STICKY;}if(projection!=null)return START_NOT_STICKY;handler.post(()->{
+        try{JSONObject connection;try(BufferedReader reader=new BufferedReader(new FileReader(new File(getFilesDir(),"developer-bridge.json")))){connection=new JSONObject(reader.readLine());}boot=connection.getString("android_boot_id");
+            projection=getSystemService(MediaProjectionManager.class).getMediaProjection(intent.getIntExtra("result",Activity.RESULT_CANCELED),intent.getParcelableExtra("projection"));if(projection==null)throw new IOException("Screen sharing permission unavailable");
+            projection.registerCallback(new MediaProjection.Callback(){@Override public void onStop(){stopSelf();}},handler);
+            images=ImageReader.newInstance(1280,720,PixelFormat.RGBA_8888,2);images.setOnImageAvailableListener(reader->{try(Image image=reader.acquireLatestImage()){
+                if(image==null||closing)return;long observed=System.nanoTime();if(observed-previous<500000000L)return;previous=observed;
+                Image.Plane plane=image.getPlanes()[0];int stride=plane.getPixelStride(),row=plane.getRowStride();if(stride!=4||row<image.getWidth()*4)throw new IOException("Unsupported sharing pixel layout");int paddedWidth=row/4;
+                Bitmap padded=Bitmap.createBitmap(paddedWidth,image.getHeight(),Bitmap.Config.ARGB_8888);ByteBuffer pixels=ByteBuffer.allocate(row*image.getHeight());ByteBuffer original=plane.getBuffer();pixels.put(original);pixels.rewind();padded.copyPixelsFromBuffer(pixels);Bitmap bitmap=Bitmap.createBitmap(padded,0,0,image.getWidth(),image.getHeight());ByteArrayOutputStream jpeg=new ByteArrayOutputStream();bitmap.compress(Bitmap.CompressFormat.JPEG,80,jpeg);if(bitmap!=padded)bitmap.recycle();padded.recycle();if(jpeg.size()>1024*1024)throw new IOException("Shared image exceeds the frame budget");
+                write(new JSONObject().put("active",true).put("android_boot_id",boot).put("observed_mono_ns",Long.toString(observed)).put("image_timestamp",Long.toString(image.getTimestamp())).put("image_timestamp_basis","source_unspecified").put("width",image.getWidth()).put("height",image.getHeight()).put("mapping","composited_view_unregistered").put("jpeg_base64",Base64.encodeToString(jpeg.toByteArray(),Base64.NO_WRAP)));
+            }catch(Exception error){android.util.Log.e("CyInsightOVR","View sharing frame failed",error);}},handler);
+            display=projection.createVirtualDisplay("CyInsights desktop view sharing",1280,720,getResources().getDisplayMetrics().densityDpi,DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,images.getSurface(),null,handler);
+        }catch(Exception error){android.util.Log.e("CyInsightOVR","Cannot start view sharing",error);stopSelf();}
+    });return START_NOT_STICKY;}
+    @Override public IBinder onBind(Intent intent){return null;}
+    @Override public void onDestroy(){closing=true;handler.post(()->{try{write(new JSONObject().put("active",false));}catch(Exception ignored){}if(display!=null)display.release();if(images!=null)images.close();if(projection!=null)projection.stop();thread.quitSafely();});stopForeground(STOP_FOREGROUND_REMOVE);super.onDestroy();}
+}

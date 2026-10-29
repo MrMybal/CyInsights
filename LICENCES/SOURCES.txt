@@ -1,4 +1,12 @@
 Current CyInsights inventory (2026-10-10):
+CyInsightOVR addition (2026-10-28): native Android application and shared desktop
+tile view (AGPL-3.0-or-later), owned capture schema (MIT).
+Official Dear ImGui OpenGL3 backend v1.92.5, MIT:
+https://github.com/ocornut/imgui/tree/v1.92.5/backends
+Source, pinned file hashes and full MIT grant: ThirdParty/ImGuiOpenGL/.
+The APK retains these notices in assets/LICENCES. The installed device profiler
+is invoked through an explicit authorized developer bootstrap; no Meta binary
+or Unreal component is included in the APK.
 CyUI 1.0.0: owned semantic Dear ImGui UI library, source snapshot 2026-10-17.
 Source: ThirdParty/CyUI; full MIT grant: CyUI-MIT.txt.
 Uses the application's existing ImGui target; no second ImGui or system fonts bundled.
@@ -86,3 +94,10 @@ Dependency license texts and notices extracted from their pinned wheels: AI/.
 The private venv uses installed Python 3.11 x64; its license: AI/Python-3.11-License.txt.
 No model weights, AI provider CLI or Epic engine binaries are redistributed.
 The SDK and third-party licenses do not relicense the existing derived sources.
+
+CyInsightOVR runtime capability inquiry (2026-10-28):
+- Khronos OpenXR 1.1.65 headers and official Android arm64 loader.
+  https://repo.maven.apache.org/maven2/org/khronos/openxr/openxr_loader_for_android/1.1.65/
+  Apache-2.0 (chosen distribution license). Complete notices: OpenXR.txt.
+  Pinned archive and individual file SHA-256: ../ThirdParty/OpenXR/ORIGIN.json.
+  No Epic or proprietary Meta runtime is bundled. Inquiry creates no XR session.

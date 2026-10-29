@@ -19,6 +19,7 @@ struct RemoteOptions {
     bool override_capture_options=false;
     CaptureOptions capture;
     MetaQuestOptions meta_gpu;
+    bool quest_tiles=false,quest_tile_images=false;double quest_tile_hz=1;
 };
 struct RemoteSnapshot {
     RemoteState state = RemoteState::idle;
@@ -33,7 +34,7 @@ struct RemoteSnapshot {
     fs::path archive, partial_trace;
     cygi::Json capture_defaults,capture_capabilities;
     std::string gpu_message;
-    std::string meta_message;
+    std::string meta_message,tile_message;cygi::Json companion;
     bool Busy() const {
         return finishing || state == RemoteState::probing || state == RemoteState::starting || state == RemoteState::recording ||
                state == RemoteState::stopping || state == RemoteState::packaging;

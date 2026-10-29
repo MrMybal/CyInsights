@@ -1929,6 +1929,29 @@
             "additionalProperties": false,
             "description": "Optional capture policy v1. Omit the entire object to use plugin project defaults. Image/texture readbacks are opt-in. Disabled/compiled-out stats cannot be recreated."
           },
+          "quest_tiles": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "default": false,
+                "description": "Record optional CyInsightOVR tile snapshots in the same cycapture; requires an authorized ADB connection and running companion bridge."
+              },
+              "images": {
+                "type": "boolean",
+                "default": false,
+                "description": "Explicitly capture optional Quest view images through the authorized ADB bridge on supported firmware, or system-approved view sharing otherwise. Approximate observation association only; no audio, exact execution-frame, eye or mesh attribution."
+              },
+              "hz": {
+                "type": "number",
+                "default": 1,
+                "minimum": 0.2,
+                "maximum": 5,
+                "description": "Requested tile snapshots per second, independent of native per-frame GPU scopes. Actual image cadence depends on the source and capture time."
+              }
+            }
+          },
           "meta_gpu": {
             "type": "object",
             "additionalProperties": false,

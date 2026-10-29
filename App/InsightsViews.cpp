@@ -26,8 +26,8 @@ void PanelToggle(const char* icon,const char* label,bool& open) {
 }
 } // namespace
 void Application::Toolbar() {
-    const auto* viewport=WorkspaceViewport();
-    if(!hosted_){ImGui::SetNextWindowPos(viewport->WorkPos);ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x,NavigationHeight()));}
+    const auto viewport=WorkspaceViewport();
+    if(!hosted_){ImGui::SetNextWindowPos(viewport.WorkPos);ImGui::SetNextWindowSize(ImVec2(viewport.WorkSize.x,NavigationHeight()));}
     cyui::ScopedVar padding(ImGuiStyleVar_WindowPadding,cyui::dp(8,4));
     if(hosted_)ImGui::BeginChild("##InsightsNavigation",ImVec2(0,NavigationHeight()),ImGuiChildFlags_AlwaysUseWindowPadding,ImGuiWindowFlags_NoScrollbar);
     else BeginView("##InsightsNavigation",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoDocking|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoScrollbar);
@@ -563,6 +563,7 @@ void Application::Timing() {
         ImGui::SetScrollY(drag_scroll_start_-(ImGui::GetIO().MousePos.y-overview_drag_y_));
     bool scope_hovered=false,blank_lane_double_click=false;
     const float counter_tracks_start=ImGui::GetCursorScreenPos().y;
+    quest_tiles_.Clock(cache_);if(quest_tiles_.Track(w,view_start_,view_end_))show_ovr_=true;
     CounterTracks(w);
     const float counter_tracks_end=ImGui::GetCursorScreenPos().y;
     d = ImGui::GetWindowDrawList();
@@ -933,14 +934,14 @@ void Application::LoadStatus() {
     if(native_setup_.Busy()){pending_shown_=true;return;}
     bool busy=native_import_pending_||!pending_capture_.empty()||native_.Busy()||model_task_.valid();
     if(!busy&&load_error_.empty())return;
-    const auto* viewport=WorkspaceViewport();
-    ImGui::SetNextWindowViewport(viewport->ID);
+    const auto viewport=WorkspaceViewport();
+    ImGui::SetNextWindowViewport(viewport.ID);
     // Keep the timeline usable while a replacement visible interval is queried.
     bool initial=!native_.store||!std::isfinite(loaded_start_);
     // Interval reads are reported in the toolbar. No appearing window may take
     // focus or mouse capture away from an ongoing navigation gesture.
     if(!initial&&load_error_.empty())return;
-    ImGui::SetNextWindowPos(initial||!load_error_.empty()?ImVec2(viewport->WorkPos.x+viewport->WorkSize.x*.5f,viewport->WorkPos.y+viewport->WorkSize.y*.45f):ImVec2(viewport->WorkPos.x+12*UiScale(),viewport->WorkPos.y+viewport->WorkSize.y-125*UiScale()),ImGuiCond_Always,initial||!load_error_.empty()?ImVec2(.5f,.5f):ImVec2(0,0));
+    ImGui::SetNextWindowPos(initial||!load_error_.empty()?ImVec2(viewport.WorkPos.x+viewport.WorkSize.x*.5f,viewport.WorkPos.y+viewport.WorkSize.y*.45f):ImVec2(viewport.WorkPos.x+12*UiScale(),viewport.WorkPos.y+viewport.WorkSize.y-125*UiScale()),ImGuiCond_Always,initial||!load_error_.empty()?ImVec2(.5f,.5f):ImVec2(0,0));
     ImGui::SetNextWindowSize(ImVec2(560*UiScale(),0),ImGuiCond_Always);
     BeginView(load_error_.empty()?"Loading capture":"Capture could not be opened",nullptr,
         ImGuiWindowFlags_NoDocking|ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoCollapse|ImGuiWindowFlags_AlwaysAutoResize|ImGuiWindowFlags_NoFocusOnAppearing);

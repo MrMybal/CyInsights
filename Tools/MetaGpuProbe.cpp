@@ -20,6 +20,10 @@ int main(int argc,char** argv){try{
         cyinsights::RemoteOptions o;o.ipv4=argv[2];o.seconds=std::stod(argv[4]);o.output_directory=std::filesystem::u8path(argv[5]);o.meta_gpu.package=argv[3];o.meta_gpu.restart_game=true;
         for(int i=6;i<argc;++i){const std::string option=argv[i];
             if(option=="--no-restart")o.meta_gpu.restart_game=false;
+            else if(option=="--tiles")o.quest_tiles=true;
+            else if(option=="--images"){o.quest_tiles=true;o.quest_tile_images=true;}
+            else if(option=="--no-meta-stages")o.meta_gpu.enabled=false;
+            else if(option.rfind("--tile-hz=",0)==0)o.quest_tile_hz=std::stod(option.substr(10));
             else if(option.rfind("--device=",0)==0)o.meta_gpu.device=option.substr(9);
             else if(option.rfind("--port=",0)==0){size_t used=0;const auto value=std::stoul(option.substr(7),&used);if(used!=option.size()-7||value<1||value>65535)throw std::runtime_error("Invalid capture port");o.control_port=static_cast<uint16_t>(value);}
             else throw std::runtime_error("Unknown remote probe option");

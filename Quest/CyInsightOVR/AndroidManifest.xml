@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.cyinsights.ovr" android:versionCode="1" android:versionName="0.1.0-dev">
+    <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="34"/>
+    <uses-feature android:glEsVersion="0x00030000" android:required="true"/>
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+    <uses-permission android:name="org.khronos.openxr.permission.OPENXR"/>
+    <uses-permission android:name="org.khronos.openxr.permission.OPENXR_SYSTEM"/>
+    <queries>
+        <provider android:authorities="org.khronos.openxr.runtime_broker;org.khronos.openxr.system_runtime_broker"/>
+        <intent><action android:name="org.khronos.openxr.OpenXRRuntimeService"/></intent>
+    </queries>
+    <instrumentation android:name=".SmokeTest" android:targetPackage="org.cyinsights.ovr" android:label="CyInsightOVR development render test"/>
+    <instrumentation android:name=".MetricsSdkProbe" android:targetPackage="org.cyinsights.ovr" android:label="CyInsightOVR optional public SDK probe"/>
+    <instrumentation android:name=".CapabilitiesProbe" android:targetPackage="org.cyinsights.ovr" android:label="CyInsightOVR read-only runtime capabilities"/>
+    <instrumentation android:name=".PanelUiTest" android:targetPackage="org.cyinsights.ovr" android:label="CyInsightOVR panel input and settings regression"/>
+    <instrumentation android:name=".HudSettingsProbe" android:targetPackage="org.cyinsights.ovr" android:label="CyInsightOVR selected Meta HUD settings regression"/>
+    <instrumentation android:name=".QuickAccessProbe" android:targetPackage="org.cyinsights.ovr" android:label="CyInsightOVR launcher shortcut capabilities"/>
+    <application android:label="CyInsightOVR" android:theme="@android:style/Theme.Material.NoActionBar" android:debuggable="true" android:allowBackup="false" android:resizeableActivity="true" android:extractNativeLibs="true" android:icon="@drawable/cyinsights_logo">
+        <uses-native-library android:name="libopenxr_loader.so" android:required="false"/>
+        <receiver android:name=".ShortcutPinnedReceiver" android:exported="false"/>
+        <meta-data android:name="com.oculus.supportedDevices" android:value="quest2|questpro|quest3|quest3s"/>
+        <activity android:name=".ShareViewActivity" android:exported="false" android:theme="@android:style/Theme.Material.NoActionBar"/>
+        <service android:name=".SharedViewService" android:exported="false" android:foregroundServiceType="mediaProjection"/>
+        <service android:name=".CaptureService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started short GPU snapshot after closing the configuration panel, with visible progress and saved result"/>
+        </service>
+        <service android:name=".LiveHeatmapService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started development Vulkan tile heatmap with sampled measured GPU data and visible stop/configuration controls"/>
+        </service>
+        <service android:name=".VrHudService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-enabled developer VR HUD controller with configuration and stop notification"/>
+        </service>
+        <service android:name=".OverlayService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-enabled developer GPU performance HUD with a visible stop notification"/>
+        </service>
+        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask" android:configChanges="orientation|screenSize|keyboardHidden" android:screenOrientation="landscape">
+            <layout android:defaultWidth="1024dp" android:defaultHeight="640dp" android:minWidth="720dp" android:minHeight="480dp"/>
+            <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -23,9 +23,9 @@ void Application::NativeSetupView() {
     const bool busy=native_setup_.Busy();
     const bool failed=native_setup_.state==NativeSetup::State::Failed;
     if((!busy&&!failed)||setup_dismissed_)return;
-    const auto* viewport=WorkspaceViewport();
-    ImGui::SetNextWindowViewport(viewport->ID);
-    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x+viewport->WorkSize.x*.5f,viewport->WorkPos.y+viewport->WorkSize.y*.25f),ImGuiCond_Appearing,ImVec2(.5f,.5f));
+    const auto viewport=WorkspaceViewport();
+    ImGui::SetNextWindowViewport(viewport.ID);
+    ImGui::SetNextWindowPos(ImVec2(viewport.WorkPos.x+viewport.WorkSize.x*.5f,viewport.WorkPos.y+viewport.WorkSize.y*.25f),ImGuiCond_Appearing,ImVec2(.5f,.5f));
     ImGui::SetNextWindowSize(ImVec2(640*UiScale(),0),ImGuiCond_Always);
     BeginView("Native trace reader setup",nullptr,ImGuiWindowFlags_NoDocking|ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoCollapse|ImGuiWindowFlags_AlwaysAutoResize|ImGuiWindowFlags_NoFocusOnAppearing);
     ImGui::TextWrapped("%s",native_setup_.message.c_str());

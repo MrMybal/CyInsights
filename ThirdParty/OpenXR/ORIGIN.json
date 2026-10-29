@@ -1,0 +1,17 @@
+{
+  "component": "Khronos OpenXR headers and Android loader",
+  "version": "1.1.65",
+  "source": "https://repo.maven.apache.org/maven2/org/khronos/openxr/openxr_loader_for_android/1.1.65/openxr_loader_for_android-1.1.65.aar",
+  "archive_sha256": "a298c326085b09181c85235fb04d37510939bd30938ed4322c093c09780e8643",
+  "license": "Apache-2.0",
+  "binaries_bundled": [
+    "Android/arm64-v8a/libopenxr_loader.so"
+  ],
+  "files": {
+    "Android/arm64-v8a/libopenxr_loader.so": "49a3cb45735a23e596711ba3127e407cd34a0ce2ed09dbd4f1d1839006b96d0f",
+    "include/openxr/openxr.h": "183fce845edd297790082fd23b49f78f023be6438eb529ae59e2af5fbc6d8ee4",
+    "include/openxr/openxr_platform.h": "f17e6d752e0065ede9f2a4c8932155acff96462306a2468a67a6ad77484641d8",
+    "include/openxr/openxr_platform_defines.h": "a458ba5777415f2de518fdcdcc87fcf8651ba0468c9f69a101378672aad80946",
+    "LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  }
+}

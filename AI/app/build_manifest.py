@@ -64,7 +64,10 @@ for name,desc in [('capture_probe','Probe a development game/Quest plugin by IPv
                   ('capture_start','Start a remote development capture and stream to PC. State changes are persistent app actions; SDK cancellation does not stop recording.')]:
     add(name,desc,{'ipv4':string(minLength=7,maxLength=15,pattern=r'^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$'),
        'port':integer(default=41855,minimum=1,maximum=65535),'seconds':number(default=0,minimum=0,maximum=3600),
-       **({'capture_options':capture_options,'meta_gpu':field('object',additionalProperties=False,properties={
+       **({'capture_options':capture_options,'quest_tiles':field('object',additionalProperties=False,properties={
+           'enabled':boolean(default=False,description='Record optional CyInsightOVR tile snapshots in the same cycapture; requires an authorized ADB connection and running companion bridge.'),
+           'images':boolean(default=False,description='Explicitly capture optional Quest view images through the authorized ADB bridge on supported firmware, or system-approved view sharing otherwise. Approximate observation association only; no audio, exact execution-frame, eye or mesh attribution.'),
+           'hz':number(default=1,minimum=.2,maximum=5,description='Requested tile snapshots per second, independent of native per-frame GPU scopes. Actual image cadence depends on the source and capture time.')}),'meta_gpu':field('object',additionalProperties=False,properties={
            'enabled':field('boolean',default=True,description='Quest hardware stages/counters via authorized ADB. Enabled by default for testing.'),
            'restart_game':field('boolean',default=False,description='Optional explicit restart of the selected development game after GPU profiling activation. Default preserves the running game and its existing profiling configuration.'),
            'adb_path':string(default='',maxLength=4096),'device':string(default='',maxLength=255),

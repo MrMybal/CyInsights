@@ -14,6 +14,20 @@ def test_contract():
     assert set(annotation['permissions'])=={'annotations','appControl'}
     capture=next(op for op in manifest['operations'] if op['id']=='capture_start')
     assert capture['inputSchema']['properties']['meta_gpu']['properties']['restart_game']['default'] is False
+    tiles=capture['inputSchema']['properties']['quest_tiles']['properties']
+    assert tiles['enabled']['default'] is False and tiles['images']['default'] is False
+    assert tiles['hz']['minimum']==.2 and tiles['hz']['maximum']==5
+
+def test_quest_tile_options_are_typed_and_forwarded():
+    with tempfile.TemporaryDirectory() as root, create_runtime(Path(root)/'jobs') as runtime:
+        actor=runtime.authenticate(runtime.create_client('capture',['remoteCapture'])['token'])
+        session=runtime.create_session(actor)
+        with patch('tool.native_call',return_value={'accepted':True}) as call:
+            options={'enabled':True,'images':True,'hz':2.5}
+            job=runtime.submit(actor,session['sessionId'],'capture_start',{'ipv4':'192.0.2.5','quest_tiles':options})
+            assert runtime.wait(actor,job['jobId'])['state']=='Completed'
+            assert call.call_args[0][1]['quest_tiles']==options
+            with pytest.raises(CyToolError):runtime.submit(actor,session['sessionId'],'capture_start',{'ipv4':'192.0.2.5','quest_tiles':{'hz':10}})
 
 def test_jobs_output_isolation_and_persistent_source():
     with tempfile.TemporaryDirectory() as root:

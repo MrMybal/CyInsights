@@ -15,12 +15,17 @@ public:
     ~MetaQuestCapture();
     // Preparation occurs before the app-owned Unreal capture. Never interrupts
     // an active native trace; the caller verifies idle ownership first.
+    bool SelectDevice(const MetaQuestOptions&,const std::string& ipv4,const cygi::Json& metadata);
+    cygi::Json Companion(const cygi::Json& request,bool cleanup=false);
+    void PullTiles(const std::string& id,const fs::path& destination);
     bool Prepare(const MetaQuestOptions&,const std::string& ipv4,const cygi::Json& metadata);
     bool Begin(const fs::path& staging,double seconds,const cygi::Json& metadata=cygi::Json());
     void BindSession(const std::string& session){session_=session;}
     void End();
     cygi::Json Source() const;
     const std::string& Message()const{return message_;}
+    std::string StartupHint();
+    static std::string DescribeStartup(const std::string& activities,const std::string& power);
     bool Restarted()const{return restarted_;}
     static fs::path FindAdb(const fs::path& explicit_path={});
 private:

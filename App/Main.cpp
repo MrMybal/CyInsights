@@ -3,6 +3,7 @@
 #include "Application.hpp"
 #include "DocumentWorkspace.hpp"
 #include "Branding.hpp"
+#include "QuestTileReplay.hpp"
 #include "UiTheme.hpp"
 #include "ResourceIds.h"
 #include <chrono>
@@ -160,7 +161,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
     wc.hIcon=LoadIconW(instance,MAKEINTRESOURCEW(IDI_CYINSIGHTS));
     wc.hIconSm=static_cast<HICON>(LoadImageW(instance,MAKEINTRESOURCEW(IDI_CYINSIGHTS),IMAGE_ICON,GetSystemMetrics(SM_CXSMICON),GetSystemMetrics(SM_CYSMICON),LR_SHARED));
     RegisterClassExW(&wc);
-    HWND window = CreateWindowW(wc.lpszClassName, L"CyInsights — Unreal & GPU profiling", WS_OVERLAPPEDWINDOW,
+    HWND window = CreateWindowW(wc.lpszClassName, L"CyInsights - Unreal & GPU profiling", WS_OVERLAPPEDWINDOW,
                                 60, 60, 1680, 980, nullptr, nullptr, instance, nullptr);
     ShowWindow(window,SW_MAXIMIZE);UpdateWindow(window);
     DXGI_SWAP_CHAIN_DESC desc{};
@@ -208,9 +209,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
     ShowWindow(window, SW_MAXIMIZE);
     UpdateWindow(window);
     {
+        cyinsights::SetQuestImageDevice(device);
         cyinsights::DocumentWorkspace workspace(static_cast<ImTextureID>(reinterpret_cast<uintptr_t>(brand_logo)));
         auto& startup_app=workspace.Primary();
         bool multi_trace_smoke=false,ai_control_all=false;int multi_trace_step=0,multi_trace_wait=0;
+        bool document_lifecycle_smoke=false;int document_lifecycle_step=0,document_lifecycle_wait=0;
         bool standalone_ai_smoke=false,standalone_ai_complete=false;size_t standalone_ai_step=0;
         std::future<cygi::Json> standalone_ai_future;auto standalone_ai_results=cygi::Json::Array();
         const std::array<const char*,7> standalone_ai_operations{{"get_state","get_analysis_guide","get_capabilities","histogram","query_frames","query_scopes","list_counters"}};
@@ -251,6 +254,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             else if(argument==L"--loading-snapshot"&&i+1<count)
                 loading_snapshot=args[++i];
             else if(argument==L"--multi-trace-smoke")multi_trace_smoke=true;
+            else if(argument==L"--document-lifecycle-smoke")document_lifecycle_smoke=true;
             else if(argument==L"--ai-control-all")ai_control_all=true;
             else if(argument==L"--vulkan-details-view")vulkan_details_view=true;
             else if(argument==L"--navigation-smoke")navigation_smoke=true;
@@ -502,6 +506,18 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
                     else multi_trace_step=4;
                 }
             }
+            if(document_lifecycle_smoke&&!workspace.Busy()&&frames>20&&document_lifecycle_step<4){
+                if(document_lifecycle_step==0){if(workspace.Count()!=2)return 24;workspace.Detach(1);document_lifecycle_step=1;document_lifecycle_wait=0;}
+                else if(++document_lifecycle_wait>8){
+                    if(document_lifecycle_step==1){
+                        if(ImGui::GetPlatformIO().Viewports.Size<2)return 25;
+                        auto proof=snapshot;proof+=L".detached.json";workspace.WriteReport(proof);
+                        workspace.Attach(1);document_lifecycle_step=2;
+                    }else if(document_lifecycle_step==2){workspace.Detach(1);document_lifecycle_step=3;}
+                    else {workspace.CloseCapture(1);document_lifecycle_step=4;Log("Detached document closed after reattachment cycle");}
+                    document_lifecycle_wait=0;
+                }
+            }
             if(vulkan_details_view&&!vulkan_details_focused&&!app.AnalysisBusy())vulkan_details_focused=app.FocusVulkanPassContents();
             if(vulkan_details_focused)++vulkan_details_settle;
             if(inspect_task&&!task_inspected&&frames>20&&!app.AnalysisBusy()){
@@ -531,7 +547,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             if(!loading_snapshot.empty()&&frames>5&&app.AnalysisBusy()) {
                 SaveSnapshot(loading_snapshot);loading_snapshot.clear();
             }
-            if (!snapshot.empty() && ++frames > 20 && !workspace.Busy()&&(!standalone_ai_smoke||standalone_ai_complete)&&(!multi_trace_smoke||multi_trace_step==4)&&(!vulkan_details_view||vulkan_details_settle>3)&&(!navigation_smoke||navigation_step==11)&&(!diagnostic_smoke||diagnostic_settle>5)&&(!interaction_smoke||interaction_step==16)&&(!activity_range_smoke||activity_step==4)&&(!frame_stats_range_smoke||frame_stats_step==4)) {
+            if (!snapshot.empty() && ++frames > 20 && !workspace.Busy()&&(!standalone_ai_smoke||standalone_ai_complete)&&(!multi_trace_smoke||multi_trace_step==4)&&(!document_lifecycle_smoke||document_lifecycle_step==4&&++document_lifecycle_wait>8)&&(!vulkan_details_view||vulkan_details_settle>3)&&(!navigation_smoke||navigation_step==11)&&(!diagnostic_smoke||diagnostic_settle>5)&&(!interaction_smoke||interaction_step==16)&&(!activity_range_smoke||activity_step==4)&&(!frame_stats_range_smoke||frame_stats_step==4)) {
                 if (!SaveSnapshot(snapshot))
                     return 2;
                 auto report=snapshot;report+=L".json";app.WriteAnalysisReport(report);auto documents=snapshot;documents+=L".documents.json";workspace.WriteReport(documents);

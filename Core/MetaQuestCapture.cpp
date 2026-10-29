@@ -43,8 +43,7 @@ std::string MetaQuestCapture::Call(const std::vector<std::wstring>& args,unsigne
     if(code)throw std::runtime_error("ADB command failed: "+text.substr(0,1500));return text;
 }
 std::string MetaQuestCapture::Shell(const std::vector<std::wstring>& args,unsigned timeout,bool cleanup){std::vector<std::wstring> all={L"-s",Wide(device_),L"shell"};all.insert(all.end(),args.begin(),args.end());return Call(all,timeout,cleanup);}
-bool MetaQuestCapture::Prepare(const MetaQuestOptions& options,const std::string& ipv4,const cygi::Json& metadata){
-    try {
+bool MetaQuestCapture::SelectDevice(const MetaQuestOptions& options,const std::string& ipv4,const cygi::Json& metadata){try{
         adb_=FindAdb(options.adb);Check(!adb_.empty(),"Meta GPU: adb.exe missing; select it in capture options");
         device_=options.device;
         if(device_.empty()){
@@ -59,6 +58,42 @@ bool MetaQuestCapture::Prepare(const MetaQuestOptions& options,const std::string
         package_=options.package.empty()?metadata["android_package"].AsString():options.package;
         Check(Token(package_,"[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z0-9_]+)+"),"Meta GPU: update the plugin for automatic Android package identity, or enter the game's package");
         const auto known=metadata["android_package"].AsString();Check(known.empty()||known==package_,"Meta GPU package does not match the connected game's identity");
+        return true;
+    }catch(const std::exception& e){message_=e.what();return false;}}
+namespace {
+std::string Base64(const std::string& input){static const char abc[]="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";std::string out;uint32_t buffer=0;int bits=-6;for(unsigned char c:input){buffer=(buffer<<8)|c;bits+=8;while(bits>=0){out+=abc[(buffer>>bits)&63];bits-=6;}}if(bits>-6)out+=abc[((buffer<<8)>>(bits+8))&63];while(out.size()%4)out+='=';return out;}
+}
+cygi::Json MetaQuestCapture::Companion(const cygi::Json& request,bool cleanup){
+    const auto encoded=Base64(request.Write());auto text=Shell({L"CLASSPATH=/data/local/tmp/cyinsightovr-bridge.jar",L"app_process",L"/system/bin",L"org.cyinsights.ovr.ShellClient",L"--request",Wide(encoded)},30000,cleanup);cygi::Json result;std::string error;Check(cygi::Json::Parse(text,result,&error)&&result.IsObject(),"Invalid CyInsightOVR bridge response");
+    // Dispatch failures have a single error field. Recording status also has an
+    // error field (normally empty) alongside its identity and completion state.
+    if(result.Has("error")&&result.Members().size()==1)throw std::runtime_error(result["error"].AsString().empty()?"CyInsightOVR returned an unspecified error":result["error"].AsString());return result;
+}
+void MetaQuestCapture::PullTiles(const std::string& id,const fs::path& destination){
+    Check(Token(id,"[0-9a-f-]{36}"),"Invalid companion recording identity");Call({L"-s",Wide(device_),L"pull",Wide("/data/local/tmp/cyinsightovr-recordings/"+id),destination.wstring()},120000,true);
+}
+std::string MetaQuestCapture::DescribeStartup(const std::string& activities,const std::string& power){
+    if(power.find("mWakefulness=Asleep")!=std::string::npos||power.find("mWakefulness=Dozing")!=std::string::npos)
+        return "Quest is asleep; put on the headset and return to the game";
+    // Activity history contains old dialogs too. Only a resumed dialog is a
+    // current blocker, and multiple Quest displays can have resumed activities.
+    std::istringstream lines(activities);std::string line;bool controllers=false,guardian=false;
+    while(std::getline(lines,line))if(line.find("topResumedActivity=")!=std::string::npos||line.find("mResumedActivity:")!=std::string::npos){
+        controllers|=line.find("LaunchCheckControllerRequiredDialogActivity")!=std::string::npos;
+        guardian|=line.find("GuardianDialogActivity")!=std::string::npos;
+    }
+    if(guardian)return "Meta play-area confirmation is open; validate it in the headset";
+    if(controllers)return "Meta controllers-required dialog is open; activate the controllers and validate it in the headset";
+    return {};
+}
+std::string MetaQuestCapture::StartupHint(){
+    if(adb_.empty()||device_.empty()||Stopping())return {};
+    try{return DescribeStartup(Shell({L"dumpsys",L"activity",L"activities"},3000),Shell({L"dumpsys",L"power"},3000));}
+    catch(...){return {};}
+}
+bool MetaQuestCapture::Prepare(const MetaQuestOptions& options,const std::string& ipv4,const cygi::Json& metadata){
+    try {
+        Check(SelectDevice(options,ipv4,metadata),message_.c_str());
         std::string sources;try{sources=Shell({L"perfetto",L"--query",L"--long"});}catch(...){if(Stopping())throw;sources=Shell({L"perfetto",L"--query"});}
         track_stage_source_=sources.find("gpu_renderstage")!=std::string::npos;
         stage_source_advertised_=track_stage_source_||sources.find("gpu.renderstages.oculus")!=std::string::npos;counter_source_advertised_=sources.find("gpu.counters.oculus")!=std::string::npos;

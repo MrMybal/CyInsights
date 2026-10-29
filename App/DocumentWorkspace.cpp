@@ -15,7 +15,7 @@ std::vector<fs::path> ChooseCaptures(){
     IFileOpenDialog* dialog=nullptr;
     if(SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&dialog)))){
         DWORD options=0;dialog->GetOptions(&options);dialog->SetOptions(options|FOS_ALLOWMULTISELECT|FOS_FORCEFILESYSTEM|FOS_FILEMUSTEXIST);
-        COMDLG_FILTERSPEC filters[]={{L"Unreal / CyInsights captures",L"*.utrace;*.cycapture;*.pftrace"}};
+        COMDLG_FILTERSPEC filters[]={{L"Unreal / CyInsights captures",L"*.utrace;*.cycapture;*.pftrace;*.cyovr"}};
         dialog->SetFileTypes(1,filters);dialog->SetTitle(L"Open captures in separate tabs");
         if(SUCCEEDED(dialog->Show(GetActiveWindow()))){
             IShellItemArray* items=nullptr;
@@ -39,7 +39,7 @@ void Application::RequestOpen(const fs::path& path){if(open_document_)open_docum
 void Application::ChooseAndOpenCaptures(){for(const auto& file:ChooseCaptures())RequestOpen(file);}
 void Application::DrawHosted(bool visible){
     hosted_=true;document_visible_=visible;
-    workspace_viewport_=*ImGui::GetWindowViewport();workspace_viewport_.WorkPos=ImGui::GetCursorScreenPos();workspace_viewport_.WorkSize=ImGui::GetContentRegionAvail();
+    workspace_viewport_={ImGui::GetWindowViewport()->ID,ImGui::GetCursorScreenPos(),ImGui::GetContentRegionAvail()};
     Tick();pending_shown_=true;
     if(visible)Toolbar();
     ImGuiWindowClass cls;cls.ClassId=ImHashStr(("CyTracePanels"+std::to_string(document_id_)).c_str());cls.DockingAllowUnclassed=false;

@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include "AnalysisWorkers.hpp"
 #include "UiMetrics.hpp"
+#include "OvrHeatmapView.hpp"
 #include <CyGPUInspectorCore/Format.hpp>
 #include <algorithm>
 #include <chrono>
@@ -43,7 +44,7 @@ fs::path ChooseFolder() {
     if(SUCCEEDED(initialized))CoUninitialize();return result;
 }
 namespace {
-const wchar_t *CaptureFilter = L"Unreal / CyInsights captures\0*.cycapture;*.utrace\0All files\0*.*\0\0";
+const wchar_t *CaptureFilter = L"Unreal / CyInsights captures\0*.cycapture;*.utrace;*.pftrace;*.cyovr\0All files\0*.*\0\0";
 cygi::Json ReadJson(const fs::path &file) {
     std::ifstream in(file);
     std::string text((std::istreambuf_iterator<char>(in)), {});
@@ -81,6 +82,8 @@ Application::Application() {
     if(native_setup_.installations.empty())session_view_=true;
 }
 Application::~Application() {
+    remote_share_cancel_=true;
+    if(remote_share_.valid())remote_share_.wait();
     native_setup_.Cancel();
     ai_rpc_.Stop();ai_issues_cancel_=true;for(auto& work:ai_work_)if(work.request)work.request->cancelled=true;
     if(ai_issues_task_.valid())ai_issues_task_.wait();for(auto& work:ai_work_)if(work.result.valid())work.result.wait();
@@ -105,6 +108,12 @@ bool Application::OpenNow(const fs::path &file) {
         return false;
     }
     try {
+        std::shared_ptr<cyovr::Capture> ovr;
+        if(file.extension()==L".cyovr") {
+            if(fs::file_size(file)>64ull*1024*1024)throw std::runtime_error("Oversized OVR snapshot: expected bounded tile data, not a native trace");
+            ovr=std::make_shared<cyovr::Capture>(cyovr::ParseCapture(ReadJson(file)));
+        }
+        quest_tiles_.Clear();
         ++ai_generation_;ai_issues_cancel_=true;ai_findings_.clear();ai_issues_=cygi::Json::Object();ai_issues_a_=ai_issues_b_=NAN;
         activity_store_.reset();activity_result_={};activity_pinned_.clear();activity_request_.clear();activity_ready_.clear();activity_details_request_.clear();activity_details_ready_.clear();activity_details_observed_.clear();activity_pending_=false;activity_requested_at_=-1;activity_message_.clear();activity_auto_started_=false;activity_search_[0]=0;activity_lane_=0;activity_page_=0;++activity_revision_;
         activity_plot_queries_=activity_detail_queries_=0;
@@ -112,7 +121,12 @@ bool Application::OpenNow(const fs::path &file) {
         analysis_a_=analysis_b_=NAN;analysis_whole_=true;distribution_label_.clear();distribution_dirty_=true;distribution_track_=0;distribution_task_thread_=-1;tasks_thread_=-1;tasks_page_=0;tasks_auto_started_=false;
         timing_exact_name_.clear();loaded_exact_name_.clear();timing_filter_key_.clear();timing_timer_matches_.clear();timing_name_matches_.clear();distribution_function_.clear();distribution_summary_.reset();distribution_summary_key_.clear();
         distribution_pending_=tasks_pending_=histogram_dock_pending_=false;observed_selection_a_=observed_selection_b_=0;
-        if (file.extension() == L".utrace" || file.extension() == L".pftrace") {
+        ovr_capture_=std::move(ovr);show_ovr_=ovr_capture_!=nullptr;ovr_surface_=ovr_capture_?cyovr::LargestSurface(*ovr_capture_):0;ovr_tile_=-1;
+        if(ovr_capture_) {
+            capture_=Capture{};root_.clear();trace_.clear();cache_=NewCache();gpu_.reset();gpu_frames_.clear();metrics_.clear();
+            capture_.manifest["metadata"]["project"]=ovr_capture_->package;
+            show_frames_=show_timing_=show_timers_=show_callers_=show_callees_=show_counters_=false;
+        } else if (file.extension() == L".utrace" || file.extension() == L".pftrace") {
             capture_ = Capture{};
             root_.clear();
             trace_ = fs::absolute(file);
@@ -168,6 +182,7 @@ bool Application::OpenNow(const fs::path &file) {
                 selected_frame_ = 0;
                 LoadGpu(gpu_frames_.front());
             }
+            if(fs::is_regular_file(root_/"quest-tiles/info.json")){quest_tiles_.Open(root_/"quest-tiles");show_ovr_=true;}
             const auto version = capture_.manifest["metadata"]["engine_version"].AsString();
             if (version.size() >= 3 && exe_[0]) {
                 const auto minor = version.substr(0, version.find('.', 2));
@@ -254,11 +269,11 @@ void Application::ImportNative() {
 void Application::Layout(unsigned id) {
     ImGui::DockBuilderRemoveNode(id);
     ImGui::DockBuilderAddNode(id, ImGuiDockNodeFlags_DockSpace);
-    ImGui::DockBuilderSetNodeSize(id, WorkspaceViewport()->WorkSize);
+    ImGui::DockBuilderSetNodeSize(id, WorkspaceViewport().WorkSize);
     unsigned main = id, right, overview, messages, callers, callees, timers;
     ImGui::DockBuilderSplitNode(
         main, ImGuiDir_Right,
-        std::clamp(300.f * UiScale() / WorkspaceViewport()->WorkSize.x, .10f, .30f), &right, &main);
+        std::clamp(300.f * UiScale() / WorkspaceViewport().WorkSize.x, .10f, .30f), &right, &main);
     ImGui::DockBuilderSplitNode(main, ImGuiDir_Up, .12f, &overview, &main);
     ImGui::DockBuilderSplitNode(main, ImGuiDir_Down, .075f, &messages, &main);
     ImGui::DockBuilderSplitNode(right, ImGuiDir_Up, .25f, &timers, &right);
@@ -266,6 +281,7 @@ void Application::Layout(unsigned id) {
     ImGui::DockBuilderDockWindow(WindowName("Frames").c_str(), overview);
     ImGui::DockBuilderDockWindow(WindowName("Timing").c_str(), main);
     ImGui::DockBuilderDockWindow(WindowName("GPU frame").c_str(), main);
+    ImGui::DockBuilderDockWindow(WindowName("Quest GPU heatmap").c_str(), main);
     ImGui::DockBuilderDockWindow(WindowName("Capture comparison").c_str(), main);
     ImGui::DockBuilderDockWindow(WindowName("Distributions").c_str(), main);
     ImGui::DockBuilderDockWindow(WindowName("Tasks").c_str(), main);
@@ -292,7 +308,7 @@ void Application::LoadWindow() {
     if(drag_surface_!=DragSurface::None&&ImGui::GetTime()-model_request_time_<1./60.)return;
     model_request_time_=ImGui::GetTime();
     requested_start_=view_start_;requested_end_=view_end_;requested_stats_start_=a;requested_stats_end_=b;model_cancel_.store(false);
-    float pixels=std::max(1.f,WorkspaceViewport()->WorkSize.x-300*UiScale());
+    float pixels=std::max(1.f,WorkspaceViewport().WorkSize.x-300*UiScale());
     auto store=native_.store;double start=view_start_,end=view_end_;
     model_task_=std::async(std::launch::async,[this,store,start,end,a,b,pixels,name=timing_exact_name_,retired=std::move(retired_timing_)]() mutable {
         retired.reset();
@@ -426,6 +442,7 @@ void Application::PanelMenu() {
             ImGui::MenuItem("Callers", nullptr, &show_callers_);
             ImGui::MenuItem("Callees", nullptr, &show_callees_);
             ImGui::MenuItem("GPU frame", nullptr, &show_gpu_);
+            ImGui::MenuItem("Quest GPU heatmap", nullptr, &show_ovr_);
             ImGui::MenuItem("Selection", nullptr, &show_details_);
             ImGui::MenuItem("Platform metrics", nullptr, &show_metrics_);
             if(ImGui::MenuItem("Frame stats",nullptr,&show_frame_stats_)&&show_frame_stats_)frame_stats_dock_pending_=true;
@@ -510,7 +527,7 @@ void Application::DrawMenuBar() {
         AppearanceMenu();
         ImGui::SameLine();
         auto project = capture_.manifest["metadata"]["project"].AsString();
-        ImGui::TextDisabled("  %s  —  CyInsights", project.empty() ? "Unreal capture" : project.c_str());
+        ImGui::TextDisabled("  %s  -  CyInsights", project.empty() ? "Unreal capture" : project.c_str());
         ImGui::EndMainMenuBar();
     }
 }
@@ -519,11 +536,11 @@ void Application::Draw() {
     DrawMenuBar();
     Toolbar();
     float navigation_height = NavigationHeight();
-    const auto *viewport = WorkspaceViewport();
-    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x, viewport->WorkPos.y + navigation_height));
+    const auto viewport = WorkspaceViewport();
+    ImGui::SetNextWindowPos(ImVec2(viewport.WorkPos.x, viewport.WorkPos.y + navigation_height));
     ImGui::SetNextWindowSize(
-        ImVec2(viewport->WorkSize.x, std::max(1.f, viewport->WorkSize.y - navigation_height)));
-    ImGui::SetNextWindowViewport(viewport->ID);
+        ImVec2(viewport.WorkSize.x, std::max(1.f, viewport.WorkSize.y - navigation_height)));
+    ImGui::SetNextWindowViewport(viewport.ID);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
     BeginView("##InsightsWorkspace", nullptr,
@@ -542,9 +559,9 @@ void Application::Draw() {
     }
     if (session_view_) {
         FollowTimelineSelection();
-        ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x, viewport->WorkPos.y + navigation_height));
+        ImGui::SetNextWindowPos(ImVec2(viewport.WorkPos.x, viewport.WorkPos.y + navigation_height));
         ImGui::SetNextWindowSize(
-            ImVec2(viewport->WorkSize.x, std::max(1.f, viewport->WorkSize.y - navigation_height)));
+            ImVec2(viewport.WorkSize.x, std::max(1.f, viewport.WorkSize.y - navigation_height)));
         Session();
         if(show_ai_)AiView();
         LoadStatus();
@@ -564,6 +581,7 @@ void Application::DrawPanels() {
     FollowTimelineSelection();
     if (show_gpu_)
         Gpu();
+    if(show_ovr_)OvrHeatmap();
     if (show_timers_)
         Statistics();
     if(show_counters_)Counters();
@@ -584,6 +602,18 @@ void Application::DrawPanels() {
     if (show_messages_)
         Messages();
     if(document_visible_){LoadStatus();NativeSetupView();}
+}
+void Application::OvrHeatmap() {
+    if(BeginView("Quest GPU heatmap",&show_ovr_)) {
+        if(quest_tiles_.Present()){quest_tiles_.Clock(cache_);quest_tiles_.Panel(range_start_,range_end_);}
+        else if(!ovr_capture_)cyui::emptyState("No Quest tile snapshot","Open a .cyovr capture exported by CyInsightOVR. Existing .utrace GPU bars do not provide tile coordinates.");
+        else {
+            cyui::heading("CyInsightOVR - GPU tile snapshot",2);
+            cyui::textDim("Target: %s | capture: %s",ovr_capture_->package.c_str(),ovr_capture_->id.c_str());
+            cyovr::Heatmap(*ovr_capture_,ovr_surface_,ovr_tile_,ovr_stage_);
+        }
+    }
+    ImGui::End();
 }
 void Application::Session() {
     cyui::ScopedVar padding(ImGuiStyleVar_WindowPadding,cyui::dp(20,16));
@@ -616,7 +646,7 @@ void Application::Session() {
     ImGui::BeginDisabled(remote.Busy());
     if(cyui::beginProperties("##remote_connection",100)) {
         cyui::property("Device IP","LAN IPv4 of the game or standalone Quest running the CyInsights plugin.");
-        ImGui::InputTextWithHint("##remoteip", "192.168.1.40", remote_ip_, sizeof(remote_ip_));
+        ImGui::InputTextWithHint("##remoteip", "192.0.2.10", remote_ip_, sizeof(remote_ip_));
         cyui::endProperties();
     }
     RemoteOptions options;
@@ -625,6 +655,7 @@ void Application::Session() {
     options.seconds = remote_seconds_;
     options.override_capture_options=!remote_use_defaults_;
     options.capture=remote_capture_;
+    options.quest_tiles=remote_tiles_;options.quest_tile_images=remote_tiles_&&remote_tile_images_;options.quest_tile_hz=remote_tile_hz_;
     options.meta_gpu=remote_meta_;options.meta_gpu.adb=fs::u8path(remote_adb_);options.meta_gpu.device=remote_adb_device_;options.meta_gpu.package=remote_android_package_;
     wchar_t app_path[32768]{};
     GetModuleFileNameW(nullptr, app_path, 32768);
@@ -634,6 +665,16 @@ void Application::Session() {
     if (cyui::iconTextButton(cyui::icon::record,"Start remote trace",cyui::Variant::primary)) remote_.Start(options);
     if(focus_capture_options_){ImGui::SetNextItemOpen(true);focus_capture_options_=false;}
     if (cyui::beginSection("Capture options",false)) {
+        ImGui::SeparatorText("CyInsightOVR tile snapshots");
+        const bool companion=remote.companion["available"].AsBool()&&remote.companion["tiles_recording"].AsBool();
+        cyui::textDim("Companion: %s",companion?"connected":"not detected (Connect to device to check)");
+        ImGui::Checkbox("Record Quest tile costs",&remote_tiles_);ImGui::BeginDisabled(!remote_tiles_);ImGui::Checkbox("Include associated Quest images",&remote_tile_images_);ImGui::SetNextItemWidth(cyui::dp(120));ImGui::SliderFloat("Tile snapshots / second",&remote_tile_hz_,.2f,5.f,"%.1f Hz");ImGui::EndDisabled();
+        if(remote.companion["adb_view_capture"].AsBool())cyui::textDim("Quest view source: native Meta capture through the authorized ADB bridge");
+        else if(ImGui::Button("Enable Quest view sharing...")){if(!remote_share_.valid()){auto settings=options.meta_gpu;auto ip=options.ipv4;auto metadata=remote.manifest["metadata"];remote_share_=std::async(std::launch::async,[this,settings,ip,metadata]{try{MetaQuestCapture bridge(remote_share_cancel_);if(!bridge.SelectDevice(settings,ip,metadata))return bridge.Message();auto request=cygi::Json::Object();request["operation"]="share_view_request";bridge.Companion(request);return std::string("Accept image sharing in the Quest, then return to the game. No audio is captured.");}catch(const std::exception& e){return std::string(e.what());}});}}
+        if(remote_share_.valid()&&remote_share_.wait_for(std::chrono::seconds(0))==std::future_status::ready)remote_share_message_=remote_share_.get();
+        if(!remote_share_message_.empty())cyui::textDim("%s",remote_share_message_.c_str());
+        ImGui::TextWrapped("Optional snapshots are stored in this .cycapture and shown on the timing timeline. Supported Quest firmware captures images through the authorized ADB bridge, only while recording. Other devices require system-approved view sharing. Tile/image matching uses observation times; exact execution-frame and eye identity remain unknown. Image capture is off by default; no audio is captured.");
+        ImGui::SeparatorText("Unreal capture profile");
         ImGui::Checkbox("Use plugin project defaults",&remote_use_defaults_);
         if(remote_use_defaults_&&!remote.capture_defaults.IsNull()){
             std::string error;if(ReadCaptureOptions(remote.capture_defaults,remote_capture_,error))std::snprintf(remote_stat_groups_,sizeof(remote_stat_groups_),"%s",remote_capture_.stat_groups.c_str());
@@ -709,6 +750,7 @@ void Application::Session() {
         ImGui::TreePop();
     }
     if(!remote.gpu_message.empty())ImGui::TextWrapped("GPU: %s",remote.gpu_message.c_str());
+    if(!remote.tile_message.empty())ImGui::TextWrapped("Quest tiles: %s",remote.tile_message.c_str());
     if(!remote.meta_message.empty())ImGui::TextWrapped("Meta GPU: %s",remote.meta_message.c_str());
     for(const auto& source:remote.manifest["sources"].Items())if(source["id"].AsString()=="unreal.gpu.scopes"&&source.Has("timestamp_queries_available")) {
         const bool ready=source["trace_compiled"].AsBool()&&source["timestamp_queries_available"].AsBool();

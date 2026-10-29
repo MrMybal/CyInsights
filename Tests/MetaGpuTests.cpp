@@ -31,6 +31,7 @@ int Fake(int argc,char** argv,const fs::path& dir){
     if(a[0]=="pull"){fs::copy_file(dir/"fixture.pftrace",fs::u8path(a.at(2)),fs::copy_options::overwrite_existing);return 0;}
     if(a[0]!="shell"||a.size()<2)return 2;a.erase(a.begin());
     if(a[0]=="ip"){std::cout<<"inet 192.0.2.5/24";return 0;}
+    if(a[0]=="CLASSPATH=/data/local/tmp/cyinsightovr-bridge.jar"){std::cout<<Read(dir/"companion-reply");return 0;}
     if(a[0]=="ovrgpuprofiler"){
         if(a.at(1)=="-i"){if(fs::exists(dir/"query-failed"))return 2;std::cout<<(fs::exists(dir/"disabled")?"Detailed GPU profiling is disabled.":"Detailed GPU profiling is enabled.");return 0;}
         Write(dir/"enabled",a.at(2));std::cout<<"Detailed GPU profiling enabled";return 0;
@@ -56,6 +57,11 @@ int main(int argc,char** argv){
     auto dir=fs::temp_directory_path()/("cyinsights-meta-test-"+std::to_string(GetCurrentProcessId()));int checks=0;
     auto check=[&](bool ok,const char* name){if(!ok)throw std::runtime_error(name);++checks;};
     try{fs::create_directories(dir);Write(dir/"fixture.pftrace",Fixture());
+        using cyinsights::MetaQuestCapture;
+        check(MetaQuestCapture::DescribeStartup("topResumedActivity=ActivityRecord{ com.oculus.vrshell/.systemdialog.launchcheck.LaunchCheckControllerRequiredDialogActivity }","mWakefulness=Awake").find("controllers-required")!=std::string::npos,"Resumed Meta controller gate is reported");
+        check(MetaQuestCapture::DescribeStartup("mLastPausedActivity: ActivityRecord{ LaunchCheckControllerRequiredDialogActivity }\ntopResumedActivity=ActivityRecord{ com.test.Game/.Main }","mWakefulness=Awake").empty(),"An old Meta dialog is not a current launch blocker");
+        check(MetaQuestCapture::DescribeStartup("topResumedActivity=LaunchCheckControllerRequiredDialogActivity\ntopResumedActivity=GuardianDialogActivity","mWakefulness=Awake").find("play-area")!=std::string::npos,"Resumed play-area confirmation takes priority");
+        check(MetaQuestCapture::DescribeStartup("topResumedActivity=LaunchCheckControllerRequiredDialogActivity","mWakefulness=Asleep").find("asleep")!=std::string::npos,"Sleeping Quest is reported before launch prompts");
         WSADATA sockets{};check(WSAStartup(MAKEWORD(2,2),&sockets)==0,"Local restart test Winsock available");
         Decoder decoder;std::vector<Stage> events;std::vector<Counter> samples;auto counts=decoder.Read(dir/"fixture.pftrace",[&](const Stage& s){events.push_back(s);},[&](const Counter& c){samples.push_back(c);});
         check(counts.stages==2&&counts.counters==1&&counts.unavailable==2,"Measured stage/counter counts and unavailable data");
@@ -85,6 +91,10 @@ int main(int argc,char** argv){
             bool cancelled=false;try{ExportStandalone(dir/"fixture.pftrace",dir/"cancelled.cynt",[]{return true;});}catch(const std::exception& e){cancelled=std::string(e.what())=="Analysis cancelled";}check(cancelled&&!fs::exists(dir/"cancelled.cynt"),"GPU-only cancellation aborts before publishing output");}
         wchar_t exe[32768]{};GetModuleFileNameW(nullptr,exe,32768);SetEnvironmentVariableW(L"CYINSIGHTS_TEST_META_ROOT",dir.c_str());
         std::atomic<bool> cancel{false};cyinsights::MetaQuestOptions options;check(!options.restart_game,"Running-game capture does not restart by default");options.restart_game=true;options.adb=exe;options.package="com.test.Game";auto metadata=cygi::Json::Object();
+        {cyinsights::MetaQuestCapture companion(cancel);check(companion.SelectDevice(options,"192.0.2.5",metadata),"Companion device selected");auto request=cygi::Json::Object();request["operation"]="tiles_record_status";
+         Write(dir/"companion-reply",R"({"active":true,"recording_id":"owned-recording","error":""})");check(companion.Companion(request)["recording_id"].AsString()=="owned-recording","Successful tile start retains ownership despite its empty error field");
+         Write(dir/"companion-reply",R"({"active":false,"recording_id":"owned-recording","error":"writer failed"})");check(companion.Companion(request)["error"].AsString()=="writer failed","Recording failure status remains readable for cleanup");
+         Write(dir/"companion-reply",R"({"error":"screen sharing unavailable"})");bool rejected=false;try{companion.Companion(request);}catch(const std::exception& e){rejected=std::string(e.what())=="screen sharing unavailable";}check(rejected,"Bridge dispatch refusal remains an exception");}
         {cyinsights::MetaQuestCapture capture(cancel);check(capture.Prepare(options,"192.0.2.5",metadata),capture.Message().c_str());check(capture.Restarted(),"Selected game restarted before capture");auto stage=dir/"capture_test";fs::create_directory(stage);check(capture.Begin(stage,1),capture.Message().c_str());capture.BindSession("session-test");capture.End();auto source=capture.Source();check(Read(stage/"meta-gpu.info.json").find("session-test")!=std::string::npos,"Native and Meta session identity preserved");check(source["stage_count"].AsString()=="2"&&source["status"].AsString()=="measured","Collected file inspected and source manifest measured");check(source["render_stage_transport"].AsString()=="track_event/gpu_renderstage"&&source["hardware_detail_status"].AsString()=="measured"&&source["fine_stage_count"].AsString()=="2"&&source["stage_types"].Items().size()==2,"Advertised Meta TrackEvent transport and measured detail preserved in source manifest");check(source["profiling_driver_status"].AsString()=="enabled"&&source["timed_stage_packet_count"].AsString()=="3"&&source["stage_source_advertised"].AsBool(),"Driver verification and actual packet diagnostics retained");check(Read(dir/"enabled")=="com.test.Game"&&Read(dir/"stopped")=="987","Scoped activation and owned Perfetto cleanup");}
         check(Read(dir/"launch-component")=="com.test.Game/com.epicgames.unreal.GameActivity","Restart launches the resolved target activity rather than random input injection");
         options.restart_game=false;

@@ -15,6 +15,8 @@
 #include "TaskTrace.hpp"
 #include "ActivityTrace.hpp"
 #include "AiRpc.hpp"
+#include "OvrCapture.hpp"
+#include "QuestTileReplay.hpp"
 #include <imgui.h>
 #include <map>
 #include <memory>
@@ -88,15 +90,25 @@ class Application {
   private:
     void Tick();
     void DrawPanels();
+    void OvrHeatmap();QuestTileReplay quest_tiles_;
+    std::shared_ptr<cyovr::Capture> ovr_capture_;
+    bool show_ovr_=false;
+    int ovr_surface_=0,ovr_tile_=-1,ovr_stage_=0;
     void RequestOpen(const fs::path& file);
     void ChooseAndOpenCaptures();
     bool BeginView(const char* name,bool* open=nullptr,ImGuiWindowFlags flags=0);
-    const ImGuiViewport* WorkspaceViewport() const {return hosted_?&workspace_viewport_:ImGui::GetMainViewport();}
+    // Geometry is a value; ImGuiViewport owns backend bookkeeping and must
+    // never be copied into a document (its destructor asserts on those pointers).
+    struct WorkspaceGeometry {ImGuiID ID=0;ImVec2 WorkPos{},WorkSize{};};
+    WorkspaceGeometry WorkspaceViewport() const {
+        if(hosted_)return workspace_viewport_;
+        const auto* viewport=ImGui::GetMainViewport();return {viewport->ID,viewport->WorkPos,viewport->WorkSize};
+    }
     uint64_t document_id_=0;
     fs::path document_path_;
     std::function<void(const fs::path&)> open_document_;
     bool hosted_=false,document_visible_=true;
-    ImGuiViewport workspace_viewport_{};
+    WorkspaceGeometry workspace_viewport_{};
     ImGuiID document_dock_=0;
     ImTextureID brand_logo_=0;
     void AiTick();
@@ -312,7 +324,7 @@ class Application {
     bool remote_use_defaults_=true;
     bool focus_capture_options_=false;
     CaptureOptions remote_capture_,remote_gpu_options_;
-    MetaQuestOptions remote_meta_;
+    MetaQuestOptions remote_meta_;bool remote_tiles_=false,remote_tile_images_=false;float remote_tile_hz_=1;std::future<std::string> remote_share_;std::atomic<bool> remote_share_cancel_{false};std::string remote_share_message_;
     char remote_adb_[4096]{},remote_adb_device_[256]{},remote_android_package_[256]{};
     char remote_stat_groups_[513]="Game,UObjects,GPU";
     bool show_details_ = false, show_metrics_ = false;

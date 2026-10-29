@@ -160,7 +160,7 @@ bool RemoteCapture::Launch(const RemoteOptions& o,bool probe) {
 }
 void RemoteCapture::Run(RemoteOptions options,bool probe) {
     RemoteSnapshot state;state.state=probe?RemoteState::probing:RemoteState::starting;
-    MetaQuestCapture meta(cancel_,&stop_);bool meta_requested=false;
+    MetaQuestCapture meta(cancel_,&stop_),tile_bridge(cancel_,&stop_);bool meta_requested=false;std::string tile_recording;fs::path tile_directory;
     std::ofstream journal;std::string journal_phase,journal_message;auto next_pulse=Clock::now();
     auto publish=[&]{
         state.startup_elapsed=std::chrono::duration<double>(Clock::now()-launched_at_).count();Publish(state);
@@ -171,6 +171,8 @@ void RemoteCapture::Run(RemoteOptions options,bool probe) {
     };
     auto pulse=[&]{if(Clock::now()>=next_pulse){next_pulse=Clock::now()+std::chrono::milliseconds(250);publish();}};
     try {
+        Require(std::isfinite(options.quest_tile_hz)&&options.quest_tile_hz>=.2&&options.quest_tile_hz<=5,"Tile capture cadence must be 0.2 to 5 Hz");
+        Require(!options.quest_tile_images||options.quest_tiles,"Enable tile recording before requesting associated images");
         Winsock winsock;auto target=Address(options);
         if(!probe){Require(!options.output_directory.empty(),"Choose a capture output directory");fs::create_directories(options.output_directory);
             state.diagnostic_log=options.output_directory/("capture_control_"+std::to_string(Clock::now().time_since_epoch().count())+".jsonl");journal.open(state.diagnostic_log,std::ios::binary);Require(bool(journal),"Cannot create capture diagnostics");}
@@ -196,6 +198,7 @@ void RemoteCapture::Run(RemoteOptions options,bool probe) {
         Require(state.manifest.IsObject()&&state.manifest["metadata"].IsObject(),"Capture plugin returned no device metadata");
         state.capture_defaults=hello["capture_defaults"];state.capture_capabilities=hello["capture_capabilities"];
         Require(hello["state"].AsString()=="idle"&&!hello["native_trace_active"].AsBool(),"Another native capture is already active on the device");
+        if((probe||options.quest_tiles)&&state.manifest["metadata"]["platform"].AsString()=="Android"&&!state.manifest["metadata"]["android_package"].AsString().empty()){try{Require(tile_bridge.SelectDevice(options.meta_gpu,options.ipv4,state.manifest["metadata"]),tile_bridge.Message());auto request=cygi::Json::Object();request["operation"]="companion_capabilities";state.companion=tile_bridge.Companion(request);state.companion["available"]=true;}catch(const std::exception& e){state.companion["available"]=false;state.companion["reason"]=e.what();}publish();}
         if(probe){state.state=RemoteState::ready;state.message="Capture plugin connected";publish();return;}
         meta_requested=options.meta_gpu.enabled&&hello["manifest"]["metadata"]["platform"].AsString()=="Android";
         if(meta_requested){
@@ -204,10 +207,11 @@ void RemoteCapture::Run(RemoteOptions options,bool probe) {
             if(options.meta_gpu.restart_game){control.Reset(INVALID_SOCKET);rpc.Reset(INVALID_SOCKET);}
             meta.Prepare(options.meta_gpu,options.ipv4,original_metadata);state.meta_message=meta.Message();publish();
             if(meta.Restarted()){
-                const auto deadline=Clock::now()+std::chrono::seconds(120);bool connected=false;unsigned attempt=0;std::string last_error;
+                const auto deadline=Clock::now()+std::chrono::seconds(120);bool connected=false;unsigned attempt=0;std::string last_error,startup_hint;auto next_hint=Clock::now();
                 state.phase="reconnect";
                 while(!connected&&Clock::now()<deadline&&!cancel_.load()&&!stop_.load()){
-                    state.message="Reconnecting to restarted game (attempt "+std::to_string(++attempt)+") at "+options.ipv4+":"+std::to_string(options.control_port)+(last_error.empty()?std::string():". Last error: "+last_error);publish();
+                    if(Clock::now()>=next_hint){startup_hint=meta.StartupHint();next_hint=Clock::now()+std::chrono::seconds(3);}
+                    state.message=startup_hint.empty()?"Reconnecting to restarted game (attempt "+std::to_string(++attempt)+") at "+options.ipv4+":"+std::to_string(options.control_port)+(last_error.empty()?std::string():". Last error: "+last_error):startup_hint;publish();
                     try{
                         Connect(control,target,cancel_,&stop_,pulse);rpc.Reset(control.value);
                         state.message="Capture port connected; waiting for the restarted game's response";publish();
@@ -224,7 +228,7 @@ void RemoteCapture::Run(RemoteOptions options,bool probe) {
                     }catch(const std::exception& e){last_error=e.what();control.Reset(INVALID_SOCKET);rpc.Reset(INVALID_SOCKET);if(!stop_.load()&&!cancel_.load())std::this_thread::sleep_for(std::chrono::milliseconds(250));}
                 }
                 Require(!stop_.load()&&!cancel_.load(),"Capture stopped while reconnecting to restarted game");
-                Require(connected,"The game restarted but its capture service did not become ready at "+options.ipv4+":"+std::to_string(options.control_port)+". "+last_error+". Check the plugin's TCP listener and the headset launch state; see capture diagnostics");
+                Require(connected,"The game restarted but its capture service did not become ready at "+options.ipv4+":"+std::to_string(options.control_port)+". "+last_error+(startup_hint.empty()?". Check the plugin's TCP listener and the headset launch state; see capture diagnostics":". "+startup_hint));
                 Require(hello["state"].AsString()=="idle"&&!hello["native_trace_active"].AsBool(),"Quest game already has a capture after restart");
                 state.capture_defaults=hello["capture_defaults"];state.capture_capabilities=hello["capture_capabilities"];
                 state.manifest=hello["manifest"];state.message="Restarted game capture service ready";publish();
@@ -262,6 +266,7 @@ void RemoteCapture::Run(RemoteOptions options,bool probe) {
         auto staging=options.output_directory/fs::u8path(name);
         Require(fs::create_directory(staging),"Cannot create fresh capture staging directory");
         if(meta_requested){state.phase="meta_start";state.message="Starting Meta recording on the headset";publish();auto metadata=hello["manifest"]["metadata"];for(const auto& clock:hello["manifest"]["clocks"].Items())if(clock["id"].AsString()=="unreal.cpu")metadata["cpu_frequency_hz"]=clock["frequency_hz"];meta.Begin(staging,options.seconds,metadata);state.meta_message=meta.Message();publish();}
+        if(options.quest_tiles){Require(state.companion["available"].AsBool()&&state.companion["tiles_recording"].AsBool(),"CyInsightOVR recording bridge unavailable; connect/update the companion before requesting tiles");auto request=cygi::Json::Object();request["operation"]="tiles_record_start";request["package"]=state.manifest["metadata"]["android_package"];request["hz"]=options.quest_tile_hz;request["images"]=options.quest_tile_images;auto started=tile_bridge.Companion(request);tile_recording=started["recording_id"].AsString();Require(!tile_recording.empty(),"CyInsightOVR returned no recording identity");tile_directory=staging/"quest-tiles";state.tile_message="Quest tile recording active";publish();}
         Require(!stop_.load(),"Capture stopped before native recording started");
         state.partial_trace=staging/"unreal.utrace.partial";
         std::ofstream out(state.partial_trace,std::ios::binary);Require(bool(out),"Cannot create received trace file");
@@ -335,12 +340,23 @@ void RemoteCapture::Run(RemoteOptions options,bool probe) {
             publish();
         }
         out.close();Require(bool(out),"Cannot finalize received trace");
+        cygi::Json tile_finished;
+        if(!tile_recording.empty()){
+            auto request=cygi::Json::Object();request["operation"]="tiles_record_stop";request["recording_id"]=tile_recording;
+            tile_finished=tile_bridge.Companion(request,true);
+        }
+
         std::string error;Require(ValidateManifest(state.manifest,error),error);
         Require(state.manifest["session_id"].AsString()==state.session_id,"Final manifest session mismatch");
         // Every advertised payload must actually be present in the archive.
         for(const auto& source:state.manifest["sources"].Items())
             if(source.Has("path"))Require(source["path"].AsString()=="unreal.utrace","Remote manifest references an untransferred payload");
         if(meta_requested){state.phase="meta_receive";state.state=RemoteState::packaging;state.meta_message="Receiving Meta hardware GPU trace";publish();meta.End();state.meta_message=meta.Message();auto sources=state.manifest["sources"];sources.Push(meta.Source());state.manifest["sources"]=sources;}
+        if(!tile_recording.empty()){
+            const auto& finished=tile_finished;tile_bridge.PullTiles(tile_recording,tile_directory);tile_recording.clear();
+            auto infoPath=tile_directory/"info.json";std::ifstream input(infoPath);std::string text((std::istreambuf_iterator<char>(input)),{}),error;cygi::Json info;Require(cygi::Json::Parse(text,info,&error),"Companion tile metadata is invalid");info["unreal_session_id"]=state.session_id;for(const auto& clock:state.manifest["clocks"].Items())if(clock["id"].AsString()=="unreal.cpu")info["unreal_cpu_frequency_hz"]=clock["frequency_hz"];std::ofstream(infoPath,std::ios::binary)<<info.Write(2);
+            auto source=cygi::Json::Object();source["id"]="quest.ovr.tiles";source["path"]="quest-tiles/info.json";source["status"]=finished["samples"].AsNumber()>0?"measured":"unavailable";source["reason"]=finished["error"].AsString();if(finished["samples"].AsNumber()==0&&source["reason"].AsString().empty())source["reason"]="No complete measured tile section was received for the selected target";source["samples"]=finished["samples"];source["images"]=finished["images"];state.manifest["sources"].Push(source);state.tile_message="Received "+std::to_string(finished["samples"].AsUInt())+" tile snapshots and "+std::to_string(finished["images"].AsUInt())+" images";
+        }
         auto transport=state.manifest["network"];
         transport["received_bytes"]=std::to_string(state.bytes);transport["completion"]="native EOF and remote stop acknowledged";
         state.manifest["network"]=transport;
@@ -351,6 +367,7 @@ void RemoteCapture::Run(RemoteOptions options,bool probe) {
         auto archive=options.output_directory/fs::u8path(name+".cycapture");Require(Pack(staging,archive,error),error);
         state.phase="complete";state.archive=archive;state.partial_trace.clear();state.state=RemoteState::complete;state.message="Capture saved on PC";publish();
     } catch(const std::exception& e) {
+        if(!tile_recording.empty()){try{auto request=cygi::Json::Object();request["operation"]="tiles_record_stop";request["recording_id"]=tile_recording;tile_bridge.Companion(request,true);if(!tile_directory.empty())tile_bridge.PullTiles(tile_recording,tile_directory);}catch(...){}}
         state.phase="failed";state.state=RemoteState::failed;state.message=e.what();state.finishing=meta_requested;publish();
         if(meta_requested){meta.End();state.meta_message=meta.Message();}
         // Closing our control connection asks the plugin to stop only our session.

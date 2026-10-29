@@ -88,6 +88,7 @@ bool NativeTrace::Start(const std::filesystem::path &exe, const std::filesystem:
     decode_seconds_=index_seconds_=0;
     read_counters_ = true;
     counters = CounterModel{};
+    if(std::filesystem::exists(cache/"quest-tiles-clock.json"))std::filesystem::remove(cache/"quest-tiles-clock.json");
     if(std::filesystem::exists(cache/"vulkan-pass-details.cyvp"))std::filesystem::remove(cache/"vulkan-pass-details.cyvp");
     if (std::filesystem::exists(cache / "counters.csv")) std::filesystem::remove(cache / "counters.csv");
     if (std::filesystem::exists(cache / "frame-stats.cystats")) std::filesystem::remove(cache / "frame-stats.cystats");

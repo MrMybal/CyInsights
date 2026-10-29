@@ -1,0 +1,10 @@
+{
+  "upstream": "https://github.com/ocornut/imgui",
+  "ref": "v1.92.5",
+  "license": "MIT",
+  "files": {
+    "imgui_impl_opengl3.cpp": "50f73906f253bd2c4f1bfbd57e6e6b8be5207b82aac67be237e382f93f7e2ba8",
+    "imgui_impl_opengl3.h": "d70bf0cfe8254b06574ec20ae2353bd7517c2650a366248f73b71b1c1a5f925f",
+    "imgui_impl_opengl3_loader.h": "450794ebfe16264d6e9026f7be923fe460f3c4e668b6ce7e0f70c5eda46358b8"
+  }
+}

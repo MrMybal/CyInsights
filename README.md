@@ -17,6 +17,7 @@ is written for CyInsights; it does not reuse the CyGPUInspector standalone UI.
 - Timers, callers/callees, counters, task analysis, distributions and A/B comparison.
 - Quest Vulkan subpass command arguments and bounded detail queries; see [coverage and validation](Docs/QuestSubpassContents.md).
 - Optional Meta Quest Perfetto hardware GPU sources in the same capture; see [test defaults and validation limits](Docs/MetaQuestGpu.md).
+- Separate native [CyInsightOVR Quest companion](Quest/CyInsightOVR/README.md): system GPU curves, tile-stage snapshots and an experimental heatmap HUD for prepared Development Vulkan APKs. Universal custom overlays are unavailable. Optional [tile/image recording and timeline replay](Docs/QuestTileRecording.md) includes its current hardware validation limits.
 - Unreal frame-stat snapshots, synchronized curves and per-frame tables, with source/observation times and availability retained.
 - Network packets, Unreal file operations, asset loading and memory samples on the same timeline.
 - Double-click exact function filtering and right-click interval histograms.
