@@ -16,7 +16,15 @@ public final class ShellBridge {
     private static final Object LOCK=new Object();
     private static final LinkedHashMap<String,JSONObject> METRICS=new LinkedHashMap<>();
     private static final ArrayDeque<JSONObject> HISTORY=new ArrayDeque<>();
-    private static JSONObject capture;
+    private static final String historySession=Long.toString(System.nanoTime());
+    private static long historySequence=0;
+    private static void appendSample(JSONObject sample)throws Exception{sample.put("history_sequence",Long.toString(++historySequence));METRICS.put(sample.getString("name"),sample);HISTORY.addLast(sample);while(HISTORY.size()>32768)HISTORY.removeFirst();}
+    private static JSONObject capture,slowSnapshot;
+    private static long slowSnapshotAt=0;
+    private static final DrawCounterMonitor drawCounters=new DrawCounterMonitor((args,timeout)->{
+        Output value=command(args,timeout);if(!value.complete)throw new IOException("Counter setup command failed");return value.text;
+    },sample->{synchronized(LOCK){JSONArray values=sample.getJSONArray("metrics");for(int i=0;i<values.length();++i){JSONObject value=values.getJSONObject(i);appendSample(value);}while(HISTORY.size()>32768)HISTORY.removeFirst();}});
+    private static void clearDrawHistory(){synchronized(LOCK){METRICS.entrySet().removeIf(e->e.getKey().startsWith("Vulkan "));HISTORY.removeIf(e->e.optString("name").startsWith("Vulkan "));}}
     private static volatile boolean capturing=false,running=true;
     private static volatile boolean metaOverlayRequested=false;
     private static TileRecording recording;
@@ -76,7 +84,7 @@ public final class ShellBridge {
                 try(BufferedReader r=new BufferedReader(new InputStreamReader(p.getInputStream(),StandardCharsets.UTF_8))) {
                     String line;while(running&&!capturing&&(line=r.readLine())!=null) {
                         JSONObject sample=ProfilerParser.metric(line,System.nanoTime());if(sample==null)continue;
-                        synchronized(LOCK){METRICS.put(sample.getString("name"),sample);HISTORY.addLast(sample);while(HISTORY.size()>16384)HISTORY.removeFirst();}
+                        synchronized(LOCK){appendSample(sample);}
                         message="Receiving measured system GPU counters";
                     }
                 }finally{terminate(p);realtime=null;}
@@ -102,19 +110,34 @@ public final class ShellBridge {
         return view;
     }
     private static JSONObject dispatch(JSONObject request) throws Exception {
-        String op=request.optString("operation","");JSONObject out=new JSONObject();out.put("protocol","cyinsightovr.bridge/1");
+        String op=request.optString("operation","");if(!op.equals("snapshot"))slowSnapshot=null;JSONObject out=new JSONObject();out.put("protocol","cyinsightovr.bridge/1");
         if(op.equals("snapshot")) {
             out.put("status",message);out.put("bridge",true);out.put("capturing",capturing);out.put("android_boot_id",boot);out.put("observed_mono_ns",Long.toString(System.nanoTime()));
             out.put("cross_game_overlay_backend","meta.ovrmetrics.documented_hud");out.put("meta_overlay_requested",metaOverlayRequested);out.put("execution_frame_identity",JSONObject.NULL);
-            out.put("vr_hud",hud.state());out.put("shared_view",sharedView(false));out.put("tile_recording",recording.status());
-            try{out.put("live_tiles",liveTiles.status());}catch(Exception e){out.put("live_tiles",new JSONObject().put("active",false).put("message",e.getMessage()));}
+            // Shell commands and target readiness checks remain at 1 Hz even when
+            // high-rate draw curves request snapshots twenty times per second.
+            if(slowSnapshot==null||System.nanoTime()-slowSnapshotAt>=1000000000L){
+                slowSnapshot=new JSONObject().put("vr_hud",hud.state()).put("shared_view",sharedView(false)).put("tile_recording",recording.status());
+                try{slowSnapshot.put("live_tiles",liveTiles.status());}catch(Exception e){slowSnapshot.put("live_tiles",new JSONObject().put("active",false).put("message",e.getMessage()));}
+                slowSnapshotAt=System.nanoTime();
+            }
+            for(String key:new String[]{"vr_hud","shared_view","tile_recording","live_tiles"})out.put(key,slowSnapshot.opt(key));
+            out.put("draw_counters",drawCounters.status());out.put("history_session",historySession);
 
             out.put("custom_cross_game_hud",new JSONObject().put("status","unavailable")
                 .put("reason","No validated public Quest compositor API for a custom HUD over unmodified games. Meta HUD uses the installed Meta renderer."));
             synchronized(LOCK){JSONArray metrics=new JSONArray();for(JSONObject v:METRICS.values())metrics.put(v);out.put("metrics",metrics);
                 JSONArray history=new JSONArray();long after=0;try{after=Long.parseLong(request.optString("after","0"));}catch(NumberFormatException ignored){}
-                if(request.optBoolean("include_history",false))for(JSONObject v:HISTORY)if(Long.parseLong(v.getString("observed_mono_ns"))>after)history.put(v);
+                long sequence=request.optLong("after_sequence",-1);if(sequence>=0&&!historySession.equals(request.optString("history_session")))sequence=0;if(request.optBoolean("include_history",false))for(JSONObject v:HISTORY)if(sequence>=0?Long.parseLong(v.getString("history_sequence"))>sequence:Long.parseLong(v.getString("observed_mono_ns"))>after)history.put(v);
                 out.put("history",history);out.put("capture",capture==null||capture.optString("capture_id").equals(request.optString("after_capture",""))?JSONObject.NULL:capture);}
+        }else if(op.equals("draw_counters_prepare")) {
+            drawCounters.close();clearDrawHistory();out=liveTiles.prepare(packageName(request));
+        }else if(op.equals("draw_counters_start")) {
+            String target=packageName(request);int hz=DrawCounterSample.frequency(request.optInt("hz",10));JSONObject layer=liveTiles.status();
+            if(!layer.optBoolean("prepared")||!layer.optBoolean("layer_ready")||!target.equals(layer.optString("target")))throw new IOException("Prepare the selected development Vulkan target, then completely reopen it once before starting draw counters");
+            clearDrawHistory();out=drawCounters.start(target,hz);
+        }else if(op.equals("draw_counters_stop")) {
+            drawCounters.close();clearDrawHistory();out=drawCounters.status();
         }else if(op.equals("capture")) {
             String target=packageName(request);double seconds=request.optDouble("seconds",.3);
             if(!Double.isFinite(seconds)||seconds<.05||seconds>2)throw new IllegalArgumentException("Snapshot duration must be 0.05 to 2 seconds");
@@ -174,7 +197,7 @@ public final class ShellBridge {
             if(recording.active()){if(op.equals("heatmap_remove"))throw new IOException("Stop the desktop tile recording before uninstalling its integration");liveTiles.hide();return liveTiles.status();}
             liveTiles.stop();continuousTiles.close();
             if(!liveTiles.awaitStopped(3000))throw new IOException("The GPU source has not stopped yet; target integration was preserved");
-            out=op.equals("heatmap_remove")?liveTiles.remove():liveTiles.status();
+            if(op.equals("heatmap_remove")){drawCounters.close();clearDrawHistory();}out=op.equals("heatmap_remove")?liveTiles.remove():liveTiles.status();
         }else if(op.equals("enable_details")) {
             if(capturing)throw new IllegalStateException("Wait for the current snapshot");
             String target=packageName(request);Output r=command(new String[]{profiler(),"-e",target},8);
@@ -196,7 +219,7 @@ public final class ShellBridge {
         if(Process.myUid()!=2000)throw new SecurityException("Start this developer bridge through authorized ADB shell");
         if(args.length!=1)throw new IllegalArgumentException("Expected installed CyInsightOVR application UID");
         int allowed=Integer.parseInt(args[0]);if(allowed<10000)throw new IllegalArgumentException("Invalid app UID");
-        Runtime.getRuntime().addShutdownHook(new Thread(()->{running=false;continuousTiles.close();try{liveTiles.stop();}catch(Exception ignored){}terminate(realtime);},"CyOVR-Stop"));
+        Runtime.getRuntime().addShutdownHook(new Thread(()->{drawCounters.close();running=false;continuousTiles.close();try{liveTiles.stop();}catch(Exception ignored){}terminate(realtime);},"CyOVR-Stop"));
         boot=readSmall("/proc/sys/kernel/random/boot_id");
         try{liveTiles.recoverMissingIntegration();}catch(Exception recovery){System.err.println("CyOVR integration recovery: "+recovery);}
         recording=new TileRecording(ShellBridge::recordedView,boot);liveTiles.observe(value->recording.offer(value));new Thread(ShellBridge::monitor,"CyOVR-GPU-Counters").start();

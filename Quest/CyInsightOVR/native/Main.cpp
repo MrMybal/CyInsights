@@ -16,6 +16,7 @@ using J=cygi::Json;
 struct Point {double time,value;};
 struct Metric {double time=0,value=NAN;std::deque<Point> history;};
 std::map<std::string,Metric> metrics;
+std::string draw_counter_session;
 J state;cyovr::Capture capture;std::string capture_id,error,command;
 std::mutex command_mutex;
 std::mutex snapshot_mutex;
@@ -38,9 +39,11 @@ void ApplyPreparedSnapshots(){
     std::vector<J> updates;std::unique_ptr<cyovr::Capture> ready;std::string failure;
     {std::lock_guard<std::mutex> lock(snapshot_mutex);updates.swap(pending_snapshots);ready=std::move(pending_capture);failure.swap(pending_capture_error);}
     for(auto& update:updates){
+        const auto& counters=update["draw_counters"];auto identity=counters["active"].AsBool()?counters["target"].AsString()+":"+counters["session"].AsString():std::string();
+        if(identity!=draw_counter_session){for(auto it=metrics.begin();it!=metrics.end();)if(it->first.find("Vulkan ")==0)it=metrics.erase(it);else ++it;draw_counter_session=identity;}
         for(const auto& sample:update["history"].Items()){
             auto& metric=metrics[sample["name"].AsString()];double time=Seconds(sample["observed_mono_ns"]);if(time<=metric.time)continue;
-            metric.time=time;metric.value=sample["value"].AsNumber(NAN);metric.history.push_back({time,metric.value});while(metric.history.size()>600)metric.history.pop_front();
+            metric.time=time;metric.value=sample["value"].AsNumber(NAN);metric.history.push_back({time,metric.value});while(metric.history.size()>2400)metric.history.pop_front();
         }state=std::move(update);
     }
     if(ready&&ready->id!=capture_id){capture=std::move(*ready);capture_id=capture.id;surface=cyovr::LargestSurface(capture);tile=-1;error.clear();if(auto_open_capture)page=1;}
@@ -64,7 +67,7 @@ void Curve(const char* name,const char* title,double multiplier,const char* unit
             last=point;last_time=v.time;have=true;
         }
     }
-    cyui::textFaint("System scope | 120 s history | source updates ~1 Hz");cyui::endCard();
+    if(std::string(name).find("Vulkan ")==0)cyui::textFaint("Selected process | submitted input geometry | 120 s history");else cyui::textFaint("System scope | 120 s history | source updates ~1 Hz");cyui::endCard();
 }
 #include "DisplaySettings.hpp"
 void Draw() {
@@ -89,6 +92,7 @@ void Draw() {
     if(state["capturing"].AsBool())cyui::progressBar(-1,ImVec2(-1,cyui::dp(18)),"Capturing measured GPU stages...");
     if(!error.empty())cyui::callout(cyui::Tone::error,error.c_str());
     if(page==0) {
+        DrawCounterControls();
         if(!connected)cyui::callout(cyui::Tone::warning,state["status"].AsString().c_str());
         if(chart_mask==0){cyui::emptyState("No panel graphs selected","Choose your curves in Display & HUD.");if(cyui::button("Choose graphs"))page=2;}
         if(chart_mask&&ImGui::BeginTable("##graphs",ImGui::GetContentRegionAvail().x>cyui::dp(680)?2:1,ImGuiTableFlags_SizingStretchSame)) {
@@ -96,7 +100,7 @@ void Draw() {
             ImGui::EndTable();
         }
         cyui::textDim("%s",state["status"].AsString().c_str());
-        cyui::callout(cyui::Tone::info,"Counters describe the GPU system. Missing or stale data is not zero. These are not per-frame game timings.");
+        cyui::callout(cyui::Tone::info,"Meta counters describe the GPU system. Vulkan counters describe the selected process submissions. Missing data is not zero; per-frame values need a measured presentation boundary.");
     }else if(page==1) {
         if(!capture.id.empty())cyui::textDim("Snapshot %s | target %s",capture.id.c_str(),capture.package.c_str());
         cyovr::Heatmap(capture,surface,tile,stage);
@@ -157,7 +161,7 @@ extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeWhe
 extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeScroll(JNIEnv*,jclass,jfloat pixels){if(std::isfinite(pixels))pending_scroll+=std::clamp(float(pixels),-2000.f,2000.f);}
 extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeSettings(JNIEnv* env,jclass,jstring text){
     J settings;if(!J::Parse(Utf(env,text),settings))return;
-    chart_mask=settings["chart_mask"].AsUInt32(15)&63u;hud_size=int(std::clamp(settings["hud_size"].AsNumber(),0.,1.));hud_corner=int(std::clamp(settings["hud_corner"].AsNumber(),0.,8.));
+    chart_mask=settings["chart_mask"].AsUInt32(15|(3u<<6))&((1u<<std::size(charts))-1);curve_hz=int(settings["curve_hz"].AsNumber(10));if(curve_hz!=1&&curve_hz!=5&&curve_hz!=10&&curve_hz!=20)curve_hz=10;hud_size=int(std::clamp(settings["hud_size"].AsNumber(),0.,1.));hud_corner=int(std::clamp(settings["hud_corner"].AsNumber(),0.,8.));
     heatmap_mode=int(std::clamp(settings["heatmap_mode"].AsNumber(),0.,1.));heatmap_position=int(std::clamp(settings["heatmap_position"].AsNumber(8),0.,8.));
     heatmap_ceiling=float(std::clamp(settings["heatmap_ceiling_us"].AsNumber(500),10.,5000.));heatmap_hud_opacity=float(std::clamp(settings["heatmap_hud_opacity"].AsNumber(.25),.05,1.));heatmap_full_opacity=float(std::clamp(settings["heatmap_full_opacity"].AsNumber(.2),.05,1.));
     if(settings["graphs"].IsArray()){hud_graphs.clear();for(const auto& id:settings["graphs"].Items())if(hud_graphs.size()<6)hud_graphs.insert(id.AsString());}

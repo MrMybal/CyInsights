@@ -1,7 +1,8 @@
 // Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
 // Included inside Main.cpp's private UI namespace.
 #pragma once
-unsigned chart_mask=15;
+unsigned chart_mask=15|(3u<<6);
+int curve_hz=10;
 std::set<std::string> hud_graphs={"average_frame_rate","app_gpu_time_microseconds"},hud_stats;
 float pending_scroll=0,body_scroll=0,body_scroll_max=0;
 int previous_page=-1;
@@ -12,9 +13,14 @@ struct Chart {const char* name;const char* title;double multiplier;const char* u
 constexpr Chart charts[]={
     {"GPU % Bus Busy","GPU bus busy",1,"%",100},{"GPU Frequency","GPU frequency",1e-6,"MHz",600},
     {"% Time Shading Fragments","Fragment shading share",1,"%",100},{"% Time Shading Vertices","Vertex shading share",1,"%",100},
-    {"% Texture Fetch Stall","Texture fetch stalls",1,"%",100},{"% Stalled on System Memory","System memory stalls",1,"%",100}};
+    {"% Texture Fetch Stall","Texture fetch stalls",1,"%",100},{"% Stalled on System Memory","System memory stalls",1,"%",100},
+    {"Vulkan Known Draw Calls/s","Known submitted draw calls",1,"draw/s",1000},
+    {"Vulkan Known Input Triangles/s","Known submitted input triangles",1e-6,"M triangles/s",10},
+    {"Vulkan Indirect Commands/s","Indirect drawing commands",1,"commands/s",100},
+    {"Vulkan Draw Calls/Presented Frame","Known draws / presented frame",1,"draw/frame",1000},
+    {"Vulkan Known Triangles/Presented Frame","Known triangles / presented frame",1e-6,"M triangles/frame",1}};
 J Ids(const std::set<std::string>& ids){auto a=J::Array();for(const auto& id:ids)a.Push(id);return a;}
-J DisplaySettings(){auto out=J::Object();out["chart_mask"]=chart_mask;out["hud_size"]=hud_size;out["hud_corner"]=hud_corner;out["graphs"]=Ids(hud_graphs);out["stats"]=Ids(hud_stats);out["heatmap_mode"]=heatmap_mode;out["heatmap_position"]=heatmap_position;out["heatmap_ceiling_us"]=heatmap_ceiling;out["heatmap_hud_opacity"]=heatmap_hud_opacity;out["heatmap_full_opacity"]=heatmap_full_opacity;return out;}
+J DisplaySettings(){auto out=J::Object();out["chart_mask"]=chart_mask;out["curve_hz"]=curve_hz;out["hud_size"]=hud_size;out["hud_corner"]=hud_corner;out["graphs"]=Ids(hud_graphs);out["stats"]=Ids(hud_stats);out["heatmap_mode"]=heatmap_mode;out["heatmap_position"]=heatmap_position;out["heatmap_ceiling_us"]=heatmap_ceiling;out["heatmap_hud_opacity"]=heatmap_hud_opacity;out["heatmap_full_opacity"]=heatmap_full_opacity;return out;}
 void SaveDisplaySettings(){auto out=DisplaySettings();out["operation"]="panel_settings";Action(out.Write().c_str());}
 void StartSelectedHud(){auto options=DisplaySettings();options["operation"]="overlay_meta_on";const char* names[]={"upper_left","upper_right","lower_left","lower_right","upper_center","center_left","center","center_right","lower_center"};options["size"]=hud_size==0?"small":"medium";options["corner"]=names[hud_corner];Action(options.Write().c_str());}
 void StartSelectedHeatmap(){auto options=J::Object();options["operation"]=state["live_tiles"]["active"].AsBool()?"heatmap_update":"heatmap_start";options["mode"]=heatmap_mode==0?"hud":"fullscreen";options["position"]=heatmap_position;options["ceiling_us"]=heatmap_ceiling;options["opacity"]=heatmap_mode==0?heatmap_hud_opacity:heatmap_full_opacity;Action(options.Write().c_str());}
@@ -27,6 +33,9 @@ int HudGroup(const std::string& id){
 void DisplayControls(){
     bool changed=false;
     cyui::beginCard("##chart_settings","Panel graphs");
+    const char* rates[]={"1 Hz","5 Hz","10 Hz","20 Hz"};const int values[]={1,5,10,20};int rate=0;for(int i=0;i<4;++i)if(values[i]==curve_hz)rate=i;
+    if(ImGui::Combo("Curve updates",&rate,rates,4)){curve_hz=values[rate];changed=true;}
+    ImGui::TextWrapped("Draw counters use measured submission windows at the selected rate. Meta system counters keep their own source cadence, usually 1 Hz. Faster polling does not invent source samples.");
     ImGui::TextWrapped("Choose the curves shown in Overview. These are sampled system counters; unavailable values stay marked as unavailable.");
     for(unsigned i=0;i<std::size(charts);++i){bool enabled=(chart_mask&(1u<<i))!=0;
         if(ImGui::Checkbox(charts[i].title,&enabled)){if(enabled)chart_mask|=1u<<i;else chart_mask&=~(1u<<i);changed=true;}
@@ -63,6 +72,24 @@ void DisplayControls(){
     ImGui::TextWrapped("Use Start HUD in the fixed bottom bar to apply this selection. Configuration stays open. Stop HUD restores the previous Meta settings.");
     cyui::endCard();
     if(changed)SaveDisplaySettings();
+}
+void DrawCounterControls(){
+    const auto& counters=state["draw_counters"];cyui::beginCard("##draw_counters","Draw calls & input triangles");
+    cyui::badge(counters["status"].AsString()=="measured"?"SUBMISSION COUNTERS":counters["active"].AsBool()?"WAITING FOR COUNTERS":"COUNTERS STOPPED",cyui::Tone::info);
+    cyui::textDim("Target: %s | curves %d Hz",counters["active"].AsBool()?counters["target"].AsString().c_str():state["target_package"].AsString().c_str(),curve_hz);
+    if(counters["active"].AsBool()&&counters["target"].AsString()!=state["target_package"].AsString())cyui::textFaint("Selected next target: %s",state["target_package"].AsString().c_str());
+    ImGui::TextWrapped("%s",counters["reason"].AsString().c_str());
+    if(counters["status"].AsString()=="measured"){
+        cyui::textDim("Last %.0f ms: %.0f known draws | %.0f known input triangles | %.0f indirect commands",counters["interval_seconds"].AsNumber()*1000,counters["draws"].AsNumber(),counters["known_input_triangles"].AsNumber(),counters["indirect_commands"].AsNumber());
+        cyui::textFaint("Measured source cadence: %.1f Hz",counters["source_hz"].AsNumber());
+        if(!counters["draws_complete"].AsBool()||!counters["triangles_complete"].AsBool())cyui::callout(cyui::Tone::warning,"Partial totals. GPU-controlled counts, primitive restart and unknown topology are not included in known geometry.");
+        if(!counters["per_presented_frame_available"].AsBool())cyui::textFaint("Per-frame values unavailable: no Vulkan presentation boundary in this window. XR queue submissions are not treated as frames.");
+    }
+    if(cyui::button("Prepare draw counter layer"))Action("draw_counters_prepare");ImGui::SameLine();
+    if(cyui::button(counters["active"].AsBool()?"Apply counter frequency":"Start draw counters"))Action("draw_counters_start");ImGui::SameLine();
+    if(cyui::button("Stop draw counters"))Action("draw_counters_stop");
+    ImGui::TextWrapped("Requires a debuggable Vulkan target. Prepare once, then completely reopen that target manually. This does not enable detailed GPU profiling or restart the game. Change curve frequency in Display & HUD.");
+    cyui::textFaint("Input geometry before culling; no visible-triangle or per-eye attribution. No GPU buffer readback.");cyui::endCard();
 }
 void HeatmapControls(){
     bool changed=false;const char* corners[]={"Top left","Top right","Bottom left","Bottom right","Top center","Center left","Center","Center right","Bottom center"};

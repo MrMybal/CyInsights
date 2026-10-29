@@ -208,3 +208,6 @@ add_executable(CyActivityTests Tests/ActivityTests.cpp App/ActivityTrace.cpp App
 target_link_libraries(CyActivityTests PRIVATE CyNativeStorage)
 add_test(NAME CyActivityTests COMMAND CyActivityTests)
 add_dependencies(CyComponentTests CyActivityTests)
+add_executable(CyOvrDrawTests Tests/OvrDrawTests.cpp)
+add_test(NAME CyOvrDrawTests COMMAND CyOvrDrawTests)
+add_dependencies(CyComponentTests CyOvrDrawTests)

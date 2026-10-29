@@ -35,8 +35,10 @@ public final class MainActivity extends Activity {
     private static native void nativeSnapshot(String text);
     private static native String nativeCommand();
     private PanelView view;private PanelInput input;private final Handler ui=new Handler(Looper.getMainLooper());
+    private ScheduledFuture<?> pollTask;private int curveHz=10;
+    private void schedulePoll(){if(pollTask!=null)pollTask.cancel(false);pollTask=worker.scheduleWithFixedDelay(this::poll,0,1000/curveHz,TimeUnit.MILLISECONDS);}
     private ScheduledExecutorService worker;private volatile boolean active=false;
-    private volatile String target="",preparedHeatmapTarget="",lastCapture="",lastActionError="";private String after="0";private volatile JSONObject capture;
+    private volatile String target="",preparedHeatmapTarget="",lastCapture="",lastActionError="";private String after="0",afterSequence="0",historySession="";private long lastPollNs=0;private boolean highRateCounters=false;private volatile JSONObject capture;
     private JSONObject xrCapabilities;private volatile JSONObject hudCatalog;
     private boolean panelCheckStarted=false;
     private boolean pinRequestPending=false;
@@ -86,10 +88,11 @@ public final class MainActivity extends Activity {
         nativeSnapshot(state.toString());view.requestRender();
     }
     private void poll() {
-        if(!active)return;
+        if(!active)return;long now=System.nanoTime();if(!highRateCounters&&now-lastPollNs<900000000L)return;lastPollNs=now;
         try {
-            JSONObject r=request(new JSONObject().put("operation","snapshot").put("after",after).put("after_capture",lastCapture).put("include_history",true));
-            JSONArray history=r.optJSONArray("history");if(history!=null&&history.length()>0)after=history.getJSONObject(history.length()-1).getString("observed_mono_ns");
+            JSONObject r=request(new JSONObject().put("operation","snapshot").put("after",after).put("after_sequence",afterSequence).put("history_session",historySession).put("after_capture",lastCapture).put("include_history",true));
+            historySession=r.optString("history_session",historySession);JSONObject counterState=r.optJSONObject("draw_counters");highRateCounters=counterState!=null&&counterState.optBoolean("active");
+            JSONArray history=r.optJSONArray("history");if(history!=null&&history.length()>0){JSONObject last=history.getJSONObject(history.length()-1);after=last.getString("observed_mono_ns");afterSequence=last.optString("history_sequence",afterSequence);}
             JSONObject c=r.optJSONObject("capture");if(c!=null){capture=c;String id=c.optString("capture_id");if(!id.equals(lastCapture)){CaptureStore.save(this,c);lastCapture=id;}}
             publish(r);
         }catch(Exception e) {
@@ -102,7 +105,9 @@ public final class MainActivity extends Activity {
             try{JSONObject options=new JSONObject(name);
                 if("panel_settings".equals(options.optString("operation"))){
                     if(name.length()>4096)throw new IllegalArgumentException("Settings too large");
-                    options.remove("operation");getPreferences(0).edit().putString("display_settings",options.toString()).apply();return;
+                    int hz=DrawCounterSample.frequency(options.optInt("curve_hz",10));
+                    options.remove("operation");getPreferences(0).edit().putString("display_settings",options.toString()).apply();
+                    if(curveHz!=hz){curveHz=hz;schedulePoll();worker.execute(()->{try{JSONObject state=request(new JSONObject().put("operation","snapshot"));JSONObject counters=state.optJSONObject("draw_counters");if(counters!=null&&counters.optBoolean("active"))request(new JSONObject().put("operation","draw_counters_start").put("package",counters.getString("target")).put("hz",hz));}catch(Exception error){lastActionError=error.getMessage();}});}return;
                 }
                 if(!"overlay_meta_on".equals(options.optString("operation"))&&!"heatmap_start".equals(options.optString("operation"))&&!"heatmap_update".equals(options.optString("operation")))throw new IllegalArgumentException("Invalid HUD action");
                 options.put("package",HeatmapTarget.resolve(options.optString("operation"),target,preparedHeatmapTarget));
@@ -149,7 +154,7 @@ public final class MainActivity extends Activity {
         send(name);
     }
     private void send(String name) {
-        try{send(new JSONObject().put("operation",name).put("package",target).put("seconds",.3));}catch(JSONException ignored){}
+        try{send(new JSONObject().put("operation",name).put("package",target).put("seconds",.3).put("hz",curveHz));}catch(JSONException ignored){}
     }
     private void send(JSONObject options) {
         worker.execute(()->{
@@ -185,10 +190,10 @@ public final class MainActivity extends Activity {
         String settings=getPreferences(0).getString("display_settings","{}");view.queueEvent(()->nativeSettings(settings));
         worker=Executors.newSingleThreadScheduledExecutor();
         worker.execute(()->{try{capture=CaptureStore.latest(this);if(capture!=null){lastCapture=capture.optString("capture_id");publish(new JSONObject().put("bridge",false).put("status","Opening saved GPU snapshot").put("capture",capture));}}catch(Exception e){android.util.Log.w("CyInsightOVR","Cannot reopen saved snapshot",e);}});
-        worker.scheduleWithFixedDelay(this::poll,0,1000,TimeUnit.MILLISECONDS);
+        try{curveHz=DrawCounterSample.frequency(new JSONObject(settings).optInt("curve_hz",10));}catch(Exception ignored){curveHz=10;}schedulePoll();
         worker.execute(()->{try{hudCatalog=request(new JSONObject().put("operation","hud_catalog"));poll();}catch(Exception ignored){}});
     }
-    @Override protected void onResume(){super.onResume();active=true;view.onResume();ui.removeCallbacks(commands);ui.post(commands);requestedLaunchActions();if(worker!=null)worker.execute(this::poll);maybeCheckPanel();}
+    @Override protected void onResume(){super.onResume();lastPollNs=0;active=true;view.onResume();ui.removeCallbacks(commands);ui.post(commands);requestedLaunchActions();if(worker!=null)worker.execute(this::poll);maybeCheckPanel();}
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(active)requestedLaunchActions();maybeCheckPanel();}
     @Override public void onWindowFocusChanged(boolean focus){super.onWindowFocusChanged(focus);if(focus&&pinRequestPending){ui.removeCallbacks(pinRequest);ui.postDelayed(pinRequest,200);}}
     @Override protected void onPause(){active=false;input.cancel();ui.removeCallbacks(commands);view.onPause();super.onPause();}

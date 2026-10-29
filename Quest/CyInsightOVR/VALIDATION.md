@@ -1,3 +1,32 @@
+# Draw counters and curve cadence, 2026-10-29
+
+- The experimental APK builds and its v3 development signature verifies. The
+  final APK and bridge are installed on the Quest 3. Twenty-two native submitted
+  geometry checks, twenty-one Android cadence/coverage checks, twenty-six simulated
+  layer lifecycle checks and three device authentication checks pass. Three real
+  target-UID reader start/stop cycles pass without residual reader processes.
+- Real data was received from the dedicated GPU test project at a requested
+  20 Hz: a measured 50.536 ms observation window (19.79 Hz) contained 847 known
+  submitted draws and 19,454 known input triangles. That window had no indirect
+  commands, unknown geometry or untracked command buffers. These are submission
+  observations, not an executed/visible triangle count or an overhead benchmark.
+- The test's OpenXR path provided no `vkQueuePresentKHR` boundaries. Presented-frame
+  metrics correctly remained null. No submission was relabeled as an XR frame.
+- A controlled startup comparison isolated a pre-existing preparation problem:
+  Meta's profiler socket remained present with detailed mode disabled. Explicitly
+  requesting that inactive profiler layer prevented the test APK from selecting
+  Vulkan. Preparation now checks `ovrgpuprofiler -i`; the lightweight chain started
+  Vulkan and produced real counters, while the enabled-profiler chain remains
+  covered by a separate lifecycle fixture.
+- All four 1/5/10/20 Hz settings are implemented. A later full real-data cadence
+  sweep was interrupted by headset sleep before the 1 Hz run produced positive
+  geometry; it is not reported as passing. Stale observations remain unavailable.
+  The reader now stays connected, establishes a fresh baseline after resumption,
+  and stops through stdin closure rather than a shell-UID signal to an app UID.
+- Full four-rate hardware comparison, overhead and interaction with the new graph
+  selector on a continuously worn headset remain to be verified. Existing tile
+  and image limits below are unchanged.
+
 # Tile/image recording revision, 2026-10-29
 
 ExternalGame is an anonymized label for an unrelated development APK tested with

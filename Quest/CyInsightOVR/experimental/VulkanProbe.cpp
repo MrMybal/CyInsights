@@ -14,13 +14,18 @@
 #include <set>
 #include <unistd.h>
 #include "VulkanHud.hpp"
+#include "DrawCounters.hpp"
+#include "DrawPublisher.hpp"
 
 namespace {
 constexpr const char* Name="VK_LAYER_CYINSIGHTS_heatmap";
 std::atomic<unsigned> enumerations{0};
 __attribute__((constructor)) void Loaded(){__android_log_print(ANDROID_LOG_INFO,"CyOVRVulkan","LAYER library loaded pid=%d",getpid());}
 struct Instance {VkInstance handle;PFN_vkGetInstanceProcAddr gpa;};
+struct GeometryPipeline {int topology=-1;bool restart=false,dynamicTopology=false,dynamicRestart=false;};
+struct GeometryState {VkPipeline pipeline=VK_NULL_HANDLE;int topology=-1,restart=-1;};
 struct Device {VkDevice handle;PFN_vkGetDeviceProcAddr gpa;std::mutex mutex;std::set<VkFramebuffer> seen;unsigned pass_count=0;cytiles::Reader reader;
+    cydraw::Book drawBook;std::map<VkPipeline,GeometryPipeline> geometryPipelines;std::map<VkCommandBuffer,GeometryState> geometry;
     std::map<VkRenderPass,cytiles::Pass> passes;std::map<VkCommandBuffer,cytiles::Command> commands;std::map<VkCommandBuffer,VkCommandPool> commandPools;
     VkShaderModule vert=VK_NULL_HANDLE,frag=VK_NULL_HANDLE,label=VK_NULL_HANDLE;VkPipelineLayout layout=VK_NULL_HANDLE;};
 std::mutex mutex;
@@ -89,6 +94,7 @@ VKAPI_ATTR VkResult VKAPI_CALL vkCreateDevice(VkPhysicalDevice handle,const VkDe
         __android_log_print(ANDROID_LOG_INFO,"CyOVRVulkan","DEVICE created pid=%d; experimental tile HUD; waiting for a fresh measured feed",getpid());}return result;
 }
 VKAPI_ATTR void VKAPI_CALL vkDestroyDevice(VkDevice handle,const VkAllocationCallbacks* alloc){auto device=GetDevice(handle);if(!device)return;
+    cydraw::Output().Forget(reinterpret_cast<uintptr_t>(device.get()));
     {std::lock_guard<std::mutex> lock(device->mutex);cytiles::Cleanup(*device);}
     {std::lock_guard<std::mutex> lock(mutex);devices.erase(Key(handle));}Next<PFN_vkDestroyDevice>(*device,"vkDestroyDevice")(handle,alloc);
 }
@@ -116,11 +122,11 @@ VKAPI_ATTR VkResult VKAPI_CALL vkCreateRenderPass2KHR(VkDevice handle,const VkRe
 }
 VKAPI_ATTR void VKAPI_CALL vkDestroyRenderPass(VkDevice handle,VkRenderPass pass,const VkAllocationCallbacks* alloc){auto device=GetDevice(handle);if(!device)return;{std::lock_guard<std::mutex> lock(device->mutex);auto it=device->passes.find(pass);if(it!=device->passes.end()){cytiles::DestroyPass(*device,it->second);device->passes.erase(it);}}Next<PFN_vkDestroyRenderPass>(*device,"vkDestroyRenderPass")(handle,pass,alloc);}
 VKAPI_ATTR VkResult VKAPI_CALL vkAllocateCommandBuffers(VkDevice handle,const VkCommandBufferAllocateInfo* info,VkCommandBuffer* output){auto device=GetDevice(handle);if(!device)return VK_ERROR_INITIALIZATION_FAILED;auto result=Next<PFN_vkAllocateCommandBuffers>(*device,"vkAllocateCommandBuffers")(handle,info,output);if(result==VK_SUCCESS){std::lock_guard<std::mutex> lock(device->mutex);for(uint32_t i=0;i<info->commandBufferCount;++i)device->commandPools[output[i]]=info->commandPool;}return result;}
-VKAPI_ATTR void VKAPI_CALL vkDestroyCommandPool(VkDevice handle,VkCommandPool pool,const VkAllocationCallbacks* alloc){auto device=GetDevice(handle);if(!device)return;{std::lock_guard<std::mutex> lock(device->mutex);for(auto i=device->commandPools.begin();i!=device->commandPools.end();)if(i->second==pool){device->commands.erase(i->first);i=device->commandPools.erase(i);}else ++i;}Next<PFN_vkDestroyCommandPool>(*device,"vkDestroyCommandPool")(handle,pool,alloc);}
-VKAPI_ATTR VkResult VKAPI_CALL vkResetCommandPool(VkDevice handle,VkCommandPool pool,VkCommandPoolResetFlags flags){auto device=GetDevice(handle);if(!device)return VK_ERROR_INITIALIZATION_FAILED;auto result=Next<PFN_vkResetCommandPool>(*device,"vkResetCommandPool")(handle,pool,flags);if(result==VK_SUCCESS){std::lock_guard<std::mutex> lock(device->mutex);for(const auto& c:device->commandPools)if(c.second==pool)device->commands.erase(c.first);}return result;}
-VKAPI_ATTR VkResult VKAPI_CALL vkBeginCommandBuffer(VkCommandBuffer command,const VkCommandBufferBeginInfo* info){auto device=GetDevice(command);if(!device)return VK_ERROR_INITIALIZATION_FAILED;auto result=Next<PFN_vkBeginCommandBuffer>(*device,"vkBeginCommandBuffer")(command,info);if(result==VK_SUCCESS){std::lock_guard<std::mutex> lock(device->mutex);device->commands[command]={};}return result;}
-VKAPI_ATTR void VKAPI_CALL vkFreeCommandBuffers(VkDevice handle,VkCommandPool pool,uint32_t count,const VkCommandBuffer* buffers){auto device=GetDevice(handle);if(!device)return;{std::lock_guard<std::mutex> lock(device->mutex);for(uint32_t i=0;i<count;++i){device->commands.erase(buffers[i]);device->commandPools.erase(buffers[i]);}}Next<PFN_vkFreeCommandBuffers>(*device,"vkFreeCommandBuffers")(handle,pool,count,buffers);}
-VKAPI_ATTR void VKAPI_CALL vkCmdBindPipeline(VkCommandBuffer command,VkPipelineBindPoint point,VkPipeline pipeline){auto device=GetDevice(command);if(!device)return;if(point==VK_PIPELINE_BIND_POINT_GRAPHICS){std::lock_guard<std::mutex> lock(device->mutex);device->commands[command].pipeline=pipeline;}Next<PFN_vkCmdBindPipeline>(*device,"vkCmdBindPipeline")(command,point,pipeline);}
+VKAPI_ATTR void VKAPI_CALL vkDestroyCommandPool(VkDevice handle,VkCommandPool pool,const VkAllocationCallbacks* alloc){auto device=GetDevice(handle);if(!device)return;{std::lock_guard<std::mutex> lock(device->mutex);for(auto i=device->commandPools.begin();i!=device->commandPools.end();)if(i->second==pool){device->commands.erase(i->first);device->drawBook.Erase(reinterpret_cast<uintptr_t>(i->first));device->geometry.erase(i->first);i=device->commandPools.erase(i);}else ++i;}Next<PFN_vkDestroyCommandPool>(*device,"vkDestroyCommandPool")(handle,pool,alloc);}
+VKAPI_ATTR VkResult VKAPI_CALL vkResetCommandPool(VkDevice handle,VkCommandPool pool,VkCommandPoolResetFlags flags){auto device=GetDevice(handle);if(!device)return VK_ERROR_INITIALIZATION_FAILED;auto result=Next<PFN_vkResetCommandPool>(*device,"vkResetCommandPool")(handle,pool,flags);if(result==VK_SUCCESS){std::lock_guard<std::mutex> lock(device->mutex);for(const auto& c:device->commandPools)if(c.second==pool){device->commands.erase(c.first);device->drawBook.Erase(reinterpret_cast<uintptr_t>(c.first));device->geometry.erase(c.first);}}return result;}
+VKAPI_ATTR VkResult VKAPI_CALL vkBeginCommandBuffer(VkCommandBuffer command,const VkCommandBufferBeginInfo* info){auto device=GetDevice(command);if(!device)return VK_ERROR_INITIALIZATION_FAILED;auto result=Next<PFN_vkBeginCommandBuffer>(*device,"vkBeginCommandBuffer")(command,info);if(result==VK_SUCCESS){std::lock_guard<std::mutex> lock(device->mutex);device->commands[command]={};device->drawBook.Begin(reinterpret_cast<uintptr_t>(command));device->geometry[command]={};}return result;}
+VKAPI_ATTR void VKAPI_CALL vkFreeCommandBuffers(VkDevice handle,VkCommandPool pool,uint32_t count,const VkCommandBuffer* buffers){auto device=GetDevice(handle);if(!device)return;{std::lock_guard<std::mutex> lock(device->mutex);for(uint32_t i=0;i<count;++i){device->commands.erase(buffers[i]);device->commandPools.erase(buffers[i]);device->drawBook.Erase(reinterpret_cast<uintptr_t>(buffers[i]));device->geometry.erase(buffers[i]);}}Next<PFN_vkFreeCommandBuffers>(*device,"vkFreeCommandBuffers")(handle,pool,count,buffers);}
+VKAPI_ATTR void VKAPI_CALL vkCmdBindPipeline(VkCommandBuffer command,VkPipelineBindPoint point,VkPipeline pipeline){auto device=GetDevice(command);if(!device)return;if(point==VK_PIPELINE_BIND_POINT_GRAPHICS){std::lock_guard<std::mutex> lock(device->mutex);device->commands[command].pipeline=pipeline;device->geometry[command].pipeline=pipeline;}Next<PFN_vkCmdBindPipeline>(*device,"vkCmdBindPipeline")(command,point,pipeline);}
 VKAPI_ATTR void VKAPI_CALL vkCmdSetViewport(VkCommandBuffer command,uint32_t first,uint32_t count,const VkViewport* values){auto device=GetDevice(command);if(!device)return;if(first==0&&count){std::lock_guard<std::mutex> lock(device->mutex);auto& c=device->commands[command];c.viewport=values[0];c.hasViewport=true;}Next<PFN_vkCmdSetViewport>(*device,"vkCmdSetViewport")(command,first,count,values);}
 VKAPI_ATTR void VKAPI_CALL vkCmdSetScissor(VkCommandBuffer command,uint32_t first,uint32_t count,const VkRect2D* values){auto device=GetDevice(command);if(!device)return;if(first==0&&count){std::lock_guard<std::mutex> lock(device->mutex);auto& c=device->commands[command];c.scissor=values[0];c.hasScissor=true;}Next<PFN_vkCmdSetScissor>(*device,"vkCmdSetScissor")(command,first,count,values);}
 VKAPI_ATTR void VKAPI_CALL vkCmdSetBlendConstants(VkCommandBuffer command,const float values[4]){auto device=GetDevice(command);if(!device)return;{std::lock_guard<std::mutex> lock(device->mutex);std::copy(values,values+4,device->commands[command].blend.begin());}Next<PFN_vkCmdSetBlendConstants>(*device,"vkCmdSetBlendConstants")(command,values);}
@@ -132,9 +138,11 @@ VKAPI_ATTR void VKAPI_CALL vkCmdEndRenderPass2(VkCommandBuffer command,const VkS
 VKAPI_ATTR void VKAPI_CALL vkCmdEndRenderPass2KHR(VkCommandBuffer command,const VkSubpassEndInfo* end){auto device=GetDevice(command);if(!device)return;cytiles::Draw(*device,command);Next<PFN_vkCmdEndRenderPass2KHR>(*device,"vkCmdEndRenderPass2KHR")(command,end);}
 
 }
+#include "DrawHooks.hpp"
 namespace {
 PFN_vkVoidFunction Hook(const char* name){
 #define MATCH(f) if(std::strcmp(name,#f)==0)return reinterpret_cast<PFN_vkVoidFunction>(f)
+    DRAW_HOOKS(MATCH);
     MATCH(vkGetInstanceProcAddr);MATCH(vkGetDeviceProcAddr);MATCH(vkCreateInstance);MATCH(vkDestroyInstance);MATCH(vkEnumeratePhysicalDevices);
     MATCH(vkEnumerateInstanceLayerProperties);MATCH(vkEnumerateInstanceExtensionProperties);MATCH(vkEnumerateDeviceLayerProperties);MATCH(vkEnumerateDeviceExtensionProperties);
     MATCH(vkCreateRenderPass2);MATCH(vkCreateRenderPass2KHR);MATCH(vkDestroyRenderPass);MATCH(vkBeginCommandBuffer);MATCH(vkFreeCommandBuffers);MATCH(vkAllocateCommandBuffers);MATCH(vkDestroyCommandPool);MATCH(vkResetCommandPool);

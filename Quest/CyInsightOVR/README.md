@@ -258,6 +258,52 @@ and fragment operations. A hot tile does not identify a unique shader, mesh or
 actor. Detailed GPU profiling changes scheduling and adds overhead; short
 diagnostic snapshots are not the baseline for final performance measurements.
 
+## Draw calls, input triangles and faster curves
+
+The **Overview** page includes **Draw calls & input triangles** controls. Select
+the development game's Android package, press **Prepare draw counter layer**, and
+completely close/reopen that target once. Then press **Start draw counters**.
+Preparation does not enable Meta detailed GPU profiling and never restarts a game.
+It requires the experimental Vulkan APK and a debuggable Vulkan target.
+
+In **Display & HUD**, **Curve updates** selects **1, 5, 10 or 20 Hz** (10 Hz by
+default). Enable the known submitted draws, input triangles and indirect-command
+curves there. The measured source cadence is displayed separately. Meta's system
+counters retain their own cadence, normally around 1 Hz. Ordinary panel polling
+stays at 1 Hz while draw collection is stopped. Slow shell checks are cached;
+high-rate collection uses one persistent target-UID reader rather than repeated
+shell/cat launches. Closing its input pipe ends it; its native export lease also
+expires after two seconds. Source samples are not interpolated or duplicated.
+
+Draws are counted when tracked command buffers are successfully submitted,
+including reused command buffers, repeated secondary executions and instances.
+The layer's own heatmap draws are excluded. The native recorder keeps lightweight
+command metadata while the optional layer is loaded. Its file export runs only
+while the explicit reader's lease is active, on a worker, at the selected rate.
+No GPU query, buffer readback, texture capture or pipeline wait is added for counts.
+Actual game overhead has not yet been benchmarked.
+
+Input triangles are before culling, clipping, shader-generated geometry and view
+expansion. Fixed-count indirect draws retain their known draw count, but their
+triangle counts remain unknown. GPU-controlled draw counts, primitive restart,
+unknown topology and missing command buffers mark totals as incomplete. The UI
+labels known totals explicitly; a missing value is not displayed as zero.
+
+Per-presented-frame means are available only when actual `vkQueuePresentKHR`
+boundaries are observed on one device. **An OpenXR Quest submission is not assumed
+to be a frame.** When the XR runtime provides no Vulkan presentation boundary,
+these per-frame curves remain unavailable; measured submission-window counts and
+draws/triangles per second still work. These are process-submission observations,
+not proof of visible triangles, GPU execution timing, per-eye or mesh attribution.
+This feature adds panel graphs; Meta's HUD metric catalog is unchanged.
+
+The same operations are available through `Tools/OvrBridge.py`:
+`draw_counters_prepare --package org.example.game`,
+`draw_counters_start --package org.example.game --hz 20`, and
+`draw_counters_stop`. Authenticated `snapshot` returns `draw_counters` and the
+derived metrics. History has a restart-scoped sequence cursor so mixed source
+cadences do not drop or duplicate observations.
+
 ## Current boundaries
 
 - No validated custom universal cross-game VR overlay or image-aligned live heatmap.

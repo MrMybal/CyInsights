@@ -45,7 +45,13 @@ final class LiveHeatmapController {
         // Quest's loader can stop auto-inserting its profiler when explicit debug layers are selected.
         // Keep the installed, enabled system profiler in the explicit chain; never bundle it.
         String socket=run("/system/bin/getprop","debug.vulkan.profiler.namedsocket").trim();
-        if(socket.startsWith("/dev/socket/")&&new File("/system_ext/lib64/libVkLayer_ADRENO_qprofiler.so").isFile())return LAYER+":VK_LAYER_ADRENO_qprofiler";
+        if(socket.startsWith("/dev/socket/")&&new File("/system_ext/lib64/libVkLayer_ADRENO_qprofiler.so").isFile()){
+            // The socket survives -d. Requesting the profiler layer while detailed
+            // mode is disabled makes some Quest loaders reject Vulkan entirely.
+            String status="";for(String path:new String[]{"/system_ext/bin/ovrgpuprofiler","/system/bin/ovrgpuprofiler","/vendor/bin/ovrgpuprofiler"})if(new File(path).canExecute()){status=run(path,"-i").trim().toLowerCase(Locale.ROOT);break;}
+            if(status.contains("profiling is enabled"))return LAYER+":VK_LAYER_ADRENO_qprofiler";
+            if(!status.contains("profiling is disabled"))throw new IOException("Cannot confirm the current Meta profiling mode; GPU settings were not changed");
+        }
         return LAYER;
     }
     synchronized JSONObject prepare(String pkg)throws Exception{
@@ -102,7 +108,7 @@ final class LiveHeatmapController {
         JSONArray pending=prepared.optJSONArray("rollback_pending");
         if(pending!=null){for(int j=0;j<pending.length();++j){String key=pending.getString(j);int index=Arrays.asList(KEYS).indexOf(key);if(index<0)throw new IOException("Invalid recovery setting");if(setting(key).equals(desired[index]))set(key,previous.getString(key));}}
         else if(ours)for(String key:KEYS)set(key,previous.getString(key));
-        if(prepared.optBoolean("owns_library")){if(installed(pkg)){String actual=as(pkg,"sha256sum",LIB).trim().split("\\s+")[0];if(!actual.equals(prepared.getString("sha256")))throw new IOException("Target layer changed; refusing to remove an unrecognized file");}as(pkg,"rm","-f",LIB,FEED,FEED+".tmp",FEED+".ready");}
+        if(prepared.optBoolean("owns_library")){if(installed(pkg)){String actual=as(pkg,"sha256sum",LIB).trim().split("\\s+")[0];if(!actual.equals(prepared.getString("sha256")))throw new IOException("Target layer changed; refusing to remove an unrecognized file");}as(pkg,"rm","-f",LIB,FEED,FEED+".tmp",FEED+".ready","files/cyinsights-draw-counters.json","files/cyinsights-draw-counters.json.tmp","files/cyinsights-draw-counters.json.enabled","files/cyinsights-draw-counters.json.enabled.tmp");}
         if(!stateFile.delete()&&stateFile.exists())throw new IOException("Cannot remove layer settings snapshot");prepared=null;message=ours?"Development layer removed; previous GPU settings restored":"Layer removed. Another tool changed GPU settings; those settings were preserved.";return status();
     }
 }
