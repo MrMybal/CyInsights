@@ -1,5 +1,22 @@
 # CyInsights
 
+## Download the current alpha
+
+**[CyInsights 0.2.2 Alpha 1 - all downloads](https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.1)**
+
+- **[Quest APK - Vulkan heatmap and draw counters (experimental)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.1/CyInsights-v0.2.2-alpha.1-Quest-Vulkan-arm64.apk)**
+- [Quest APK - standard](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.1/CyInsights-v0.2.2-alpha.1-Quest-Standard-arm64.apk)
+- [Quest complete bundle - APKs, ADB bootstrap and guide](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.1/CyInsights-v0.2.2-alpha.1-Quest-arm64.zip)
+- [Windows desktop application](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.1/CyInsights-v0.2.2-alpha.1-Windows-x64.zip)
+- [Unreal plugin sources](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.1/CyInsights-v0.2.2-alpha.1-Unreal-Plugins-Source.zip)
+- [Standalone MCP / AI SDK](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.1/CyInsights-v0.2.2-alpha.1-AI-SDK.zip)
+
+This build remains an **alpha prerelease**. GitHub's **Latest** shortcut can open
+an older non-prerelease; use the current-alpha link above for these APKs.
+Install one Quest APK variant. The advanced collector needs an authorized ADB
+bootstrap after each headset reboot, then runs without a connected PC. The
+complete Quest bundle includes that bootstrap and its instructions.
+
 Native interface navigation, query preparation and performance measurements are documented in [InterfacePerformance](Docs/InterfacePerformance.md).
 The native [CyUI interface](Docs/Interface.md) provides five themes, compact or
 comfortable controls, grouped analysis tools and a responsive capture session.
