@@ -2,14 +2,14 @@
 
 ## Download the current alpha
 
-**[CyInsights 0.2.2 Alpha 1 - all downloads](https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.1)**
+**[CyInsights 0.2.2 Alpha 2 - all downloads](https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.2)**
 
-- **[Quest APK - Vulkan heatmap and draw counters (experimental)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.1/CyInsights-v0.2.2-alpha.1-Quest-Vulkan-arm64.apk)**
-- [Quest APK - standard](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.1/CyInsights-v0.2.2-alpha.1-Quest-Standard-arm64.apk)
-- [Quest complete bundle - APKs, ADB bootstrap and guide](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.1/CyInsights-v0.2.2-alpha.1-Quest-arm64.zip)
-- [Windows desktop application](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.1/CyInsights-v0.2.2-alpha.1-Windows-x64.zip)
-- [Unreal plugin sources](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.1/CyInsights-v0.2.2-alpha.1-Unreal-Plugins-Source.zip)
-- [Standalone MCP / AI SDK](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.1/CyInsights-v0.2.2-alpha.1-AI-SDK.zip)
+- **[Quest APK - Vulkan heatmap and draw counters (experimental)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.2/CyInsights-v0.2.2-alpha.2-Quest-Vulkan-arm64.apk)**
+- [Quest APK - standard](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.2/CyInsights-v0.2.2-alpha.2-Quest-Standard-arm64.apk)
+- [Quest complete bundle - APKs, ADB bootstrap and guide](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.2/CyInsights-v0.2.2-alpha.2-Quest-arm64.zip)
+- [Windows desktop application](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.2/CyInsights-v0.2.2-alpha.2-Windows-x64.zip)
+- [Unreal plugin sources](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.2/CyInsights-v0.2.2-alpha.2-Unreal-Plugins-Source.zip)
+- [Standalone MCP / AI SDK](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.2/CyInsights-v0.2.2-alpha.2-AI-SDK.zip)
 
 This build remains an **alpha prerelease**. GitHub's **Latest** shortcut can open
 an older non-prerelease; use the current-alpha link above for these APKs.
@@ -29,6 +29,7 @@ is written for CyInsights; it does not reuse the CyGPUInspector standalone UI.
 
 ## Current capabilities
 
+- Stable-only GitHub updates: **Help > Updates** on Windows and **Updates** in CyInsightOVR. Alpha/prerelease builds are ignored; see [update behavior and publishing](Docs/Updates.md).
 - Open `.utrace` and versioned `.cycapture` archives. Preserve the original trace.
 - Continuous tracks, synchronized frame overview, pan/zoom and range selection.
 - Timers, callers/callees, counters, task analysis, distributions and A/B comparison.

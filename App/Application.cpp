@@ -1,6 +1,7 @@
 // CyInsights interface, independent of the CyGPUInspector UI.
 // Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
 #include "Application.hpp"
+#include "UpdateView.hpp"
 #include <unordered_map>
 #include "AnalysisWorkers.hpp"
 #include "UiMetrics.hpp"
@@ -525,6 +526,7 @@ void Application::DrawMenuBar() {
             ImGui::EndMenu();
         }
         AppearanceMenu();
+        UpdateMenu();
         ImGui::SameLine();
         auto project = capture_.manifest["metadata"]["project"].AsString();
         ImGui::TextDisabled("  %s  -  CyInsights", project.empty() ? "Unreal capture" : project.c_str());

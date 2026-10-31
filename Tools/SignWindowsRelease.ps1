@@ -12,7 +12,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $releaseRoot = (Resolve-Path -LiteralPath $Directory).Path
 if (-not (Test-Path -LiteralPath $releaseRoot -PathType Container)) { throw 'Release directory required' }
-$knownNames = @('CyInsightsApp.exe','CyCaptureTool.exe','CyNativeTiming.exe','CyNativeTasks.exe',
+$knownNames = @('CyInsightsApp.exe','CyCaptureTool.exe','CyInsightsUpdater.exe','CyNativeTiming.exe','CyNativeTasks.exe',
     'CyNativeActivities.exe','CyInsightsGpu.addon64')
 $targets = @(Get-ChildItem -LiteralPath $releaseRoot -File -Recurse | Where-Object { $knownNames -contains $_.Name })
 if (-not ($targets | Where-Object { $_.Name -eq 'CyInsightsApp.exe' })) { throw 'CyInsightsApp.exe is missing; no binary will be signed or restored' }
@@ -64,6 +64,7 @@ foreach ($file in $targets) {
             path = $file.FullName.Substring($releaseRoot.Length+1).Replace('\','/')
             sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             status = $signature.Status.ToString()
+            product_version = [Diagnostics.FileVersionInfo]::GetVersionInfo($file.FullName).ProductVersion
             publisher = if ($signature.SignerCertificate) { $signature.SignerCertificate.Subject } else { $null }
             timestamped = $null -ne $signature.TimeStamperCertificate
         }

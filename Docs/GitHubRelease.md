@@ -1,6 +1,7 @@
 # Paquet Windows et sources des plugins
 
-Le ZIP Windows contient `CyInsightsApp.exe`, `CyCaptureTool.exe`, les notices,
+Le ZIP Windows contient `CyInsightsApp.exe`, `CyCaptureTool.exe`,
+`CyInsightsUpdater.exe`, les notices,
 la documentation, les sources des lecteurs natifs et le compagnon IA avec ses
 wheels verrouillées. Extraire tout le ZIP avant de lancer l'application. Les
 paramètres et captures existants ne sont pas inclus dans ce paquet.
@@ -58,20 +59,27 @@ instructions de compilation, y compris le collecteur Windows facultatif.
 
 ## Préparer une release
 
-Construire l'application depuis le commit voulu, puis :
+Définir la version dans `VERSION.json`, puis construire l'application depuis le
+commit voulu. Le tag doit correspondre à cette version et aux binaires compilés :
 
 ```powershell
+$Version = 'v' + (Get-Content VERSION.json -Raw | ConvertFrom-Json).version
 python Tools/package_release.py --binaries bin/Release `
-  --output build/GitHubRelease --version v0.1.0-preview.20261010
+  --output build/GitHubRelease --version $Version
 ```
 
-Le script sélectionne les sources suivies par Git et les deux exécutables de
+Le script sélectionne les sources suivies par Git et les trois exécutables de
 l'application, vérifie les archives et produit `SHA256SUMS.txt`. Il n'inclut ni
 les PDB, traces, paramètres locaux, runtimes virtuels, ni les adaptateurs Unreal
 compilés. Les binaires gardent un nom de PDB relatif à la place du chemin du poste
 de compilation. Le manifest du ZIP indique le commit et les empreintes des fichiers.
 Les binaires de cette preview ne sont pas signés. La préparation automatique
 ne rend pas l'analyseur indépendant d'une installation Unreal.
+
+Les mises à jour depuis **Help > Updates** sur Windows et **Updates** sur Quest
+acceptent uniquement les versions stables plus récentes. Les releases alpha
+restent marquées comme prereleases et ne sont pas proposées. Voir
+[la préparation des paquets et le fonctionnement des mises à jour](Updates.md).
 
 ## GitHub release descriptions
 

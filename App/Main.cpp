@@ -5,6 +5,7 @@
 #include "Branding.hpp"
 #include "QuestTileReplay.hpp"
 #include "UiTheme.hpp"
+#include "UpdateView.hpp"
 #include "ResourceIds.h"
 #include <chrono>
 #include <algorithm>
@@ -241,6 +242,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             std::wstring argument = args[i];
             if (argument == L"--snapshot" && i + 1 < count)
                 snapshot = args[++i];
+            else if(argument==L"--updates-view")cyinsights::ShowUpdates();
+            else if(argument==L"--no-update-check")cyinsights::SuppressAutomaticUpdateCheck();
             else if(argument==L"--ui-theme"&&i+1<count){auto theme=std::filesystem::path(args[++i]).u8string();if(!cyui::setTheme(theme.c_str()))return 23;}
             else if(argument==L"--ui-comfortable")cyui::setDensity(cyui::Density::comfortable);
             else if(argument==L"--ui-size"&&i+1<count){
@@ -476,6 +479,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             auto draw_begin=std::chrono::steady_clock::now();
             ImGui::NewFrame();
             workspace.Draw();
+            const bool updates_visible=cyinsights::UpdatesVisible();
+            cyinsights::DrawUpdates(updates_visible&&workspace.CanUpdate(),updates_visible?workspace.OpenPaths():std::vector<std::filesystem::path>{});
+            if(cyinsights::UpdateExitRequested())done=true;
             if(standalone_ai_smoke&&!standalone_ai_complete&&!workspace.Busy()&&frames>20){
                 auto host=std::filesystem::path(executable).parent_path();
                 if(std::filesystem::exists(host/"AI/app/CyTool.json")||std::filesystem::exists(host.parent_path().parent_path()/"AI/app/CyTool.json"))return 21;

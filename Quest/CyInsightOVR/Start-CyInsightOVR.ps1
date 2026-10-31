@@ -1,6 +1,6 @@
 # Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
 [CmdletBinding()]
-param([string]$Adb="",[string]$Device="",[switch]$Install,[switch]$Launch,[switch]$PullCaptures,[switch]$RestartBridge)
+param([string]$Adb="",[string]$Device="",[switch]$Install,[switch]$Launch,[switch]$PullCaptures,[switch]$RestartBridge,[ValidateSet('standard','vulkan')][string]$Variant='standard')
 $ErrorActionPreference="Stop"
 if ($Device -and $Device -notmatch '^[A-Za-z0-9_.:-]+$') { throw 'Invalid ADB device identifier.' }
 if (!$Adb) { $Adb=Join-Path $env:LOCALAPPDATA 'Android\Sdk\platform-tools\adb.exe' }
@@ -9,7 +9,23 @@ $AdbArgs=@();if ($Device) { $AdbArgs=@('-s',$Device) }
 function Invoke-Adb { param([string[]]$Arguments) $result=& $Adb @AdbArgs @Arguments;if ($LASTEXITCODE -ne 0){throw "ADB command failed: $($Arguments[0])"};return $result }
 $Bundle=$PSScriptRoot
 if (!(Test-Path -LiteralPath (Join-Path $Bundle 'cyinsightovr-bridge.jar'))) { $Bundle=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../bin/CyInsightOVR')) }
-if ($Install) { Invoke-Adb @('install','-r',(Join-Path $Bundle 'CyInsightOVR-0.1.0-dev-arm64.apk')) }
+if ($Install) {
+    $BuildInfoPath=Join-Path $Bundle 'cyinsightovr-build.json'
+    if (Test-Path -LiteralPath $BuildInfoPath) {
+        $BuildInfo=Get-Content -LiteralPath $BuildInfoPath -Raw | ConvertFrom-Json
+        if ($BuildInfo.version -notmatch '^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$') { throw 'Invalid bundle version.' }
+        $Flavor=if($Variant -eq 'vulkan'){'Vulkan'}else{'Standard'}
+        $ExpectedName='CyInsights-v'+$BuildInfo.version+'-Quest-'+$Flavor+'-arm64.apk'
+        $Entry=$BuildInfo.apks.$Variant
+        if (!$Entry -or $Entry.file -ne $ExpectedName -or $Entry.sha256 -notmatch '^[a-f0-9]{64}$') { throw 'The selected APK variant is not included in this bundle.' }
+        $ApkPath=Join-Path $Bundle $ExpectedName
+        if ((Get-FileHash -LiteralPath $ApkPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $Entry.sha256) { throw 'APK checksum does not match the bundle manifest.' }
+    } else {
+        $LegacyName=if($Variant -eq 'vulkan'){'CyInsightOVR-0.1.0-dev-vulkan-arm64.apk'}else{'CyInsightOVR-0.1.0-dev-arm64.apk'}
+        $ApkPath=Join-Path $Bundle $LegacyName
+    }
+    Invoke-Adb @('install','-r',$ApkPath)
+}
 if ($PullCaptures) { Invoke-Adb @('pull','/sdcard/Android/data/org.cyinsights.ovr/files/Captures',(Join-Path $PSScriptRoot 'Captures'));return }
 $Identity=(Invoke-Adb @('shell','cmd','package','list','packages','-U','org.cyinsights.ovr')) -join "`n"
 if ($Identity -notmatch '(?m)^package:org\.cyinsights\.ovr\s+uid:(\d+)\s*$') { throw 'Install the CyInsightOVR development APK first.' }

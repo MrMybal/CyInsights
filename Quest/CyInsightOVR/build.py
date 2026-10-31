@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
 """Offline Android SDK/NDK build. Uses installed tooling, no Gradle downloads."""
-import argparse, os, pathlib, shutil, subprocess, zipfile
+import argparse, os, pathlib, shutil, subprocess, zipfile, json
 
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 HERE=pathlib.Path(__file__).resolve().parent
@@ -11,6 +11,14 @@ def main():
     ndk=sdk/'ndk/27.2.12479018';cmake=sdk/'cmake/3.22.1/bin/cmake.exe';ninja=sdk/'cmake/3.22.1/bin/ninja.exe';bt=sdk/'build-tools/35.0.1';android=sdk/'platforms/android-34/android.jar'
     env=os.environ.copy();env['JAVA_HOME']=str(a.java);env['PATH']=str(a.java/'bin')+os.pathsep+env.get('PATH','')
     def run(*args):subprocess.run([str(x) for x in args],check=True,env=env,cwd=ROOT)
+    version=json.loads((ROOT/'VERSION.json').read_text(encoding='utf-8'))
+    import re,xml.etree.ElementTree as ET
+    if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?',version['version']):raise ValueError('Invalid application version')
+    if not isinstance(version['android_version_code'],int) or not 1<=version['android_version_code']<2100000000:raise ValueError('Invalid Android version code')
+    flavor='vulkan' if a.experimental_vulkan_layer else 'standard'
+    generated=work/'generated';generated.mkdir(exist_ok=True)
+    build_info=generated/'UpdateBuild.java'
+    build_info.write_text('package org.cyinsights.ovr; final class UpdateBuild { static final String VERSION='+json.dumps(version['version'])+'; static final String VARIANT='+json.dumps(flavor)+'; }\n',encoding='utf-8')
     if a.experimental_vulkan_layer:
         import struct
         shader_arrays=[]
@@ -32,7 +40,7 @@ def main():
         shutil.copyfile(work/'native'/name,packaged/name)
         run(ndk/'toolchains/llvm/prebuilt/windows-x86_64/bin/llvm-strip.exe','--strip-debug',packaged/name)
     classes=work/'classes';classes.mkdir(exist_ok=True)
-    sources=sorted((HERE/'src').rglob('*.java'));response=work/'javac.args';response.write_text('\n'.join('"'+str(x).replace('\\','/')+'"' for x in sources),encoding='utf-8')
+    sources=sorted((HERE/'src').rglob('*.java'))+[build_info];response=work/'javac.args';response.write_text('\n'.join('"'+str(x).replace('\\','/')+'"' for x in sources),encoding='utf-8')
     run(a.java/'bin/javac.exe','-encoding','UTF-8','--release','8','-classpath',android,'-d',classes,'@'+str(response))
     jar=work/'classes.jar'
     with zipfile.ZipFile(jar,'w',zipfile.ZIP_DEFLATED) as z:
@@ -41,7 +49,10 @@ def main():
     run(bt/'d8.bat','--release','--min-api','29','--lib',android,'--output',dex,jar)
     res=work/'res/drawable';res.mkdir(parents=True,exist_ok=True);shutil.copyfile(ROOT/'Assets/Branding/cyinsights-logo-ui-v1.png',res/'cyinsights_logo.png')
     run(bt/'aapt2.exe','compile','--dir',res.parent,'-o',work/'resources.zip')
-    unsigned=work/'unsigned.apk';run(bt/'aapt2.exe','link','-o',unsigned,'--manifest',HERE/'AndroidManifest.xml','-I',android,work/'resources.zip')
+    manifest=ET.parse(HERE/'AndroidManifest.xml');ns='{http://schemas.android.com/apk/res/android}'
+    manifest.getroot().set(ns+'versionCode',str(version['android_version_code']));manifest.getroot().set(ns+'versionName',version['version']);ET.register_namespace('android','http://schemas.android.com/apk/res/android')
+    manifest_path=work/'AndroidManifest.xml';manifest.write(manifest_path,encoding='utf-8',xml_declaration=True)
+    unsigned=work/'unsigned.apk';run(bt/'aapt2.exe','link','-o',unsigned,'--manifest',manifest_path,'-I',android,work/'resources.zip')
     with zipfile.ZipFile(unsigned,'a',zipfile.ZIP_DEFLATED) as z:
         z.write(dex/'classes.dex','classes.dex');z.write(packaged/'libcyinsightovr.so','lib/arm64-v8a/libcyinsightovr.so')
         z.write(ROOT/'ThirdParty/OpenXR/Android/arm64-v8a/libopenxr_loader.so','lib/arm64-v8a/libopenxr_loader.so')
@@ -50,14 +61,21 @@ def main():
             for f in (ROOT/folder).rglob('*'):
                 if f.is_file():z.write(f,'assets/'+f.relative_to(ROOT).as_posix())
         z.write(ROOT/'LICENSE','assets/LICENSE')
+        z.writestr('assets/update-build.json',json.dumps({'version':version['version'],'variant':flavor}))
     aligned=work/'aligned.apk';run(bt/'zipalign.exe','-f','-p','4',unsigned,aligned)
     key=work/'development.keystore'
     if not key.exists():run(a.java/'bin/keytool.exe','-genkeypair','-keystore',key,'-storepass','android','-keypass','android','-alias','androiddebugkey','-dname','CN=CyInsightOVR Development','-keyalg','RSA','-keysize','2048','-validity','10000')
-    apk=out/('CyInsightOVR-0.1.0-dev-vulkan-arm64.apk' if a.experimental_vulkan_layer else 'CyInsightOVR-0.1.0-dev-arm64.apk');run(bt/'apksigner.bat','sign','--ks',key,'--ks-key-alias','androiddebugkey','--ks-pass','pass:android','--key-pass','pass:android','--out',apk,aligned)
+    apk=out/('CyInsights-v'+version['version']+'-Quest-'+('Vulkan' if a.experimental_vulkan_layer else 'Standard')+'-arm64.apk');run(bt/'apksigner.bat','sign','--ks',key,'--ks-key-alias','androiddebugkey','--ks-pass','pass:android','--key-pass','pass:android','--out',apk,aligned)
     run(bt/'apksigner.bat','verify','--verbose',apk)
     with zipfile.ZipFile(out/'cyinsightovr-bridge.jar','w',zipfile.ZIP_DEFLATED) as z:z.write(dex/'classes.dex','classes.dex')
     shutil.copyfile(HERE/'Start-CyInsightOVR.ps1',out/'Start-CyInsightOVR.ps1')
     shutil.copyfile(HERE/'README.md',out/'README.md')
     shutil.copyfile(HERE/'VALIDATION.md',out/'VALIDATION.md')
+    info_path=out/'cyinsightovr-build.json';info={}
+    if info_path.exists():info=json.loads(info_path.read_text(encoding='utf-8'))
+    if info.get('version')!=version['version']:info={'version':version['version'],'android_version_code':version['android_version_code'],'apks':{}}
+    import hashlib
+    info['apks'][flavor]={'file':apk.name,'sha256':hashlib.sha256(apk.read_bytes()).hexdigest()}
+    info_path.write_text(json.dumps(info,indent=2)+'\n',encoding='utf-8')
     print('Development APK:',apk)
 if __name__=='__main__':main()

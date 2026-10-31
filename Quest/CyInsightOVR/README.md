@@ -42,6 +42,12 @@ APK uses Android `run-as` for pairing; it is not a production signing setup.
 
 ## Use
 
+Open **Updates** to check GitHub for newer stable builds of the installed APK
+variant. Alpha and other prereleases are ignored. The app verifies the download
+and signing certificate before requesting Android installation confirmation.
+See [updates and publishing requirements](../../Docs/Updates.md). The versioned
+bootstrap also accepts `-Variant vulkan -Install` for the experimental APK.
+
 1. Open CyInsightOVR from the headset's app library / Unknown Sources.
 2. Set the exact game package. Selecting CyInsightOVR itself for a background
    capture is rejected, because its configuration panel will close.

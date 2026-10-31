@@ -71,6 +71,8 @@ void DocumentWorkspace::Open(const fs::path& path){
     if(doc.app->Open(path)){selected_=menu_owner_=doc.id;select_pending_=true;}
 }
 bool DocumentWorkspace::Busy() const {for(const auto& doc:documents_)if(doc.app->AnalysisBusy())return true;return false;}
+bool DocumentWorkspace::CanUpdate() const {if(Busy())return false;for(const auto& d:documents_)if(!d.app->CanCloseDocument())return false;return true;}
+std::vector<fs::path> DocumentWorkspace::OpenPaths() const {std::vector<fs::path> paths;for(const auto& d:documents_)if(!d.app->DocumentPath().empty())paths.push_back(d.app->DocumentPath());return paths;}
 std::string DocumentWorkspace::Title(const Document& doc) const {return (doc.app->DocumentPath().empty()?"Capture session":doc.app->DocumentPath().filename().u8string())+"###CyDocument"+std::to_string(doc.id);}
 void DocumentWorkspace::Detach(size_t i){if(i>=documents_.size())return;documents_[i].detached=true;documents_[i].position=true;}
 void DocumentWorkspace::Attach(size_t i){if(i>=documents_.size())return;documents_[i].detached=false;selected_=menu_owner_=documents_[i].id;select_pending_=true;}

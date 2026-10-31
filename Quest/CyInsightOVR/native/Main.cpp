@@ -20,6 +20,8 @@ std::string draw_counter_session;
 J state;cyovr::Capture capture;std::string capture_id,error,command;
 std::mutex command_mutex;
 std::mutex snapshot_mutex;
+std::mutex update_mutex;
+J update_state;
 std::vector<J> pending_snapshots;
 std::unique_ptr<cyovr::Capture> pending_capture;
 std::string pending_capture_error;
@@ -70,6 +72,22 @@ void Curve(const char* name,const char* title,double multiplier,const char* unit
     if(std::string(name).find("Vulkan ")==0)cyui::textFaint("Selected process | submitted input geometry | 120 s history");else cyui::textFaint("System scope | 120 s history | source updates ~1 Hz");cyui::endCard();
 }
 #include "DisplaySettings.hpp"
+void UpdateControls(){
+    J u;{std::lock_guard<std::mutex> lock(update_mutex);u=update_state;}
+    cyui::beginCard("##updates","CyInsightOVR updates");cyui::badge("STABLE RELEASES ONLY",cyui::Tone::accent);
+    cyui::textDim("Installed: %s | %s",u["installed"].AsString().c_str(),u["variant"].AsString().c_str());
+    cyui::textFaint("github.com/MrMybal/CyInsights");bool automatic=u["automatic"].AsBool(true);
+    if(cyui::toggleSwitch("Check automatically once a day",&automatic))Action("update_auto");
+    ImGui::TextWrapped("%s",u["message"].AsString().empty()?"Preparing update settings...":u["message"].AsString().c_str());
+    if(!u["available"].AsString().empty())cyui::textDim("Available stable version: %s",u["available"].AsString().c_str());
+    auto phase=u["phase"].AsString();bool busy=u["busy"].AsBool();
+    if(busy){double total=u["total"].AsNumber();cyui::progressBar(total>0?float(u["downloaded"].AsNumber()/total):0,ImVec2(-1,0),phase=="downloading"?"Downloading APK":"Checking / verifying");if(cyui::button("Cancel"))Action("update_cancel");}
+    else if(phase=="ready"){if(cyui::primaryButton("Install update"))Action("update_install");}
+    else if(phase=="available"){if(cyui::primaryButton("Download update"))Action("update_download");}
+    else if(cyui::primaryButton("Check for updates"))Action("update_check");
+    if(!busy&&(phase=="available"||phase=="ready")){ImGui::SameLine();if(cyui::button("Check again"))Action("update_check");}
+    ImGui::TextWrapped("Only stable releases are offered. Alpha, beta and release candidates are ignored. The updater keeps your APK variant and verifies SHA-256, version and signing certificate. Android asks you to confirm installation; your settings and captures are preserved.");cyui::endCard();
+}
 void Draw() {
     ImGui::SetNextWindowPos(ImVec2(0,0));ImGui::SetNextWindowSize(ImVec2(float(width),float(height)));
     ImGui::Begin("CyInsightOVR",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoScrollbar|ImGuiWindowFlags_NoScrollWithMouse);
@@ -84,7 +102,7 @@ void Draw() {
     ImGui::SameLine();if(cyui::button("Export .cyovr"))Action("export");ImGui::SameLine();if(cyui::button("Quick access"))Action("quick_access");
     ImGui::SameLine();
     if(cyui::button("Stop HUD"))Action("overlay_stop");
-    const char* pages[]={"Overview","GPU heatmap","Display & HUD","Heatmap overlay","Connection"};if(cyui::segmented("##pages",pages,5,&page,-1))auto_open_capture=false;
+    const char* pages[]={"Overview","GPU heatmap","Display & HUD","Heatmap overlay","Connection","Updates"};if(cyui::segmented("##pages",pages,6,&page,-1))auto_open_capture=false;
     const float footer=ImGui::GetFrameHeightWithSpacing()+cyui::dp(6);
     ImGui::BeginChild("##page_content",ImVec2(0,std::max(cyui::dp(80),ImGui::GetContentRegionAvail().y-footer)),ImGuiChildFlags_None,ImGuiWindowFlags_AlwaysVerticalScrollbar);
     if(previous_page!=page){ImGui::SetScrollY(0);pending_scroll=0;previous_page=page;}
@@ -104,7 +122,7 @@ void Draw() {
     }else if(page==1) {
         if(!capture.id.empty())cyui::textDim("Snapshot %s | target %s",capture.id.c_str(),capture.package.c_str());
         cyovr::Heatmap(capture,surface,tile,stage);
-    }else if(page==2){DisplayControls();}else if(page==3){HeatmapControls();}else {
+    }else if(page==2){DisplayControls();}else if(page==3){HeatmapControls();}else if(page==5){UpdateControls();}else {
         cyui::beginCard("##panel_performance","Panel performance");
         const auto& performance=state["panel_performance"];
         if(performance["fps"].AsNumber()>0){cyui::textDim("%.1f fps / %.0f target | CPU draw %.2f ms | presentation wait %.2f ms",performance["fps"].AsNumber(),performance["target_fps"].AsNumber(),performance["draw_ms"].AsNumber(),performance["swap_wait_ms"].AsNumber());cyui::textDim("95th percentile frame interval: %.2f ms",performance["p95_frame_ms"].AsNumber());}
@@ -167,7 +185,8 @@ extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeSet
     if(settings["graphs"].IsArray()){hud_graphs.clear();for(const auto& id:settings["graphs"].Items())if(hud_graphs.size()<6)hud_graphs.insert(id.AsString());}
     if(settings["stats"].IsArray()){hud_stats.clear();for(const auto& id:settings["stats"].Items())if(hud_stats.size()<8)hud_stats.insert(id.AsString());}
 }
-extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeSelectPage(JNIEnv*,jclass,jint value){page=std::clamp(int(value),0,4);auto_open_capture=false;}
+extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeSelectPage(JNIEnv*,jclass,jint value){page=std::clamp(int(value),0,5);auto_open_capture=false;}
+extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeUpdateState(JNIEnv* env,jclass,jstring text){J incoming;if(J::Parse(Utf(env,text),incoming)&&incoming.IsObject()){std::lock_guard<std::mutex> lock(update_mutex);update_state=std::move(incoming);}}
 extern "C" JNIEXPORT jstring JNICALL Java_org_cyinsights_ovr_MainActivity_nativeUiReportForTest(JNIEnv* env,jclass){
     auto out=DisplaySettings();out["page"]=page;out["scroll"]=double(body_scroll);out["scroll_max"]=double(body_scroll_max);out["choice_x"]=double(choice_center.x);out["choice_y"]=double(choice_center.y);out["rendered_frames"]=rendered_frames;out["renderer_initialized"]=initialized;out["width"]=width;out["height"]=height;{std::lock_guard<std::mutex> lock(snapshot_mutex);out["snapshot_prepare_ms"]=snapshot_prepare_ms;}return env->NewStringUTF(out.Write().c_str());
 }

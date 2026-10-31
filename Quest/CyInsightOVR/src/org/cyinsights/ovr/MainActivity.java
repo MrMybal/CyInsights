@@ -34,6 +34,8 @@ public final class MainActivity extends Activity {
     private static native String nativeUiReportForTest();
     private static native void nativeSnapshot(String text);
     private static native String nativeCommand();
+    private static native void nativeUpdateState(String text);
+    private GithubUpdater updater;
     private PanelView view;private PanelInput input;private final Handler ui=new Handler(Looper.getMainLooper());
     private ScheduledFuture<?> pollTask;private int curveHz=10;
     private void schedulePoll(){if(pollTask!=null)pollTask.cancel(false);pollTask=worker.scheduleWithFixedDelay(this::poll,0,1000/curveHz,TimeUnit.MILLISECONDS);}
@@ -101,6 +103,7 @@ public final class MainActivity extends Activity {
     }
     private void action(String name) {
         android.util.Log.i("CyInsightOVR","UI action: "+name);
+        if(name.startsWith("update_")){if(updater!=null)updater.action(name);return;}
         if(name.startsWith("{")){
             try{JSONObject options=new JSONObject(name);
                 if("panel_settings".equals(options.optString("operation"))){
@@ -189,6 +192,7 @@ public final class MainActivity extends Activity {
         view.setFocusableInTouchMode(true);view.setFocusable(true);view.setOnTouchListener(input);view.setOnGenericMotionListener(input);view.setOnKeyListener(input);setContentView(view);view.requestFocus();
         String settings=getPreferences(0).getString("display_settings","{}");view.queueEvent(()->nativeSettings(settings));
         worker=Executors.newSingleThreadScheduledExecutor();
+        updater=new GithubUpdater(this,state->{nativeUpdateState(state.toString());view.requestRender();});
         worker.execute(()->{try{capture=CaptureStore.latest(this);if(capture!=null){lastCapture=capture.optString("capture_id");publish(new JSONObject().put("bridge",false).put("status","Opening saved GPU snapshot").put("capture",capture));}}catch(Exception e){android.util.Log.w("CyInsightOVR","Cannot reopen saved snapshot",e);}});
         try{curveHz=DrawCounterSample.frequency(new JSONObject(settings).optInt("curve_hz",10));}catch(Exception ignored){curveHz=10;}schedulePoll();
         worker.execute(()->{try{hudCatalog=request(new JSONObject().put("operation","hud_catalog"));poll();}catch(Exception ignored){}});
@@ -197,6 +201,6 @@ public final class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(active)requestedLaunchActions();maybeCheckPanel();}
     @Override public void onWindowFocusChanged(boolean focus){super.onWindowFocusChanged(focus);if(focus&&pinRequestPending){ui.removeCallbacks(pinRequest);ui.postDelayed(pinRequest,200);}}
     @Override protected void onPause(){active=false;input.cancel();ui.removeCallbacks(commands);view.onPause();super.onPause();}
-    @Override protected void onDestroy(){active=false;worker.shutdownNow();view.dispose();super.onDestroy();}
-    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(requestCode==40&&resultCode==RESULT_OK&&data!=null&&capture!=null){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){out.write(capture.toString().getBytes(StandardCharsets.UTF_8));}catch(Exception e){new AlertDialog.Builder(this).setMessage("Export failed: "+e.getMessage()).setPositiveButton("OK",null).show();}}}
+    @Override protected void onDestroy(){active=false;if(updater!=null)updater.close();worker.shutdownNow();view.dispose();super.onDestroy();}
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(requestCode==941&&updater!=null){updater.installationResult(resultCode);return;}if(requestCode==40&&resultCode==RESULT_OK&&data!=null&&capture!=null){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){out.write(capture.toString().getBytes(StandardCharsets.UTF_8));}catch(Exception e){new AlertDialog.Builder(this).setMessage("Export failed: "+e.getMessage()).setPositiveButton("OK",null).show();}}}
 }

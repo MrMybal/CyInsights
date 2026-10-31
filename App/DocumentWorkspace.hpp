@@ -10,6 +10,8 @@ public:
     void Open(const fs::path& path);
     void Draw();
     bool Busy() const;
+    bool CanUpdate() const;
+    std::vector<fs::path> OpenPaths() const;
     void Detach(size_t index);
     void Attach(size_t index);
     void Select(size_t index);

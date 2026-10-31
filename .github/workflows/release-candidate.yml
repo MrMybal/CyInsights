@@ -46,6 +46,7 @@ jobs:
           subject-path: |
             bin/Release/CyInsightsApp.exe
             bin/Release/CyCaptureTool.exe
+            bin/Release/CyInsightsUpdater.exe
             build/release-candidate/*.zip
       - uses: actions/upload-artifact@v4
         with:

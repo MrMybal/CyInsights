@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -65,6 +66,9 @@ def main():
     args = parser.parse_args()
     if not args.version or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-' for c in args.version):
         raise SystemExit('Invalid version label')
+    product_version=json.loads((ROOT/'VERSION.json').read_text(encoding='utf-8'))['version']
+    if re.fullmatch(r'v?\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?',args.version) and args.version.removeprefix('v') != product_version:
+        raise SystemExit('Release tag does not match VERSION.json; rebuild the matching version before packaging')
     binaries = args.binaries.resolve()
     output = args.output.resolve()
     if output != ROOT/'build' and ROOT/'build' not in output.parents:
@@ -73,15 +77,18 @@ def main():
     tracked = [p for p in git('ls-files', '-z').decode().split('\0') if p]
     app = {}
     signatures = windows_signatures(binaries, args.require_signed)
-    for name in ('CyInsightsApp.exe', 'CyCaptureTool.exe'):
+    for name in ('CyInsightsApp.exe', 'CyCaptureTool.exe', 'CyInsightsUpdater.exe'):
         data = (binaries/name).read_bytes()
         matching = [r for r in signatures['files'] if r['path'] == name]
         if len(matching) != 1 or hashlib.sha256(data).hexdigest() != matching[0]['sha256']:
             raise SystemExit('Executable changed after signature verification: '+name)
+        if name=='CyInsightsApp.exe' and matching[0].get('product_version')!=product_version:
+            raise SystemExit('Windows application version does not match VERSION.json; rebuild before packaging')
         if content_issues(name, data):
             raise SystemExit('Executable failed publication inspection: '+name)
         app[name] = data
     app['windows-signatures.json'] = json.dumps(signatures, indent=2).encode()
+    app['Docs/Updates.md'] = (ROOT/'Docs/Updates.md').read_bytes()
     for name in tracked:
         # Preserve licensed dependency notices and the offline AI installer;
         # do not copy an existing virtualenv or its machine-specific config.
@@ -92,6 +99,7 @@ def main():
     app['README.txt'] = (
         'CyInsights '+args.version+' / Windows x64\n'
         'Extract the complete archive and run CyInsightsApp.exe.\n'
+        'Keep CyInsightsUpdater.exe alongside the application. Help > Updates checks stable GitHub releases.\n'
         'Register your Unreal engine root folder in Session; no automatic installation scan is performed.\n'
         'On first launch, native readers are built automatically in the background, with\n'
         'progress, log and cancellation. No script needs to be run manually. Results are\n'
