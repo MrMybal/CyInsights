@@ -1,4 +1,4 @@
-# CyInsightOVR - Quest developer companion
+# CyInsightOVR - standalone Quest GPU tools
 
 Native Android arm64 application, C++ / Dear ImGui / CyUI. No Unreal installation,
 web runtime or game modification is needed to open this app. The first version is
@@ -15,38 +15,66 @@ needed. No Gradle/network download is used. This produces a development APK sign
 with a local development-only key in ignored `build/CyInsightOVR/`. Do not use that
 key for a public production release. Android debuggability is explicit.
 
-From the generated `bin/CyInsightOVR` folder:
+Install the standard or Vulkan APK, then open **CyInsightOVR** from the Quest
+library. The app starts its own foreground **GPU service**. **Connection** provides
+Start / Stop controls and its notification reopens configuration. Opening the app
+after a headset reboot starts the service again; no PC script, shell helper,
+wireless ADB pairing or other application is needed for runtime startup.
+
+The service executes the firmware's installed profiler as the APK UID. The
+ordinary GPU counters need no root or shell identity. Android's external-layer
+settings and Meta HUD controls use the app's one-time `WRITE_SECURE_SETTINGS`
+developer authorization. On a development installation, authorize once with the
+optional installer from the extracted Quest bundle:
 
 ```powershell
 .\Start-CyInsightOVR.ps1 -Device YOUR_ADB_SERIAL -Install -Launch
 ```
 
-The script installs **only** `org.cyinsights.ovr` and bootstraps an Android
-**shell-owned** collector through authorized ADB. The APK cannot grant itself
-these rights. Re-run the bootstrap after a headset reboot. Once started, the
-collector samples locally without an attached PC. It does not require root.
+This permission persists across headset reboots and same-signed updates. It must
+be granted again after uninstalling or revoking it. It controls system settings;
+our app uses it for its selected GPU layer and Meta HUD configuration. The APK
+cannot grant this development permission to itself. The installer performs
+installation/authorization only: it no longer creates a shell-owned service or
+copies a connection token. `-HudOnly -Launch` remains a compatible authorization
+shortcut. Add `-Variant vulkan` for the APK with the optional external layer.
 
-Android SELinux blocks unprivileged app-to-shell Unix streams on the tested
-Quest firmware. The bridge therefore binds **only 127.0.0.1** on an ephemeral
-port, authenticated by a fresh random 256-bit capability for each helper start.
-Authorized ADB copies this connection configuration into this app's private
-storage; the shell copy is mode 0600. The capability is never printed or put in
-command-line arguments. No LAN port is exposed. Use `-RestartBridge` after an
-update; this also rotates the capability.
+The GPU service's SDK endpoint binds only to **127.0.0.1**, on a fresh ephemeral
+port, and authenticates requests with a random 256-bit capability stored mode
+0600 in the APK's private files. Tokens never appear in command arguments or logs.
+The supported operations remain an allowlist; arbitrary commands, paths and URLs
+are rejected. The PC uses authorized ADB to call the installed APK's client under
+its UID. It consumes the same on-device service and does not start a helper.
 
-Operations are an allowlist: snapshot, status, bounded capture, explicit
-enable-detailed for a validated package, Meta HUD on/off, and the explicit
-heatmap development-layer prepare/start/update/stop/remove lifecycle. There is no
-arbitrary executable, file-read, URL or target-restart API. The public development
-APK uses Android `run-as` for pairing; it is not a production signing setup.
+The Vulkan layer opens a private, bounded socket pair through an Android
+ContentProvider URI granted only to the selected Development target. Android
+Binder supplies the caller's real UID/PID; the host verifies both before accepting
+counter data. The client releases an unstable provider reference after receiving
+the descriptor, so closing/updating the profiling app does not terminate the
+game. JNI attaches only a background worker to the target's existing JVM;
+render callbacks perform no IPC, file I/O or waits. The grant also makes the layer
+package visible on Android 11+, without changing the game's manifest or sharing
+app files. A lightweight permission check restores this scoped grant if Android
+revokes it when the game is force-stopped. Android loads the layer from
+CyInsightOVR's own APK; no private target-library copy is required. Preparing a
+target still requires reopening it once to create its GPU context with the
+selected layers. Unsupported native/Java runtime access remains unavailable,
+never a fabricated tile feed.
 
 ## Use
+
+**Connection** shows the on-device GPU service separately from Meta HUD
+settings authorization. Open the app after boot; if you explicitly stopped the
+service, press **Start GPU service**. Start heatmap/capture actions also ensure
+the app service is running. No reinstall or PC bootstrap is part of this flow.
+Older development builds used a shell helper. Retire that legacy helper once
+before testing the new runtime; rebooting the headset also removes it.
 
 Open **Updates** to check GitHub for newer stable builds of the installed APK
 variant. Alpha and other prereleases are ignored. The app verifies the download
 and signing certificate before requesting Android installation confirmation.
 See [updates and publishing requirements](../../Docs/Updates.md). The versioned
-bootstrap also accepts `-Variant vulkan -Install` for the experimental APK.
+installer also accepts `-Variant vulkan -Install` for the experimental APK.
 
 1. Open CyInsightOVR from the headset's app library / Unknown Sources.
 2. Set the exact game package. Selecting CyInsightOVR itself for a background
@@ -69,12 +97,16 @@ bootstrap also accepts `-Variant vulkan -Install` for the experimental APK.
    is native and shared with the desktop reader. The initial surface is the largest
    recorded surface, without inferring an eye or Unreal frame. Reopen CyInsightOVR
    to inspect the latest saved capture; USB and a separate capture program are not
-   needed while the developer collector is already running.
+   needed while CyInsightOVR's GPU service is running.
 
-The collector continues when the panel is closed. Capturing while the full panel
+The app-owned GPU service continues when the panel is closed. Capturing while the full panel
 has focus can suspend the immersive target, which is why recording now starts
 after the panel closes. `Tools/OvrBridge.py` remains an optional developer client;
-it is not needed for the normal in-app recording workflow.
+it is not needed for the normal in-app recording workflow. Desktop tile export
+is served by the APK itself through the authenticated service, streamed in
+`CYCAP001` format, and checked by CyInsights before extraction. An export worker
+keeps normal SDK/UI requests responsive; no shell access to scoped storage is
+required.
 
 ### VR HUD and configuration panel
 
@@ -92,6 +124,11 @@ and **Bottom center**, in addition to the corners and side centers:
   saved automatically and restored when the panel is reopened. Selections outside
   our documented list remain untouched in Meta; enabling values may also show
   those existing statistics.
+- Meta can list a hardware metric while refusing to enable it at the moment.
+  Start applies the usable selections and shows an explicit warning for each
+  missing graph/value. Saved choices are kept and retried on the next Start;
+  unavailable counters are never displayed as measured zero. A selection with
+  no usable metrics fails and restores the prior HUD configuration.
 - The metric list has Frame & GPU, CPU, Memory and Device filters. Its managed
   catalog includes all 25 numerical metrics initially enabled on the tested Quest,
   so those pre-existing selections can be disabled while applying the user's choices.
@@ -104,18 +141,27 @@ and **Bottom center**, in addition to the corners and side centers:
 - With no numerical values selected, the tall stats table is hidden **after** placing/enabling the overlay,
   because enabling the overlay may reapply saved display settings.
 - Original table visibility, placement, graph visibility and managed metric
-  selections are saved before changes, and restored by **Stop HUD**. The original
-  state is stored mode 0600 in the shell bootstrap area and survives a helper
-  restart. A failed activation attempts rollback and keeps diagnostics explicit.
+  selections are saved before changes, and restored by **Stop HUD**. The Meta HUD keeps this snapshot in private app storage and it survives the app process restarting. A failed activation attempts rollback and keeps diagnostics explicit.
 - Change options in the still-open panel, or reopen CyInsightOVR later. The notification also has
   Stop. The CLI can use `Tools/OvrBridge.py ... overlay_meta_off`.
 
-The bridge reads Meta's documented LOG_STATE output, including chunked JSON,
-and verifies the applied settings. Accepted requests/settings are separate from
+Standalone mode reads the installed Meta settings provider directly as the APK
+and verifies applied settings without a shell process or collector connection.
+The legacy diagnostic backend reads Meta's LOG_STATE output, including chunked
+JSON. Accepted requests/settings are separate from
 physical headset visibility. The user confirmed the Meta FPS graph was visible and then confirmed the final
 HUD-only size was suitable after the configuration panel/table were removed.
 FPS and GPU graph enablement is verified from the service configuration;
 immersive-game appearance and data still need a dedicated check.
+
+On 2026-11-02, real Quest 3 checks ran under the APK UID with the developer
+collector stopped: 30 HUD metrics were recognized, Start HUD applied and verified
+the basic graphs/placement and the saved user selection, and Stop HUD restored
+the original settings. Two saved hardware graph selections were refused by Meta
+and reported explicitly; they no longer prevented the usable HUD from starting.
+This validates direct HUD control, not autonomous detailed tile collection or
+physical visibility. The persistent authorization was granted; a complete
+headset-reboot check remains outstanding. See `VALIDATION.md`.
 
 ### Development Vulkan heatmap overlay
 
@@ -138,7 +184,7 @@ Choose the exact Development Vulkan package, prepare its layer, then completely
 close and reopen the target yourself. Starting the heatmap never launches or
 restarts a game and keeps the configuration panel open. Return to the game through
 the Quest menu. Apply switches modes and positions without restarting the target.
-Stop releases the live collector and waits for its worker to finish, retaining
+Stop releases the live sampler and waits for its worker to finish, retaining
 the prepared target so Start can resume without a game restart. Repeated Start
 on the same active target applies settings. Start/Apply use the prepared heatmap
 target even if the saved snapshot target differs.
@@ -146,15 +192,15 @@ target even if the saved snapshot target differs.
 The Advanced setup action **Uninstall target integration** confirms removal and
 restores the previous four Android GPU layer settings if another tool has not changed them. Existing unknown layers are
 never overwritten. Original settings and owned-library SHA-256 are journaled in
-private shell storage; failed rollback retains recovery metadata.
+private app storage; failed rollback retains recovery metadata.
 
 Preparation also requests detailed profiling and retains the installed, enabled
 Meta/Adreno profiler in the explicit Vulkan layer chain. Selecting only our layer
 can suppress Meta profiling; accepted setup remains separate from measured output.
 
-The shell collector owns one continuous profiler process, accepts complete target
+The app service owns one continuous profiler process, accepts complete target
 sections through a bounded latest-only handoff, and publishes only fresh measured
-Render costs with tile geometry to the target's private storage. Parsing and file polling run off
+Render costs with tile geometry to the selected target over its authenticated local socket. Parsing and file polling run off
 the render thread. It does not replay a saved capture as live data and does not
 save every live update to disk. Missing measurements produce an explicit diagnostic.
 A loaded layer or accepted start request alone does not prove a visible overlay.
@@ -211,7 +257,7 @@ selects the sampled system curves shown in Overview.
 
 The APK has an Android MAIN/LAUNCHER entry named **CyInsightOVR**. As a sideloaded
 development app it is opened through **Library > Unknown Sources**, not the Store
-library. The bootstrap's `-Launch` option opens the same configuration Activity.
+library. The installer's `-Launch` option opens the same configuration Activity.
 Installing this APK does not publish it to Meta or change the Quest library policy.
 
 **Quick access** in the header requests an icon through Android's public launcher
@@ -276,16 +322,16 @@ In **Display & HUD**, **Curve updates** selects **1, 5, 10 or 20 Hz** (10 Hz by
 default). Enable the known submitted draws, input triangles and indirect-command
 curves there. The measured source cadence is displayed separately. Meta's system
 counters retain their own cadence, normally around 1 Hz. Ordinary panel polling
-stays at 1 Hz while draw collection is stopped. Slow shell checks are cached;
-high-rate collection uses one persistent target-UID reader rather than repeated
-shell/cat launches. Closing its input pipe ends it; its native export lease also
-expires after two seconds. Source samples are not interpolated or duplicated.
+stays at 1 Hz while draw collection is stopped. Slow readiness checks are cached;
+high-rate collection uses the persistent peer-authenticated layer socket instead
+of target-UID readers or shell/cat launches. Stopping the service or counter
+request releases the native export lease. Source samples are not interpolated or duplicated.
 
 Draws are counted when tracked command buffers are successfully submitted,
 including reused command buffers, repeated secondary executions and instances.
 The layer's own heatmap draws are excluded. The native recorder keeps lightweight
-command metadata while the optional layer is loaded. Its file export runs only
-while the explicit reader's lease is active, on a worker, at the selected rate.
+command metadata while the optional layer is loaded. Its IPC export runs only
+while the app requests counters, on a worker, at the selected rate.
 No GPU query, buffer readback, texture capture or pipeline wait is added for counts.
 Actual game overhead has not yet been benchmarked.
 
@@ -328,7 +374,7 @@ not a live image-aligned or universal custom VR overlay. See `VALIDATION.md`.
 Sources: [Meta profiler](https://developers.meta.com/vr/documentation/native/android/ts-ovrgpuprofiler/),
 [tile stages](https://developers.meta.com/vr/documentation/unreal/ts-renderdoc-renderstage/).
 For repeatable checks, run `ParserTests` through the packaged Java bridge. The
-own-app `SmokeTest` instrumentation checks the real app's access to the collector
+own-app `SmokeTest` instrumentation checks the real app's access to the app-owned GPU service
 and copies its Android window. `-e capture_flow true` additionally presses the
 native recording button and opens only `org.cyinsights.gputest`, our dedicated
 test project, to verify measured capture, persistence and native heatmap loading.

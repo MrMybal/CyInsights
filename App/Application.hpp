@@ -18,6 +18,12 @@
 #include "OvrCapture.hpp"
 #include "QuestTileReplay.hpp"
 #include <imgui.h>
+#include <cyui/modules/Plots.h>
+#include <cyui/modules/Timeline.h>
+#include <cyui/modules/Nodes.h>
+#include <cyui/modules/Diagnostics.h>
+#include "OvrHeatmapView.hpp"
+#include "UiPlotData.hpp"
 #include <map>
 #include <memory>
 #include <set>
@@ -94,6 +100,7 @@ class Application {
     std::shared_ptr<cyovr::Capture> ovr_capture_;
     bool show_ovr_=false;
     int ovr_surface_=0,ovr_tile_=-1,ovr_stage_=0;
+    cyovr::HeatmapState ovr_heatmap_state_;
     void RequestOpen(const fs::path& file);
     void ChooseAndOpenCaptures();
     bool BeginView(const char* name,bool* open=nullptr,ImGuiWindowFlags flags=0);
@@ -259,7 +266,10 @@ class Application {
     double counter_stats_start_ = -1, counter_stats_end_ = -1;
     std::vector<CounterStats> counter_stats_;
     uint64_t counter_stats_version_=0,counter_catalog_revision_=0;std::string counter_filter_key_,counter_order_key_;std::vector<size_t> counter_visible_;
-    struct CounterPlotCache {double a=-1,b=-1;int width=0;std::vector<CounterBucket> buckets;};
+    struct CounterPlotCache {
+        double a=-1,b=-1;int width=0;
+        CounterPlotData prepared;
+    };
     std::vector<CounterPlotCache> counter_plots_;
     struct TimingAnalysis {
         std::vector<TimingEvent> events;
@@ -330,7 +340,13 @@ class Application {
     bool show_details_ = false, show_metrics_ = false;
     int track_filter_ = 0;
     bool show_tick_guides_ = true, hide_inactive_tracks_ = false;
-    std::vector<std::string> messages_;
+    cyui::LogBuffer messages_;
+    cyui::LogState messages_view_;
+    cyui::TimelineState task_timeline_;
+    uint64_t task_timeline_id_=UINT64_MAX;
+    uint64_t task_timeline_model_=UINT64_MAX;
+    cyui::InspectorState task_properties_;
+    std::map<uint32_t,std::vector<cyui::Point>> activity_plot_points_;
     std::string previous_message_;
     std::string timing_search_query_;
     std::string timing_exact_name_,timing_scope_context_,timing_filter_key_;
@@ -361,6 +377,12 @@ class Application {
     cygi::CaptureInfo gpu_info_;
     cygi::FrameGraph graph_;
     cygi::FrameTimeline gpu_timeline_;
+    cyui::TimelineState gpu_pass_view_;
+    std::vector<cyui::TimelineClip> gpu_pass_clips_;
+    cyui::NodeState gpu_graph_view_;
+    std::vector<cyui::Node> gpu_graph_nodes_;
+    std::vector<cyui::NodeLink> gpu_graph_links_;
+    std::unordered_map<cyui::ItemId,size_t> gpu_pass_indices_;
     std::vector<fs::path> gpu_frames_;
     size_t selected_frame_ = 0;
     std::vector<std::pair<double, double>> cpu_frames_;

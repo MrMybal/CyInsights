@@ -21,7 +21,7 @@ void Application::StartActivities(){
 }
 void Application::ActivityTick(){
  if(activity_reader_.Poll(activity_store_,activity_message_)&&activity_store_){
-  activity_result_={};activity_ready_.clear();activity_request_.clear();activity_details_ready_.clear();activity_details_observed_.clear();activity_pending_=false;activity_pinned_.assign(activity_store_->lanes.size(),0);++activity_revision_;
+  activity_result_={};activity_plot_points_.clear();activity_ready_.clear();activity_request_.clear();activity_details_ready_.clear();activity_details_observed_.clear();activity_pending_=false;activity_pinned_.assign(activity_store_->lanes.size(),0);++activity_revision_;
   for(size_t i=0;i<activity_pinned_.size();++i){auto& lane=activity_store_->lanes[i];activity_pinned_[i]=lane.kind!="memory"||lane.label=="Memory / total allocated max";}
   if(!activity_store_->lanes.empty()){activity_lane_=0;
    if(!native_.store&&native_.events.empty()){timing_model_.start=activity_store_->start;timing_model_.end=std::max(activity_store_->end,activity_store_->start+.000001);FitCapture();}
@@ -40,7 +40,9 @@ void Application::ActivityTick(){
  // Finish a bounded read instead of cancelling on every pointer movement.
  // Plot and detail keys are independent: paging/search never rereads the plot.
  if(activity_query_.valid()&&activity_query_.wait_for(std::chrono::seconds(0))==std::future_status::ready){
-  try{auto result=activity_query_.get();if(result.has_visible){activity_result_.visible=std::move(result.visible);activity_ready_=activity_request_;}if(result.has_details&&currentDetails==activity_details_request_){activity_result_.details=std::move(result.details);activity_details_ready_=currentDetails;}}
+  try{auto result=activity_query_.get();if(result.has_visible){activity_result_.visible=std::move(result.visible);activity_ready_=activity_request_;
+    activity_plot_points_.clear();for(const auto& lane:activity_result_.visible.lanes)
+     activity_plot_points_[lane.lane]=PrepareActivityPlot(lane,activity_result_.visible,activity_store_->lanes[lane.lane].kind=="memory");}if(result.has_details&&currentDetails==activity_details_request_){activity_result_.details=std::move(result.details);activity_details_ready_=currentDetails;}}
   catch(const std::exception& e){if(!activity_cancel_.load()){activity_message_=e.what();activity_ready_=current;activity_details_ready_=currentDetails;}}
  }
  bool needVisible=activity_ready_!=current,needDetails=show_activities_&&activity_details_ready_!=currentDetails;
@@ -116,31 +118,33 @@ void Application::ActivitiesView(){
 }
 void Application::ActivityTracks(float width){
  activity_width_=width;if(!activity_store_)return;auto scale=UiScale();const float header=18*scale,height=76*scale;auto* draw=ImGui::GetWindowDrawList();auto clip=ImGui::GetCurrentWindow()->ClipRect;
- for(size_t lane=0;lane<activity_pinned_.size();++lane){if(!activity_pinned_[lane])continue;auto pos=ImGui::GetCursorScreenPos();ImGui::PushID(static_cast<int>(lane));ImGui::InvisibleButton("activity_lane",ImVec2(width,height));bool hover=ImGui::IsItemHovered();
-  if(hover&&ImGui::IsMouseClicked(0)&&ImGui::GetIO().MousePos.y>=pos.y+header)BeginTimingDrag(DragSurface::Tracks,0,width,false);
+ for(size_t lane=0;lane<activity_pinned_.size();++lane){if(!activity_pinned_[lane])continue;auto pos=ImGui::GetCursorScreenPos();ImGui::PushID(static_cast<int>(lane));ImGui::InvisibleButton("activity_lane",ImVec2(width,header));bool hover=ImGui::IsItemHovered();
   if(hover&&ImGui::IsMouseClicked(0)&&ImGui::GetIO().MousePos.y<pos.y+header){activity_lane_=static_cast<int>(lane);activity_page_=0;FocusActivities();}
-  ImGui::PopID();if(pos.y+height<clip.Min.y||pos.y>clip.Max.y)continue;
+  if(pos.y+height<clip.Min.y||pos.y>clip.Max.y){ImGui::SetCursorScreenPos(ImVec2(pos.x,pos.y+header));ImGui::Dummy(ImVec2(width,height-header));ImGui::PopID();continue;}
   auto& meta=activity_store_->lanes[lane];auto colour=meta.kind=="network"?cyui::palette().info:meta.kind=="memory"?cyui::categorical(3):cyui::categorical(2);
-  draw->AddRectFilled(pos,ImVec2(pos.x+width,pos.y+height),cyui::palette().bg0);draw->AddRectFilled(pos,ImVec2(pos.x+width,pos.y+header),cyui::palette().bg2);
+  draw->AddRectFilled(pos,ImVec2(pos.x+width,pos.y+header),cyui::palette().bg2);
   draw->PushClipRect(pos,ImVec2(pos.x+width,pos.y+height),true);draw->AddText(ImVec2(pos.x+4*scale,pos.y+2*scale),colour,meta.label.c_str());
   auto& window=activity_result_.visible;auto found=std::find_if(window.lanes.begin(),window.lanes.end(),[&](auto& l){return l.lane==lane;});
   if(window.end>window.start&&window.start<view_end_&&window.end>view_start_&&found!=window.lanes.end()&&!found->bins.empty()){
-   double peak=1,low=0;for(auto& bin:found->bins){peak=std::max(peak,meta.kind=="memory"?bin.maximum:double(bin.count));if(meta.kind=="memory")low=std::min(low,bin.minimum);}
    double span=std::max(.000001,view_end_-view_start_),column=(window.end-window.start)/found->bins.size();
-   float base=pos.y+height-4*scale;for(size_t x=0;x<found->bins.size();++x){auto& bin=found->bins[x];if(!bin.count)continue;
-    double t=window.start+column*x;if(t+column<=view_start_||t>=view_end_)continue;
-    float px=pos.x+width*float((t-view_start_)/span),right=pos.x+width*float((t+column-view_start_)/span),y=base-float((meta.kind=="memory"?(bin.maximum-low)/(peak-low):double(bin.count)/peak))*(height-header-12*scale);
-    draw->AddRectFilled(ImVec2(px,y),ImVec2(std::max(px+1,right),base),colour);
-   }
+   cyui::PlotState plot;plot.x.range={view_start_,view_end_};plot.y.range={0,1.08};
+   auto prepared=activity_plot_points_.find(uint32_t(lane));
+   cyui::PlotSeries series;series.id=lane+1;series.style=cyui::PlotStyle::bars;series.colorIndex=meta.kind=="network"?0:meta.kind=="memory"?3:2;
+   if(prepared!=activity_plot_points_.end())series.points=prepared->second;
+   cyui::PlotOptions options;options.navigation=options.legend=options.axes=options.crosshair=false;
+   ImGui::SetCursorScreenPos(ImVec2(pos.x,pos.y+header));
+   const auto chart=cyui::plot("##activity_density",plot,{&series,1},ImVec2(width,height-header),options);
+   hover=hover||chart.hovered;
+   if(chart.hovered&&ImGui::IsMouseClicked(0))BeginTimingDrag(DragSurface::Tracks,0,width,false);
    if(window.start!=view_start_||window.end!=view_end_)draw->AddText(ImVec2(pos.x+5*scale,pos.y+header+2*scale),cyui::palette().text,"Updating... last completed density reprojected");
    double hoveredTime=view_start_+(ImGui::GetIO().MousePos.x-pos.x)/width*span;
    if(hover&&hoveredTime>=window.start&&hoveredTime<window.end){auto x=static_cast<size_t>(std::clamp((hoveredTime-window.start)/column,0.,double(found->bins.size()-1)));auto& bin=found->bins[x];
     if(meta.kind=="memory")ImGui::SetTooltip("%s\n%llu native samples in column\nMin / max: %.0f / %.0f %s\nSample intervals are not execution durations.",meta.label.c_str(),bin.count,bin.minimum,bin.maximum,meta.unit.c_str());
     else ImGui::SetTooltip("%s\n%llu observations intersect this time column\nDerived density display of measured events; open Activities for exact observations.",meta.label.c_str(),bin.count);
    }
-  }else draw->AddText(ImVec2(pos.x+5*scale,pos.y+header+6*scale),cyui::palette().textDim,"Updating activity interval...");
+  }else {ImGui::SetCursorScreenPos(ImVec2(pos.x,pos.y+header));ImGui::Dummy(ImVec2(width,height-header));draw->AddText(ImVec2(pos.x+5*scale,pos.y+header+6*scale),cyui::palette().textDim,"Updating activity interval...");}
   if(range_start_!=range_end_){double span=std::max(.000001,view_end_-view_start_);float a=pos.x+width*float((std::min(range_start_,range_end_)-view_start_)/span),b=pos.x+width*float((std::max(range_start_,range_end_)-view_start_)/span);draw->AddRectFilled(ImVec2(a,pos.y+header),ImVec2(b,pos.y+height),cyui::palette().selection);}
-  draw->PopClipRect();
+  draw->PopClipRect();ImGui::PopID();
  }
 }
 }

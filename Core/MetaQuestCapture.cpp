@@ -24,15 +24,17 @@ fs::path MetaQuestCapture::FindAdb(const fs::path& explicit_path){
     for(const wchar_t* env:{L"ANDROID_SDK_ROOT",L"ANDROID_HOME",L"LOCALAPPDATA"}){auto n=GetEnvironmentVariableW(env,path,32768);if(!n||n>=32768)continue;auto root=fs::path(path);if(std::wstring(env)==L"LOCALAPPDATA")root/=L"Android/Sdk";auto adb=root/L"platform-tools/adb.exe";if(fs::is_regular_file(adb))return adb;}
     if(SearchPathW(nullptr,L"adb.exe",nullptr,32768,path,nullptr)&&fs::is_regular_file(path))return path;return {};
 }
-std::string MetaQuestCapture::Call(const std::vector<std::wstring>& args,unsigned timeout,bool cleanup){
+std::string MetaQuestCapture::Call(const std::vector<std::wstring>& args,unsigned timeout,bool cleanup,const fs::path& binary_output){
     Check(!adb_.empty(),"ADB unavailable: select adb.exe or install Android SDK platform-tools");
     const auto dir=staging_.empty()?fs::temp_directory_path():staging_;fs::create_directories(dir);
     const auto outPath=dir/("meta-adb-"+std::to_string(GetCurrentProcessId())+"-"+std::to_string(GetCurrentThreadId())+".log");
     SECURITY_ATTRIBUTES sa{sizeof(sa),nullptr,TRUE};Handle log;log.h=CreateFileW(outPath.c_str(),GENERIC_WRITE,FILE_SHARE_READ,&sa,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);Check(log.h!=INVALID_HANDLE_VALUE,"Cannot create Meta capture command log");
+    Handle binary;if(!binary_output.empty()){binary.h=CreateFileW(binary_output.c_str(),GENERIC_WRITE,FILE_SHARE_READ,&sa,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);Check(binary.h!=INVALID_HANDLE_VALUE,"Cannot create fresh Quest tile export");}
     Handle input;input.h=CreateFileW(L"NUL",GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE,&sa,OPEN_EXISTING,0,nullptr);
     STARTUPINFOEXW startup{};startup.StartupInfo.cb=sizeof(startup);startup.StartupInfo.dwFlags=STARTF_USESTDHANDLES|STARTF_USESHOWWINDOW;startup.StartupInfo.wShowWindow=SW_HIDE;startup.StartupInfo.hStdOutput=startup.StartupInfo.hStdError=log.h;startup.StartupInfo.hStdInput=input.h;
+    if(binary.h)startup.StartupInfo.hStdOutput=binary.h;
     SIZE_T bytes=0;InitializeProcThreadAttributeList(nullptr,1,0,&bytes);std::vector<unsigned char> attributes(bytes);startup.lpAttributeList=reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(attributes.data());Check(InitializeProcThreadAttributeList(startup.lpAttributeList,1,0,&bytes)!=0,"Cannot initialize ADB process attributes");
-    HANDLE inherited[]={log.h,input.h};if(!UpdateProcThreadAttribute(startup.lpAttributeList,0,PROC_THREAD_ATTRIBUTE_HANDLE_LIST,inherited,sizeof(inherited),nullptr,nullptr)){DeleteProcThreadAttributeList(startup.lpAttributeList);throw std::runtime_error("Cannot restrict ADB inherited handles");}
+    std::vector<HANDLE> inherited={log.h,input.h};if(binary.h)inherited.push_back(binary.h);if(!UpdateProcThreadAttribute(startup.lpAttributeList,0,PROC_THREAD_ATTRIBUTE_HANDLE_LIST,inherited.data(),inherited.size()*sizeof(HANDLE),nullptr,nullptr)){DeleteProcThreadAttributeList(startup.lpAttributeList);throw std::runtime_error("Cannot restrict ADB inherited handles");}
     std::wstring command=Quote(adb_.wstring());for(const auto& arg:args)command+=L" "+Quote(arg);
     PROCESS_INFORMATION process{};const bool launched=CreateProcessW(adb_.c_str(),command.data(),nullptr,nullptr,TRUE,CREATE_NO_WINDOW|EXTENDED_STARTUPINFO_PRESENT,nullptr,nullptr,&startup.StartupInfo,&process)!=0;DeleteProcThreadAttributeList(startup.lpAttributeList);Check(launched,"Cannot launch ADB");Handle ph,th;ph.h=process.hProcess;th.h=process.hThread;
     auto begin=std::chrono::steady_clock::now();bool aborted=false;
@@ -45,7 +47,7 @@ std::string MetaQuestCapture::Call(const std::vector<std::wstring>& args,unsigne
 std::string MetaQuestCapture::Shell(const std::vector<std::wstring>& args,unsigned timeout,bool cleanup){std::vector<std::wstring> all={L"-s",Wide(device_),L"shell"};all.insert(all.end(),args.begin(),args.end());return Call(all,timeout,cleanup);}
 bool MetaQuestCapture::SelectDevice(const MetaQuestOptions& options,const std::string& ipv4,const cygi::Json& metadata){try{
         adb_=FindAdb(options.adb);Check(!adb_.empty(),"Meta GPU: adb.exe missing; select it in capture options");
-        device_=options.device;
+        device_=options.device;companion_apk_.clear();
         if(device_.empty()){
             auto devices=Call({L"devices"});std::istringstream lines(devices);std::string line;std::vector<std::string> matches;
             while(std::getline(lines,line)){std::istringstream row(line);std::string serial,status;row>>serial>>status;if(status!="device"||!Token(serial,"[A-Za-z0-9_.:-]+"))continue;
@@ -64,13 +66,26 @@ namespace {
 std::string Base64(const std::string& input){static const char abc[]="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";std::string out;uint32_t buffer=0;int bits=-6;for(unsigned char c:input){buffer=(buffer<<8)|c;bits+=8;while(bits>=0){out+=abc[(buffer>>bits)&63];bits-=6;}}if(bits>-6)out+=abc[((buffer<<8)>>(bits+8))&63];while(out.size()%4)out+='=';return out;}
 }
 cygi::Json MetaQuestCapture::Companion(const cygi::Json& request,bool cleanup){
-    const auto encoded=Base64(request.Write());auto text=Shell({L"CLASSPATH=/data/local/tmp/cyinsightovr-bridge.jar",L"app_process",L"/system/bin",L"org.cyinsights.ovr.ShellClient",L"--request",Wide(encoded)},30000,cleanup);cygi::Json result;std::string error;Check(cygi::Json::Parse(text,result,&error)&&result.IsObject(),"Invalid CyInsightOVR bridge response");
+    if(companion_apk_.empty()){
+        const auto paths=Shell({L"pm",L"path",L"org.cyinsights.ovr"},10000,cleanup);std::istringstream lines(paths);std::string line;
+        while(std::getline(lines,line)){if(!line.empty()&&line.back()=='\r')line.pop_back();if(Token(line,"package:/data/app/[A-Za-z0-9_./+=~-]+/base\\.apk"))companion_apk_=line.substr(8);}
+        Check(!companion_apk_.empty(),"Install CyInsightOVR and open it on the Quest to start its GPU service");
+    }
+    const auto encoded=Base64(request.Write());auto text=Shell({L"run-as",L"org.cyinsights.ovr",L"/system/bin/env",L"CLASSPATH="+Wide(companion_apk_),L"app_process",L"/system/bin",L"org.cyinsights.ovr.ShellClient",L"--app-request",Wide(encoded)},30000,cleanup);cygi::Json result;std::string error;Check(cygi::Json::Parse(text,result,&error)&&result.IsObject(),"Invalid CyInsightOVR response; update/open CyInsightOVR on the headset");
     // Dispatch failures have a single error field. Recording status also has an
     // error field (normally empty) alongside its identity and completion state.
     if(result.Has("error")&&result.Members().size()==1)throw std::runtime_error(result["error"].AsString().empty()?"CyInsightOVR returned an unspecified error":result["error"].AsString());return result;
 }
 void MetaQuestCapture::PullTiles(const std::string& id,const fs::path& destination){
-    Check(Token(id,"[0-9a-f-]{36}"),"Invalid companion recording identity");Call({L"-s",Wide(device_),L"pull",Wide("/data/local/tmp/cyinsightovr-recordings/"+id),destination.wstring()},120000,true);
+    Check(Token(id,"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"),"Invalid Quest recording identity");
+    Check(!fs::exists(destination),"Quest tile destination must be fresh");
+    if(companion_apk_.empty()){auto request=cygi::Json::Object();request["operation"]="companion_capabilities";Companion(request,true);}
+    auto exported=destination;exported+=L".cycapture";Check(!fs::exists(exported),"Quest tile export already exists");
+    try{
+        Call({L"-s",Wide(device_),L"exec-out",L"run-as",L"org.cyinsights.ovr",L"/system/bin/env",L"CLASSPATH="+Wide(companion_apk_),L"app_process",L"/system/bin",L"org.cyinsights.ovr.ShellClient",L"--export-recording",Wide(id)},120000,true,exported);
+        Capture archive;std::string error;if(!Inspect(exported,archive,error))throw std::runtime_error(error);Check(archive.manifest["session_id"].AsString()==id,"Quest tile export identity mismatch");if(!Extract(archive,destination,error))throw std::runtime_error(error);
+        fs::remove(exported);
+    }catch(...){std::error_code ignored;fs::remove(exported,ignored);throw;}
 }
 std::string MetaQuestCapture::DescribeStartup(const std::string& activities,const std::string& power){
     if(power.find("mWakefulness=Asleep")!=std::string::npos||power.find("mWakefulness=Dozing")!=std::string::npos)

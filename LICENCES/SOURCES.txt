@@ -7,8 +7,13 @@ Source, pinned file hashes and full MIT grant: ThirdParty/ImGuiOpenGL/.
 The APK retains these notices in assets/LICENCES. The installed device profiler
 is invoked through an explicit authorized developer bootstrap; no Meta binary
 or Unreal component is included in the APK.
-CyUI 1.0.0: owned semantic Dear ImGui UI library, source snapshot 2026-10-17.
-Source: ThirdParty/CyUI; full MIT grant: CyUI-MIT.txt.
+CyUI 1.2.0: modular Dear ImGui UI library, pinned source revision
+ff023e646c6a3038b3dfbfd53f6d2b4a2f5955e3 (2026-11-02).
+Upstream: https://github.com/MrMybal/CyUI (currently private).
+Upstream MIT license: https://github.com/MrMybal/CyUI/blob/ff023e646c6a3038b3dfbfd53f6d2b4a2f5955e3/LICENSE
+Source: ThirdParty/CyUI; full MIT grant included locally: CyUI-MIT.txt.
+The upstream link requires repository access while CyUI is private. The included
+license and source snapshot do not require access to that repository.
 Uses the application's existing ImGui target; no second ImGui or system fonts bundled.
 See ../THIRD-PARTY-CyGPUInspector.md and ../Docs/Licensing.md for actual scope.
 Application/analysis: AGPL; owned Unreal integrations/Core/collector: MIT.

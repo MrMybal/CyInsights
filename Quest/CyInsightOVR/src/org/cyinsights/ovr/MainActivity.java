@@ -40,9 +40,10 @@ public final class MainActivity extends Activity {
     private ScheduledFuture<?> pollTask;private int curveHz=10;
     private void schedulePoll(){if(pollTask!=null)pollTask.cancel(false);pollTask=worker.scheduleWithFixedDelay(this::poll,0,1000/curveHz,TimeUnit.MILLISECONDS);}
     private ScheduledExecutorService worker;private volatile boolean active=false;
-    private volatile String target="",preparedHeatmapTarget="",lastCapture="",lastActionError="";private String after="0",afterSequence="0",historySession="";private long lastPollNs=0;private boolean highRateCounters=false;private volatile JSONObject capture;
+    private volatile String target="",preparedHeatmapTarget="",lastCapture="",lastActionError="",lastActionWarning="";private String after="0",afterSequence="0",historySession="";private long lastPollNs=0;private boolean highRateCounters=false;private volatile JSONObject capture;
     private JSONObject xrCapabilities;private volatile JSONObject hudCatalog;
     private boolean panelCheckStarted=false;
+    private boolean refreshHudCatalog=true;private long lastCatalogAttemptNs=0;
     private boolean pinRequestPending=false;
     private final Runnable pinRequest=new Runnable(){public void run(){if(pinRequestPending&&active&&!isFinishing()){pinRequestPending=false;QuickAccess.pin(MainActivity.this);}}};
     void reloadDisplaySettingsForTest(){String saved=getPreferences(0).getString("display_settings","{}");view.queueEvent(()->nativeSettings(saved));}
@@ -63,7 +64,7 @@ public final class MainActivity extends Activity {
     JSONObject uiReportForTest()throws Exception{
         CountDownLatch done=new CountDownLatch(1);final String[] report={null};
         view.queueEvent(()->{report[0]=nativeUiReportForTest();done.countDown();});
-        if(!done.await(2,TimeUnit.SECONDS))throw new IOException("Panel GL thread unavailable");return new JSONObject(report[0]).put("last_action_error",lastActionError).put("activity_active",active).put("view",view.diagnostics()).put("panel_performance",view.performance());
+        if(!done.await(2,TimeUnit.SECONDS))throw new IOException("Panel GL thread unavailable");return new JSONObject(report[0]).put("last_action_error",lastActionError).put("last_action_warning",lastActionWarning).put("activity_active",active).put("view",view.diagnostics()).put("panel_performance",view.performance());
     }
     float[] hudButtonForTest()throws Exception{
         CountDownLatch done=new CountDownLatch(1);final float[][] point={null};
@@ -85,7 +86,7 @@ public final class MainActivity extends Activity {
     }
     private void publish(JSONObject state) {
         JSONObject live=state.optJSONObject("live_tiles");preparedHeatmapTarget=live!=null&&live.optBoolean("prepared")?live.optString("target"):"";
-        try{state.put("target_package",target);state.put("android_overlay_attached",OverlayService.windowAttached);state.put("panel_performance",view.performance());if(xrCapabilities!=null)state.put("openxr_capabilities",xrCapabilities);if(hudCatalog!=null)state.put("hud_catalog",hudCatalog);}catch(JSONException ignored){}
+        try{state.put("target_package",target);state.put("action_warning",lastActionWarning);state.put("android_overlay_attached",OverlayService.windowAttached);state.put("panel_performance",view.performance());if(xrCapabilities!=null)state.put("openxr_capabilities",xrCapabilities);if(hudCatalog!=null)state.put("hud_catalog",hudCatalog);}catch(JSONException ignored){}
         // Called from the worker: JSON parsing and capture preparation stay off GL.
         nativeSnapshot(state.toString());view.requestRender();
     }
@@ -93,17 +94,27 @@ public final class MainActivity extends Activity {
         if(!active)return;long now=System.nanoTime();if(!highRateCounters&&now-lastPollNs<900000000L)return;lastPollNs=now;
         try {
             JSONObject r=request(new JSONObject().put("operation","snapshot").put("after",after).put("after_sequence",afterSequence).put("history_session",historySession).put("after_capture",lastCapture).put("include_history",true));
+            if(!r.optBoolean("bridge")&&!r.optBoolean("standalone_hud")&&!r.optBoolean("gpu_service_stopped"))throw new IOException("The on-device GPU service did not confirm its connection");
             historySession=r.optString("history_session",historySession);JSONObject counterState=r.optJSONObject("draw_counters");highRateCounters=counterState!=null&&counterState.optBoolean("active");
             JSONArray history=r.optJSONArray("history");if(history!=null&&history.length()>0){JSONObject last=history.getJSONObject(history.length()-1);after=last.getString("observed_mono_ns");afterSequence=last.optString("history_sequence",afterSequence);}
             JSONObject c=r.optJSONObject("capture");if(c!=null){capture=c;String id=c.optString("capture_id");if(!id.equals(lastCapture)){CaptureStore.save(this,c);lastCapture=id;}}
             publish(r);
+            if(refreshHudCatalog&&(lastCatalogAttemptNs==0||now-lastCatalogAttemptNs>30000000000L)){
+                lastCatalogAttemptNs=now;
+                worker.execute(()->{try{JSONObject catalog=request(new JSONObject().put("operation","hud_catalog"));if(!catalog.has("error")){hudCatalog=catalog;refreshHudCatalog=false;}poll();}catch(Exception unavailable){android.util.Log.w("CyInsightOVR","HUD metric catalog temporarily unavailable");}});
+            }
         }catch(Exception e) {
-            try{JSONObject offline=new JSONObject().put("bridge",false).put("status","Developer bridge unavailable. Run Start-CyInsightOVR.ps1 once after each headset reboot; then the collector runs on the headset without the PC.").put("metrics",new JSONArray());publish(offline);}catch(JSONException ignored){}
+            refreshHudCatalog=true;
+            try{JSONObject offline=new JSONObject().put("bridge",false).put("status",BridgeClient.failureMessage(e)).put("metrics",new JSONArray());publish(offline);}catch(JSONException ignored){}
         }
     }
     private void action(String name) {
         android.util.Log.i("CyInsightOVR","UI action: "+name);
         if(name.startsWith("update_")){if(updater!=null)updater.action(name);return;}
+        if(name.equals("connection_help")){view.queueEvent(()->nativeSelectPage(4));return;}
+        if(name.equals("gpu_service_start")){GpuDataService.start(this);lastPollNs=0;worker.execute(this::poll);return;}
+        if(name.equals("gpu_service_stop")){GpuDataService.stop(this);lastPollNs=0;worker.execute(this::poll);return;}
+        if(name.equals("collector_retry")){lastPollNs=0;lastCatalogAttemptNs=0;refreshHudCatalog=true;worker.execute(this::poll);return;}
         if(name.startsWith("{")){
             try{JSONObject options=new JSONObject(name);
                 if("panel_settings".equals(options.optString("operation"))){
@@ -164,6 +175,7 @@ public final class MainActivity extends Activity {
             try {
                 JSONObject result=request(options);
                 if(result.has("error")){lastActionError=result.optString("error");android.util.Log.w("CyInsightOVR","HUD request "+options.optString("operation")+" for "+options.optString("package")+": "+lastActionError);}else lastActionError="";
+                if("overlay_meta_on".equals(options.optString("operation"))||"overlay_meta_off".equals(options.optString("operation")))lastActionWarning=result.optString("warning");
                 if(result.has("error"))ui.post(()->{if(!isFinishing())new AlertDialog.Builder(this).setMessage(result.optString("error")).setPositiveButton("OK",null).show();});
                 else if("hud_catalog".equals(options.optString("operation")))hudCatalog=result;
                 else if(("heatmap_start".equals(options.optString("operation"))||"heatmap_update".equals(options.optString("operation")))&&result.optBoolean("active"))ui.post(()->startForegroundService(new Intent(this,LiveHeatmapService.class)));
@@ -176,12 +188,18 @@ public final class MainActivity extends Activity {
                     });
                 }else if("overlay_meta_off".equals(options.optString("operation")))ui.post(()->stopService(new Intent(this,VrHudService.class)));
                 poll();
-            }catch(Exception e){ui.post(()->{if(!isFinishing())new AlertDialog.Builder(this).setMessage("Collector request failed: "+e.getMessage()).setPositiveButton("OK",null).show();});poll();}
+            }catch(Exception e){lastActionError=BridgeClient.failureMessage(e);ui.post(()->{
+                if(isFinishing())return;
+                boolean connectionError=e instanceof BridgeClient.Unavailable||e instanceof DirectMetaHud.SetupRequired;
+                AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle(e instanceof DirectMetaHud.SetupRequired?"One-time HUD authorization":connectionError?"On-device GPU service unavailable":"Quest request failed").setMessage(BridgeClient.failureMessage(e));
+                if(connectionError)dialog.setPositiveButton("Connection help",(d,w)->action("connection_help")).setNegativeButton("Close",null);
+                else dialog.setPositiveButton("OK",null);dialog.show();
+            });poll();}
         });
     }
     private final Runnable commands=new Runnable(){public void run(){if(!active)return;String name=nativeCommand();if(!name.isEmpty())action(name);ui.postDelayed(this,16);}};
     @Override public void onCreate(Bundle b) {
-        super.onCreate(b);target=getPreferences(0).getString("target","");getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        super.onCreate(b);if(GpuDataService.enabled(this))GpuDataService.start(this);target=getPreferences(0).getString("target","");getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         view=new PanelView(this,new PanelView.Renderer(){public void create(){nativeInit();}public void resize(int w,int h){nativeResize(w,h);}public void draw(){nativeDraw();}public void destroy(){nativeShutdown();}});
         input=new PanelInput(view,new PanelInput.Sink(){
             public void pointer(float x,float y,boolean down){view.queueEvent(()->nativeTouch(x,y,down));}
@@ -195,7 +213,6 @@ public final class MainActivity extends Activity {
         updater=new GithubUpdater(this,state->{nativeUpdateState(state.toString());view.requestRender();});
         worker.execute(()->{try{capture=CaptureStore.latest(this);if(capture!=null){lastCapture=capture.optString("capture_id");publish(new JSONObject().put("bridge",false).put("status","Opening saved GPU snapshot").put("capture",capture));}}catch(Exception e){android.util.Log.w("CyInsightOVR","Cannot reopen saved snapshot",e);}});
         try{curveHz=DrawCounterSample.frequency(new JSONObject(settings).optInt("curve_hz",10));}catch(Exception ignored){curveHz=10;}schedulePoll();
-        worker.execute(()->{try{hudCatalog=request(new JSONObject().put("operation","hud_catalog"));poll();}catch(Exception ignored){}});
     }
     @Override protected void onResume(){super.onResume();lastPollNs=0;active=true;view.onResume();ui.removeCallbacks(commands);ui.post(commands);requestedLaunchActions();if(worker!=null)worker.execute(this::poll);maybeCheckPanel();}
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(active)requestedLaunchActions();maybeCheckPanel();}

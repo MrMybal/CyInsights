@@ -6,6 +6,8 @@ import java.nio.charset.StandardCharsets;
 import org.json.*;
 public final class ShellClient {
     public static void main(String[] args) throws Exception {
+        if(args.length==2&&args[0].equals("--export-recording")){try{BridgeClient.exportRecording(new File("files/developer-bridge.json"),args[1],System.out);}catch(Exception error){System.err.println("Quest recording export failed: "+error.getMessage());System.exit(1);}return;}
+        if(args.length==2&&args[0].equals("--app-request")){if(args[1].length()>12000)throw new IllegalArgumentException("Request too large");JSONObject request=new JSONObject(new String(android.util.Base64.decode(args[1],android.util.Base64.DEFAULT),StandardCharsets.UTF_8));System.out.println(BridgeClient.request(new File("files/developer-bridge.json"),request));return;}
         if(args.length==2&&args[0].equals("--request")){if(args[1].length()>12000)throw new IllegalArgumentException("Request too large");JSONObject request=new JSONObject(new String(android.util.Base64.decode(args[1],android.util.Base64.DEFAULT),StandardCharsets.UTF_8));System.out.println(BridgeClient.request(new File("/data/local/tmp/cyinsightovr-connection.json"),request));return;}
         if(args.length<1||args.length>7)throw new IllegalArgumentException("operation [package] [seconds] [mode] [position] [ceiling_us] [opacity]");
         JSONObject request=new JSONObject();request.put("operation",args[0]);request.put("package",args.length>1?args[1]:"org.cyinsights.ovr");request.put("seconds",args.length>2?Double.parseDouble(args[2]):.3);

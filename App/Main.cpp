@@ -221,6 +221,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
         int count = 0;
         auto args = CommandLineToArgvW(GetCommandLineW(), &count);
         std::filesystem::path snapshot;
+        float forced_ui_dpi=0;
         std::filesystem::path loading_snapshot;
         std::filesystem::path ui_profile;std::vector<double> draw_profile,drag_profile,command_profile;
         bool vulkan_details_view=false,vulkan_details_focused=false;int vulkan_details_settle=0;
@@ -246,6 +247,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             else if(argument==L"--no-update-check")cyinsights::SuppressAutomaticUpdateCheck();
             else if(argument==L"--ui-theme"&&i+1<count){auto theme=std::filesystem::path(args[++i]).u8string();if(!cyui::setTheme(theme.c_str()))return 23;}
             else if(argument==L"--ui-comfortable")cyui::setDensity(cyui::Density::comfortable);
+            else if(argument==L"--palette-editor-view")cyinsights::ShowPaletteEditor();
+            else if(argument==L"--ui-locale"&&i+1<count){auto locale=std::filesystem::path(args[++i]).u8string();if(!cyui::setLocale(locale.c_str()))return 23;}
+            else if(argument==L"--ui-dpi"&&i+1<count){wchar_t* end=nullptr;forced_ui_dpi=wcstof(args[++i],&end);if(!end||*end||!std::isfinite(forced_ui_dpi)||forced_ui_dpi<.5f||forced_ui_dpi>4)return 23;}
             else if(argument==L"--ui-size"&&i+1<count){
                 unsigned client_width=0,client_height=0;
                 if(swscanf_s(args[++i],L"%ux%u",&client_width,&client_height)!=2||client_width<800||client_height<600||client_width>7680||client_height>4320)return 23;
@@ -290,6 +294,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
         }
         if (args)
             LocalFree(args);
+        if(forced_ui_dpi>0){io.ConfigDpiScaleFonts=false;io.ConfigDpiScaleViewports=false;}
         if(ai_control_all)for(size_t i=0;i<workspace.Count();++i)workspace.At(i).EnableAi(true);
         int frames = 0;
         auto begin = std::chrono::steady_clock::now();
@@ -314,7 +319,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
                 width = height = 0;
                 Target();
             }
-            const float dpi=ImGui_ImplWin32_GetDpiScaleForHwnd(window);
+            const float dpi=forced_ui_dpi>0?forced_ui_dpi:ImGui_ImplWin32_GetDpiScaleForHwnd(window);
             if(std::abs(cyui::dpi()-dpi)>.01f)cyui::applyDpi(dpi);
             ImGui_ImplDX11_NewFrame();
             ImGui_ImplWin32_NewFrame();

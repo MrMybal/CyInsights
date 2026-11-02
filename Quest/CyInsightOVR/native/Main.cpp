@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
 #include "../../../App/OvrHeatmapView.hpp"
 #include <imgui_impl_opengl3.h>
+#include <cyui/modules/Plots.h>
 #include <GLES3/gl3.h>
 #include <jni.h>
 #include <android/log.h>
@@ -14,9 +15,10 @@
 namespace {
 using J=cygi::Json;
 struct Point {double time,value;};
-struct Metric {double time=0,value=NAN;std::deque<Point> history;};
+struct Metric {double time=0,value=NAN,prepared_at=-1,maximum=1;std::deque<Point> history;std::vector<cyui::Point> plot;};
 std::map<std::string,Metric> metrics;
 std::string draw_counter_session;
+cyovr::HeatmapState heatmap_state;
 J state;cyovr::Capture capture;std::string capture_id,error,command;
 std::mutex command_mutex;
 std::mutex snapshot_mutex;
@@ -56,19 +58,24 @@ void Curve(const char* name,const char* title,double multiplier,const char* unit
     auto f=metrics.find(name);double time=Now();const bool fresh=f!=metrics.end()&&time-f->second.time<3;
     if(fresh&&std::isfinite(f->second.value)) {char text[120];std::snprintf(text,sizeof(text),"%.1f %s",f->second.value*multiplier,unit);cyui::heading(text,2);}
     else cyui::textDim("Unavailable / stale");
-    const auto& p=cyui::palette();auto a=ImGui::GetCursorScreenPos();ImVec2 size(ImGui::GetContentRegionAvail().x,cyui::dp(68));auto* draw=ImGui::GetWindowDrawList();
-    draw->AddRectFilled(a,ImVec2(a.x+size.x,a.y+size.y),p.bg0);ImGui::Dummy(size);
-    if(f!=metrics.end()) {
-        const auto& points=f->second.history;double max=ceiling;for(const auto& v:points)if(v.time>=time-120&&std::isfinite(v.value))max=std::max(max,v.value*multiplier);
-        ImVec2 last;bool have=false;double last_time=0;
-        for(const auto& v:points) {
-            if(v.time<time-120)continue;
-            if(!std::isfinite(v.value)){have=false;continue;}
-            ImVec2 point(a.x+float((v.time-(time-120))/120)*size.x,a.y+size.y-float(v.value*multiplier/std::max(1.,max))*size.y);
-            if(have&&v.time-last_time<3)draw->AddLine(last,point,p.accent,cyui::dp(1.5f));
-            last=point;last_time=v.time;have=true;
-        }
+    cyui::PlotState plot;plot.x.range={time-120,time};double maximum=ceiling;
+    cyui::ArrayView<cyui::Point> points;
+    if(f!=metrics.end()){
+        auto& metric=f->second;
+        if(metric.prepared_at!=metric.time){
+            metric.plot.clear();metric.plot.reserve(metric.history.size()*2);metric.maximum=ceiling;double before=0;
+            for(const auto& value:metric.history){
+                if(value.time<time-120)continue;
+                if(before&&value.time-before>=3)metric.plot.push_back({value.time,NAN});
+                metric.plot.push_back({value.time,value.value*multiplier});before=value.time;
+                if(std::isfinite(value.value))metric.maximum=std::max(metric.maximum,value.value*multiplier);
+            }metric.prepared_at=metric.time;
+        }points=metric.plot;maximum=metric.maximum;
     }
+    plot.y.range={0,std::max(1.,maximum)};
+    cyui::PlotSeries series{1,title,points,cyui::PlotStyle::line,0};
+    cyui::PlotOptions options;options.navigation=options.legend=options.axes=options.crosshair=false;
+    cyui::plot("##metric_curve",plot,{&series,1},cyui::dp(0,68),options);
     if(std::string(name).find("Vulkan ")==0)cyui::textFaint("Selected process | submitted input geometry | 120 s history");else cyui::textFaint("System scope | 120 s history | source updates ~1 Hz");cyui::endCard();
 }
 #include "DisplaySettings.hpp"
@@ -92,9 +99,10 @@ void Draw() {
     ImGui::SetNextWindowPos(ImVec2(0,0));ImGui::SetNextWindowSize(ImVec2(float(width),float(height)));
     ImGui::Begin("CyInsightOVR",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoScrollbar|ImGuiWindowFlags_NoScrollWithMouse);
     cyui::heading("CyInsightOVR",1);ImGui::SameLine();cyui::badge("QUEST GPU DIAGNOSTICS",cyui::Tone::accent);
-    cyui::textDim("Native companion for CyInsights | %s",state["target_package"].AsString().c_str());
+    cyui::textDim("Standalone Quest GPU tools | %s",state["target_package"].AsString().c_str());
     const bool connected=state["bridge"].AsBool();
-    cyui::badge(connected?"Developer collector connected":"Collector unavailable",connected?cyui::Tone::success:cyui::Tone::warning);
+    const bool standalone=state["standalone_hud"].AsBool();
+    cyui::badge(connected?"On-device GPU service running":standalone?"Meta HUD ready | GPU service stopped":"GPU service starting / unavailable",connected?cyui::Tone::success:cyui::Tone::warning);
     ImGui::SameLine();if(cyui::button("Target package"))Action("target");
     ImGui::SameLine();if(cyui::primaryButton("Capture GPU tiles in 5 s"))Action("capture");
     const auto capture_a=ImGui::GetItemRectMin(),capture_b=ImGui::GetItemRectMax();
@@ -109,9 +117,14 @@ void Draw() {
     if(pending_scroll!=0){ImGui::SetScrollY(std::clamp(ImGui::GetScrollY()+pending_scroll,0.f,ImGui::GetScrollMaxY()));pending_scroll=0;}
     if(state["capturing"].AsBool())cyui::progressBar(-1,ImVec2(-1,cyui::dp(18)),"Capturing measured GPU stages...");
     if(!error.empty())cyui::callout(cyui::Tone::error,error.c_str());
+    if(!state["action_warning"].AsString().empty())cyui::callout(cyui::Tone::warning,state["action_warning"].AsString().c_str());
+    if(!connected&&!standalone&&!state["status"].AsString().empty()){
+        cyui::callout(cyui::Tone::warning,state["status"].AsString().c_str());
+        if(page!=4&&cyui::button("Connection help"))page=4;
+    }
     if(page==0) {
+        if(!connected){cyui::callout(cyui::Tone::info,"Start the GPU service on this Quest to receive curves and tile data.");if(cyui::primaryButton("Start GPU service"))Action("gpu_service_start");}
         DrawCounterControls();
-        if(!connected)cyui::callout(cyui::Tone::warning,state["status"].AsString().c_str());
         if(chart_mask==0){cyui::emptyState("No panel graphs selected","Choose your curves in Display & HUD.");if(cyui::button("Choose graphs"))page=2;}
         if(chart_mask&&ImGui::BeginTable("##graphs",ImGui::GetContentRegionAvail().x>cyui::dp(680)?2:1,ImGuiTableFlags_SizingStretchSame)) {
             for(unsigned i=0;i<std::size(charts);++i)if(chart_mask&(1u<<i)){const auto& c=charts[i];ImGui::TableNextColumn();Curve(c.name,c.title,c.multiplier,c.unit,c.ceiling);}
@@ -121,14 +134,25 @@ void Draw() {
         cyui::callout(cyui::Tone::info,"Meta counters describe the GPU system. Vulkan counters describe the selected process submissions. Missing data is not zero; per-frame values need a measured presentation boundary.");
     }else if(page==1) {
         if(!capture.id.empty())cyui::textDim("Snapshot %s | target %s",capture.id.c_str(),capture.package.c_str());
-        cyovr::Heatmap(capture,surface,tile,stage);
+        cyovr::Heatmap(capture,surface,tile,stage,heatmap_state);
     }else if(page==2){DisplayControls();}else if(page==3){HeatmapControls();}else if(page==5){UpdateControls();}else {
+        cyui::beginCard("##gpu_service","On-device GPU service");
+        cyui::badge(connected?"RUNNING IN CYINSIGHTOVR":"STOPPED / STARTING",connected?cyui::Tone::success:cyui::Tone::warning);
+        ImGui::TextWrapped("CyInsightOVR starts its own GPU service when you open the app. It keeps running when configuration is closed. Open the app again after a headset reboot; no PC script or separate application is needed. CyInsights can use the same service for recording.");
+        if(cyui::primaryButton("Start GPU service"))Action("gpu_service_start");ImGui::SameLine();if(cyui::button("Stop GPU service"))Action("gpu_service_stop");
+        if(cyui::button("Refresh status"))Action("collector_retry");cyui::endCard();
+        cyui::beginCard("##collector_connection","Standalone HUD");
+        cyui::textDim("%s",standalone?"Authorized on this headset":"One-time authorization required");
+        ImGui::TextWrapped("The VR HUD can start and stop directly from this app, directly on the Quest. Its developer authorization is granted once at installation and survives headset reboots.");
+        cyui::textMono("Start-CyInsightOVR.ps1 -HudOnly -Launch");
+        ImGui::TextWrapped("Run this once from the complete Quest bundle using authorized ADB. It grants this app control of Meta's HUD settings; it authorizes the app's own controls. Reinstalling or resetting app permissions can require authorization again.");
+        if(cyui::button("Check connection again"))Action("collector_retry");cyui::endCard();
         cyui::beginCard("##panel_performance","Panel performance");
         const auto& performance=state["panel_performance"];
         if(performance["fps"].AsNumber()>0){cyui::textDim("%.1f fps / %.0f target | CPU draw %.2f ms | presentation wait %.2f ms",performance["fps"].AsNumber(),performance["target_fps"].AsNumber(),performance["draw_ms"].AsNumber(),performance["swap_wait_ms"].AsNumber());cyui::textDim("95th percentile frame interval: %.2f ms",performance["p95_frame_ms"].AsNumber());}
         else cyui::textDim("Waiting for panel frame measurements");cyui::endCard();
         cyui::beginCard("##access","Developer collection");
-        ImGui::TextWrapped("Run the bundled Start-CyInsightOVR.ps1 through authorized ADB once after each headset reboot. The shell-owned collector then runs locally; USB and the PC are not needed to keep collecting. This APK does not grant itself shell access.");
+        ImGui::TextWrapped("GPU stages, sampled tile costs and submitted draw counters are collected by CyInsightOVR's own Android service. Prepare the selected Development Vulkan target in Heatmap overlay before using its external layer.");
         ImGui::TextWrapped("Detailed GPU tracing needs profiling enabled before the target creates its rendering context. Enabling it never restarts a game automatically.");
         if(cyui::button("Enable detailed profiling for selected target"))Action("enable_details");
         if(cyui::button("Test Android HUD (not validated in VR)"))Action("overlay_android");
@@ -179,6 +203,7 @@ extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeWhe
 extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeScroll(JNIEnv*,jclass,jfloat pixels){if(std::isfinite(pixels))pending_scroll+=std::clamp(float(pixels),-2000.f,2000.f);}
 extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeSettings(JNIEnv* env,jclass,jstring text){
     J settings;if(!J::Parse(Utf(env,text),settings))return;
+    if(initialized){const auto& theme=settings["ui_theme"].AsString();const auto& locale=settings["ui_locale"].AsString();cyui::setTheme(theme.empty()?"navy":theme.c_str());cyui::setDensity(settings["ui_density"].AsString()=="compact"?cyui::Density::compact:cyui::Density::comfortable);cyui::setLocale(locale.empty()?"en":locale.c_str());}
     chart_mask=settings["chart_mask"].AsUInt32(15|(3u<<6))&((1u<<std::size(charts))-1);curve_hz=int(settings["curve_hz"].AsNumber(10));if(curve_hz!=1&&curve_hz!=5&&curve_hz!=10&&curve_hz!=20)curve_hz=10;hud_size=int(std::clamp(settings["hud_size"].AsNumber(),0.,1.));hud_corner=int(std::clamp(settings["hud_corner"].AsNumber(),0.,8.));
     heatmap_mode=int(std::clamp(settings["heatmap_mode"].AsNumber(),0.,1.));heatmap_position=int(std::clamp(settings["heatmap_position"].AsNumber(8),0.,8.));
     heatmap_ceiling=float(std::clamp(settings["heatmap_ceiling_us"].AsNumber(500),10.,5000.));heatmap_hud_opacity=float(std::clamp(settings["heatmap_hud_opacity"].AsNumber(.25),.05,1.));heatmap_full_opacity=float(std::clamp(settings["heatmap_full_opacity"].AsNumber(.2),.05,1.));
@@ -197,7 +222,7 @@ extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeDra
 extern "C" JNIEXPORT jstring JNICALL Java_org_cyinsights_ovr_MainActivity_nativeCommand(JNIEnv* env,jclass){std::lock_guard<std::mutex> lock(command_mutex);auto text=command;command.clear();return env->NewStringUTF(text.c_str());}
 extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeSnapshot(JNIEnv* env,jclass,jstring text) {
     const double start=Now();J incoming;
-    if(!J::Parse(Utf(env,text),incoming)){std::lock_guard<std::mutex> lock(snapshot_mutex);pending_capture_error="Invalid collector JSON";return;}
+    if(!J::Parse(Utf(env,text),incoming)){std::lock_guard<std::mutex> lock(snapshot_mutex);pending_capture_error="Invalid GPU service response";return;}
     std::unique_ptr<cyovr::Capture> prepared;std::string failure;
     if(incoming["capture"].IsObject())try{prepared=std::make_unique<cyovr::Capture>(cyovr::ParseCapture(incoming["capture"]));}catch(const std::exception& e){failure=e.what();}
     // Large source JSON is destroyed on this worker, never on the render thread.

@@ -2,20 +2,21 @@
 
 ## Download the current alpha
 
-**[CyInsights 0.2.2 Alpha 2 - all downloads](https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.2)**
+**[CyInsights 0.2.2 Alpha 3 - all downloads](https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.3)**
 
-- **[Quest APK - Vulkan heatmap and draw counters (experimental)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.2/CyInsights-v0.2.2-alpha.2-Quest-Vulkan-arm64.apk)**
-- [Quest APK - standard](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.2/CyInsights-v0.2.2-alpha.2-Quest-Standard-arm64.apk)
-- [Quest complete bundle - APKs, ADB bootstrap and guide](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.2/CyInsights-v0.2.2-alpha.2-Quest-arm64.zip)
-- [Windows desktop application](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.2/CyInsights-v0.2.2-alpha.2-Windows-x64.zip)
-- [Unreal plugin sources](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.2/CyInsights-v0.2.2-alpha.2-Unreal-Plugins-Source.zip)
-- [Standalone MCP / AI SDK](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.2/CyInsights-v0.2.2-alpha.2-AI-SDK.zip)
+- **[Quest APK - Vulkan heatmap and draw counters (experimental)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.3/CyInsights-v0.2.2-alpha.3-Quest-Vulkan-arm64.apk)**
+- [Quest APK - standard](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.3/CyInsights-v0.2.2-alpha.3-Quest-Standard-arm64.apk)
+- [Quest complete bundle - APKs, optional developer authorization and guide](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.3/CyInsights-v0.2.2-alpha.3-Quest-arm64.zip)
+- [Windows desktop application](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.3/CyInsights-v0.2.2-alpha.3-Windows-x64.zip)
+- [Unreal plugin sources](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.3/CyInsights-v0.2.2-alpha.3-Unreal-Plugins-Source.zip)
+- [Standalone MCP / AI SDK](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.3/CyInsights-v0.2.2-alpha.3-AI-SDK.zip)
 
 This build remains an **alpha prerelease**. GitHub's **Latest** shortcut can open
 an older non-prerelease; use the current-alpha link above for these APKs.
-Install one Quest APK variant. The advanced collector needs an authorized ADB
-bootstrap after each headset reboot, then runs without a connected PC. The
-complete Quest bundle includes that bootstrap and its instructions.
+Install one Quest APK variant. CyInsightOVR starts its own GPU service when
+opened, including after headset reboot. Meta HUD and Vulkan-layer configuration
+require a one-time developer authorization; the complete Quest bundle includes
+the optional installer and its instructions.
 
 Native interface navigation, query preparation and performance measurements are documented in [InterfacePerformance](Docs/InterfacePerformance.md).
 The native [CyUI interface](Docs/Interface.md) provides five themes, compact or
@@ -72,7 +73,17 @@ For GitHub release packages and local native-reader installation, see
 
 Requirements: Windows x64, Visual Studio 2022 C++ desktop workload with CMake/Ninja,
 and Python 3. Sources required by the build are versioned in this repository.
-No separate CyGPUInspector checkout is needed. From the repository root:
+No separate CyGPUInspector checkout is needed.
+
+[CyUI](https://github.com/MrMybal/CyUI) 1.2.0 is pinned and vendored under the
+[MIT license](LICENCES/CyUI-MIT.txt). Its currently private upstream
+[license link](https://github.com/MrMybal/CyUI/blob/ff023e646c6a3038b3dfbfd53f6d2b4a2f5955e3/LICENSE)
+requires repository access; the full license is included here and in release packages. The desktop selects Core, Canvas, Plots,
+Timeline, Nodes, Inspector, Images and Diagnostics; Quest selects a smaller
+subset. Audio, Gallery, browser and code-editor dependencies are excluded.
+See [the modular integration and validation notes](Docs/CyUIMigration.md).
+
+From the repository root:
 
 ```powershell
 python Tools/prepare_dependencies.py

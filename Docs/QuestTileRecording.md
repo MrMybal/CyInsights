@@ -95,8 +95,18 @@ undo an accepted recording: use `capture_stop` explicitly.
 `Tools/OvrBridge.py` also exposes `companion_capabilities`, `share_view_request`,
 `tiles_record_start --package ... --hz 1 --images`, `tiles_record_status` and
 `tiles_record_stop --recording-id UUID`. Stop requires the caller's recording ID.
-The shell bridge adds its private local capability internally; clients do not
-receive or supply it. The helper binds only to loopback on the headset.
+`export_recording --recording-id UUID --output recording.cycapture` exports an
+already stopped recording; `tiles_record_stop` also accepts
+`--export-recording recording.cycapture` to stop and export in one command.
+CyInsightOVR owns the GPU service and starts it from the APK. The desktop client
+invokes the installed APK under its own UID through authorized ADB; it adds the
+private local capability internally, without exposing it in arguments or logs.
+The service binds only to loopback on the headset. Recordings are stored in the
+app's external `files/Recordings/<UUID>` directory. Android scoped storage can
+reject a shell-UID pull of those files. CyInsightOVR therefore streams an
+authenticated native `.cycapture` export from its own service; the desktop
+verifies entry names, SHA-256 checksums and recording identity before extraction.
+No shell helper or bootstrap JAR is required.
 
 ## Validation status, 2026-10-29
 

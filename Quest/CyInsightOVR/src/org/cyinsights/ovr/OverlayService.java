@@ -29,7 +29,7 @@ public final class OverlayService extends Service {
         try{wm.addView(hud,params);windowAttached=true;}catch(RuntimeException e){stopSelf();return;}
         worker=Executors.newSingleThreadScheduledExecutor();worker.scheduleWithFixedDelay(()->{
             try{JSONObject value=BridgeClient.request(this,new JSONObject().put("operation","snapshot"));ui.post(()->{if(hud!=null)hud.update(value);});}
-            catch(Exception e){ui.post(()->{if(hud!=null){hud.status="Collector unavailable";hud.invalidate();}});}
+            catch(Exception e){ui.post(()->{if(hud!=null){hud.status="GPU service unavailable";hud.invalidate();}});}
         },0,1000,TimeUnit.MILLISECONDS);
     }
     @Override public int onStartCommand(Intent i,int flags,int id){if(i!=null&&"stop".equals(i.getAction()))stopSelf();return START_NOT_STICKY;}

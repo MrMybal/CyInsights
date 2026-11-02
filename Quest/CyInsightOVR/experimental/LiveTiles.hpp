@@ -1,5 +1,5 @@
 // Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
-// Development-layer input. Private target storage only; no network endpoint.
+// Development-layer input through authenticated local IPC; legacy private-file fallback.
 #pragma once
 #include <array>
 #include <atomic>
@@ -17,6 +17,8 @@
 #include <vector>
 #include <time.h>
 #include <unistd.h>
+#include <sstream>
+#include "LocalLayerLink.hpp"
 namespace cytiles {
 inline uint64_t Now(){timespec t{};clock_gettime(CLOCK_MONOTONIC,&t);return uint64_t(t.tv_sec)*1000000000ull+t.tv_nsec;}
 struct Tile {float x,y,width,height,cost;};
@@ -31,7 +33,10 @@ class Reader {
     static bool Read(std::istream& f,void* value,size_t size){return bool(f.read(static_cast<char*>(value),size));}
     void Poll(const std::string& path){
         while(!stopping){
-            std::ifstream f(path,std::ios::binary);uint32_t magic=0,version=0,count=0;auto s=std::make_shared<Sample>();
+            auto bytes=cylink::Host().Tiles();std::string text(bytes.begin(),bytes.end());std::istringstream local(text,std::ios::binary);std::ifstream legacy;
+            if(cylink::Host().Connected()&&bytes.empty()){std::lock_guard<std::mutex> guard(mutex);current.reset();}
+            if(!cylink::Host().Connected())legacy.open(path,std::ios::binary);std::istream& f=cylink::Host().Connected()?static_cast<std::istream&>(local):static_cast<std::istream&>(legacy);
+            uint32_t magic=0,version=0,count=0;auto s=std::make_shared<Sample>();
             bool valid=Read(f,&magic,4)&&magic==0x43595431&&Read(f,&version,4)&&version==1&&Read(f,&s->width,4)&&Read(f,&s->height,4)&&Read(f,&count,4)&&Read(f,&s->position,4)&&Read(f,&s->ceiling,4)&&Read(f,&s->opacity,4)&&Read(f,&s->stamp,8);
             uint64_t now=Now();valid=valid&&s->width>0&&s->width<=16384&&s->height>0&&s->height<=16384&&count>0&&count<=1024&&(s->position&~256u)<9&&std::isfinite(s->ceiling)&&s->ceiling>0&&std::isfinite(s->opacity)&&s->opacity>0&&s->opacity<=1&&s->stamp<=now&&now-s->stamp<3000000000ull;
             if(valid){s->tiles.resize(count);valid=Read(f,s->tiles.data(),count*sizeof(Tile));}

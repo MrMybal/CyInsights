@@ -102,6 +102,15 @@ def main():
         if (Path(lock['source']) / name).as_posix() not in tracked:
             errors.append('dependency source omitted: ' + name)
     ai_lock = json.loads((ROOT / 'AI/dependency-lock.json').read_text(encoding='utf-8'))
+    cyui_root = ROOT / 'ThirdParty/CyUI'
+    cyui_lock = json.loads((cyui_root / 'source-sha256.json').read_text(encoding='utf-8'))
+    publication_files = set(files) | tracked
+    for name, expected in cyui_lock.items():
+        path = cyui_root / name
+        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+            errors.append('CyUI dependency hash mismatch: ' + name)
+        if ('ThirdParty/CyUI/' + name) not in publication_files:
+            errors.append('CyUI dependency source omitted: ' + name)
     for wheel in ai_lock['wheels']:
         name = 'AI/wheels/' + wheel['file']
         if name not in tracked or hashlib.sha256((ROOT / name).read_bytes()).hexdigest() != wheel['sha256']:

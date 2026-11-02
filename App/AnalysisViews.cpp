@@ -219,18 +219,31 @@ void Application::DistributionView() {
     if(ImGui::IsItemHovered()){ImGui::BeginTooltip();ImGui::TextUnformatted(distribution_.exact_percentiles?"Exact nearest-rank quantiles of all valid frame samples":"Estimated quantiles; the exact value is bounded by the histogram bin:");for(size_t q=0;q<4;++q)ImGui::Text("P%d: [%.6f, %.6f] ms",q==0?50:q==1?90:q==2?95:99,distribution_.percentile_bounds[q].first*1000,distribution_.percentile_bounds[q].second*1000);ImGui::EndTooltip();}
     auto p=ImGui::GetCursorScreenPos();float width=std::max(1.f,ImGui::GetContentRegionAvail().x),height=175*scale;
     hist_probe_x_=p.x;hist_probe_y_=p.y;hist_probe_width_=width;
-    ImGui::InvisibleButton("histogram",ImVec2(width,height));bool hover=ImGui::IsItemHovered();auto* draw=ImGui::GetWindowDrawList();draw->AddRectFilled(p,ImVec2(p.x+width,p.y+height),cyui::palette().bg0);
-    uint64_t largest=*std::max_element(distribution_.bins.begin(),distribution_.bins.end()),cumulative=0;ImVec2 previous(p.x,p.y+height-22*scale);int clicked=-1;
-    for(size_t bin=0;bin<Distribution::bin_count;++bin) {
-        auto n=distribution_.bins[bin];float left=p.x+width*static_cast<float>(bin)/Distribution::bin_count,right=p.x+width*static_cast<float>(bin+1)/Distribution::bin_count;
-        double fraction=distribution_log_y_?std::log1p(double(n))/std::log1p(double(largest)):double(n)/double(largest);
-        float base=p.y+height-22*scale;draw->AddRectFilled(ImVec2(left,base-(height-38*scale)*static_cast<float>(fraction)),ImVec2(std::max(left+1,right-1),base),distribution_.selected_bin==static_cast<int>(bin)?cyui::palette().accent:cyui::palette().info);
-        cumulative+=n;ImVec2 current(right,base-(height-38*scale)*static_cast<float>(double(cumulative)/distribution_.count));draw->AddLine(previous,current,cyui::palette().textDim,1.5f*scale);previous=current;
-        if(hover&&ImGui::IsMouseHoveringRect(ImVec2(left,p.y),ImVec2(right,p.y+height))) {auto bounds=distribution_.Bounds(bin);ImGui::SetTooltip("%.6f - %.6f ms%s\n%llu samples | %.2f%% | cumulative %.2f%%\nClick to browse every sample in this bin",bounds.first*1000,bounds.second*1000,(distribution_.min==distribution_.max||bin+1==Distribution::bin_count)?" (upper inclusive)":" (upper exclusive)",n,double(n)*100/distribution_.count,double(cumulative)*100/distribution_.count);
-            if(ImGui::IsMouseClicked(0)&&!distribution_task_.valid()&&!distribution_dirty_)clicked=static_cast<int>(bin);}
+    uint64_t largest=*std::max_element(distribution_.bins.begin(),distribution_.bins.end()),cumulative=0;
+    std::vector<cyui::Point> bars,cdf{{0,0}};
+    bars.reserve(Distribution::bin_count);cdf.reserve(Distribution::bin_count+1);
+    for(size_t bin=0;bin<Distribution::bin_count;++bin){
+        const auto n=distribution_.bins[bin];
+        const double fraction=distribution_log_y_?std::log1p(double(n))/std::log1p(double(std::max(uint64_t(1),largest))):double(n)/double(std::max(uint64_t(1),largest));
+        bars.push_back({double(bin)+.5,fraction});cumulative+=n;
+        cdf.push_back({double(bin+1),double(cumulative)/distribution_.count});
     }
-    char label[80];std::snprintf(label,sizeof(label),"%.3f ms",distribution_.min*1000);draw->AddText(ImVec2(p.x+4*scale,p.y+height-18*scale),cyui::palette().text,label);
-    std::snprintf(label,sizeof(label),"%.3f ms | CDF 100%%",distribution_.max*1000);draw->AddText(ImVec2(p.x+width-ImGui::CalcTextSize(label).x-4*scale,p.y+height-18*scale),cyui::palette().textDim,label);
+    cyui::PlotState plot;plot.x.range={0,double(Distribution::bin_count)};plot.y.range={0,1.08};
+    cyui::PlotSeries series[]={{1,"",bars,cyui::PlotStyle::bars,0},{2,"",cdf,cyui::PlotStyle::line,2}};
+    cyui::PlotOptions options;options.navigation=options.legend=options.axes=options.crosshair=false;
+    const auto chart=cyui::plot("histogram",plot,{series,2},ImVec2(width,height-cyui::dp(22)),options);
+    auto* draw=ImGui::GetWindowDrawList();int clicked=-1;
+    if(distribution_.selected_bin>=0){
+        const float left=p.x+width*float(distribution_.selected_bin)/Distribution::bin_count,right=p.x+width*float(distribution_.selected_bin+1)/Distribution::bin_count;
+        draw->AddRect(ImVec2(left,p.y),ImVec2(right,p.y+height-cyui::dp(22)),cyui::palette().accent,0,0,cyui::dp(2));
+    }
+    if(chart.hovered){
+        const auto bin=size_t(std::clamp(int(std::floor(chart.mouse.x)),0,int(Distribution::bin_count-1)));
+        auto bounds=distribution_.Bounds(bin);uint64_t total=0;for(size_t i=0;i<=bin;++i)total+=distribution_.bins[i];
+        ImGui::SetTooltip("%.6f - %.6f ms%s\n%llu samples | %.2f%% | cumulative %.2f%%\nClick to browse every sample in this bin",bounds.first*1000,bounds.second*1000,(distribution_.min==distribution_.max||bin+1==Distribution::bin_count)?" (upper inclusive)":" (upper exclusive)",distribution_.bins[bin],double(distribution_.bins[bin])*100/distribution_.count,double(total)*100/distribution_.count);
+        if(ImGui::IsMouseClicked(0)&&!distribution_task_.valid()&&!distribution_dirty_)clicked=int(bin);
+    }
+    ImGui::TextDisabled("%.3f ms - %.3f ms | CDF 100%%",distribution_.min*1000,distribution_.max*1000);
     ImGui::TextDisabled("Each sample starts in the analysis interval; its complete duration is used. Missing endpoints are excluded. Scope samples are inclusive, not summed thread utilization.");
     if(distribution_.selected_bin<0)ImGui::Text("Slowest %zu of %llu samples; click a bin for all its values",distribution_.examples.size(),distribution_.count);
     else {ImGui::Text("Bin %d | %llu values | page %llu",distribution_.selected_bin,distribution_.matched,distribution_.page+1);
@@ -271,7 +284,7 @@ void Application::TasksView() {
     if(tasks_pending_)ImGui::TextDisabled("Updating from timeline selection after the drag...");
     ImGui::TextDisabled(tasks_result_candidates_?"CPU scope candidates: measured timings; native task ID, queue delays and dependencies unavailable.":"Native IDs are capture-local. Execution/pending overlap is filtered; missing lifecycle endpoints stay unavailable.");
     ImGui::Text("%llu matches | page %llu",tasks_.matched,tasks_page_+1);ImGui::SameLine();ImGui::BeginDisabled(tasks_query_.valid());if(ImGui::Button("Previous")&&tasks_page_)StartTasks(tasks_page_-1);ImGui::SameLine();if(ImGui::Button("Next")&&tasks_page_+1<(tasks_.matched+127)/128)StartTasks(tasks_page_+1);ImGui::EndDisabled();
-    float detail=selected_task_?std::min(220.f*UiScale(),ImGui::GetContentRegionAvail().y*.4f):0;
+    float detail=selected_task_?std::min(cyui::dp(350),ImGui::GetContentRegionAvail().y*.55f):0;
     if(ImGui::BeginTable("task_table",6,ImGuiTableFlags_RowBg|ImGuiTableFlags_BordersInnerV|ImGuiTableFlags_ScrollY,ImVec2(0,std::max(80.f*UiScale(),ImGui::GetContentRegionAvail().y-detail)))) {
         for(auto title:{"Identity / name","Execution thread","Start (s)","Execute (ms)","Queue (ms)","Dependency (ms)"})ImGui::TableSetupColumn(title);ImGui::TableHeadersRow();
         for(size_t i=0;i<tasks_.rows.size();++i){const auto& r=tasks_.rows[i];std::string name=tasks_result_candidates_?"Scope candidate / "+native_.store->timers[r.name].name:"Task "+std::to_string(r.id)+" / "+tasks_store_->names[r.name];
@@ -286,7 +299,40 @@ void Application::TasksView() {
         if(!tasks_result_candidates_){ImGui::SameLine();ImGui::BeginDisabled(links_query_.valid());if(ImGui::Button("Load recorded links")){auto store=tasks_store_;auto id=r.id;links_request_id_=id;links_cancel_.store(false);links_query_=std::async(std::launch::async,[this,store,id]{return store->Links(id,&links_cancel_);});}ImGui::EndDisabled();
             ImGui::Text("Task %llu | size %s | %s%s",r.id,(r.flags&8)?(std::to_string(r.size)+" bytes").c_str():"unavailable",(r.flags&1)?"awaitable":(r.flags&4)?"not awaitable":"tracking unavailable",(r.flags&2)?" / conflicting observations":"");
             const char* phase[]={"Created","Launched","Scheduled","Started","Finished","Completed","Destroyed"};
-            if(ImGui::BeginTable("lifecycle",7,ImGuiTableFlags_BordersInnerV|ImGuiTableFlags_RowBg)){for(auto title:phase)ImGui::TableSetupColumn(title);ImGui::TableHeadersRow();ImGui::TableNextRow();for(double t:r.time){ImGui::TableNextColumn();if(std::isfinite(t))ImGui::Text("%.6f s",t);else ImGui::TextDisabled("Unavailable");}ImGui::EndTable();}
+            double first=INFINITY,last=-INFINITY;
+            std::vector<cyui::TimelineMarker> markers;
+            std::vector<cyui::Property> properties;
+            for(size_t i=0;i<7;++i){
+                cyui::Property property;property.id=i+1;property.label=std::string(phase[i])+" (s)";property.readOnly=true;
+                if(std::isfinite(r.time[i])){char text[64];std::snprintf(text,sizeof(text),"%.9f",r.time[i]);property.value=std::string(text);
+                    markers.push_back({i+1,r.time[i],""});first=std::min(first,r.time[i]);last=std::max(last,r.time[i]);
+                }else property.value=cyui::tr("Unavailable");properties.push_back(std::move(property));
+            }
+            if(std::isfinite(first)){
+                if(task_timeline_id_!=r.id||task_timeline_model_!=model_version_){task_timeline_={};const double span=std::max(1e-6,last-first);task_timeline_.view={first-span*.05,last+span*.05};task_timeline_id_=r.id;task_timeline_model_=model_version_;}
+                std::vector<cyui::TimelineLane> lanes{{1,"Dependency",24},{2,"Queue",24},{3,"Execution",24}};
+                std::vector<cyui::TimelineClip> clips;
+                for(size_t i=0;i<3;++i){const double a=r.time[i+1],b=r.time[i+2];if(std::isfinite(a)&&std::isfinite(b)&&b>a)clips.push_back({i+1,i+1,a,b-a,lanes[i].label,int(i),true});}
+                cyui::TimelineOptions options;options.readOnly=true;options.revision=model_version_;options.playhead=first;
+                options.formatTime=[](double t){char text[64];std::snprintf(text,sizeof(text),"%.6f s",t);return std::string(text);};
+                options.drawClip=[](const cyui::TimelineClip& clip,const cyui::Rect& rect){
+                    if(ImGui::IsItemHovered()&&rect.contains(ImGui::GetIO().MousePos))ImGui::SetTooltip("%s: %.6f ms\n%.9f - %.9f s",clip.label.c_str(),clip.duration*1000,clip.start,clip.start+clip.duration);
+                };
+                const auto result=cyui::timeline("##task_lifecycle",task_timeline_,lanes,clips,markers,ImVec2(0,cyui::dp(100)),options);
+                if(result.rangeChanged){range_start_=task_timeline_.selection.min;range_end_=task_timeline_.selection.max;}
+                // Several lifecycle endpoints can share one pixel. Keep their
+                // exact values in Inspector and expose all nearby markers in
+                // one tooltip instead of drawing overlapping marker labels.
+                if(ImGui::IsItemHovered()){
+                    const auto a=ImGui::GetItemRectMin(),b=ImGui::GetItemRectMax();const float gutter=std::min(cyui::dp(150),(b.x-a.x)*.3f),width=std::max(1.f,b.x-a.x-gutter);
+                    std::string text;for(const auto& marker:markers){const double x=a.x+gutter+(marker.time-task_timeline_.view.min)/task_timeline_.view.span()*width;
+                        if(std::abs(x-ImGui::GetIO().MousePos.x)<=cyui::dp(5)){char line[96];std::snprintf(line,sizeof(line),"%s: %.9f s\n",phase[size_t(marker.id-1)],marker.time);text+=line;}}
+                    if(!text.empty())ImGui::SetTooltip("%s",text.c_str());
+                }
+            }
+            if(cyui::beginSection("Exact lifecycle timestamps",false)){
+                cyui::inspector("##task_timestamps",task_properties_,properties,r.id);cyui::endSection();
+            }
             if(ImGui::BeginChild("task_links",ImVec2(0,0))) {ImGui::TextDisabled("Recorded links from -> to; execution/completion prerequisite kind not inferred. Wait-for lists / critical path not decoded.");for(const auto& link:task_links_)ImGui::Text("%llu -> %llu @ %.6f s",link.from,link.to,link.time);}ImGui::EndChild();}
     }
     ImGui::End();

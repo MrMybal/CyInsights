@@ -29,13 +29,13 @@ public:
     bool Restarted()const{return restarted_;}
     static fs::path FindAdb(const fs::path& explicit_path={});
 private:
-    std::string Call(const std::vector<std::wstring>& arguments,unsigned timeout=10000,bool cleanup=false);
+    std::string Call(const std::vector<std::wstring>& arguments,unsigned timeout=10000,bool cleanup=false,const fs::path& binary_output={});
     std::string Shell(const std::vector<std::wstring>& arguments,unsigned timeout=10000,bool cleanup=false);
     const std::atomic<bool>& cancel_;
     const std::atomic<bool>* stop_=nullptr;
     bool Stopping()const{return cancel_.load()||(stop_&&stop_->load());}
     fs::path adb_,staging_,journal_;
-    std::string device_,package_,message_,remote_config_,remote_trace_;
+    std::string device_,package_,message_,remote_config_,remote_trace_,companion_apk_;
     std::string session_;
     std::vector<uint32_t> game_pids_;
     uint32_t pid_=0,perfetto_pid_=0;bool restarted_=false,ended_=false,prepared_=false;

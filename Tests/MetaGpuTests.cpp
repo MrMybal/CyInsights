@@ -5,6 +5,8 @@
 #include <Windows.h>
 #include <iostream>
 #include <fstream>
+#include <fcntl.h>
+#include <io.h>
 #include "../Core/RemoteCapture.hpp"
 #include "FakeRemoteRestart.hpp"
 using namespace cymeta;
@@ -29,9 +31,15 @@ int Fake(int argc,char** argv,const fs::path& dir){
     if(a.size()<3||a[0]!="-s"||a[1]!="fakeQuest")return 2;a.erase(a.begin(),a.begin()+2);
     if(a[0]=="push"){Write(dir/"remote-config",a.at(2));return 0;}
     if(a[0]=="pull"){fs::copy_file(dir/"fixture.pftrace",fs::u8path(a.at(2)),fs::copy_options::overwrite_existing);return 0;}
+    if(a.size()==10&&a[0]=="exec-out"&&a[1]=="run-as"&&a[2]=="org.cyinsights.ovr"&&a[8]=="--export-recording"){
+        _setmode(_fileno(stdout),_O_BINARY);auto bytes=Read(dir/"companion-export.cycapture");std::cout.write(bytes.data(),bytes.size());return 0;
+    }
     if(a[0]!="shell"||a.size()<2)return 2;a.erase(a.begin());
     if(a[0]=="ip"){std::cout<<"inet 192.0.2.5/24";return 0;}
-    if(a[0]=="CLASSPATH=/data/local/tmp/cyinsightovr-bridge.jar"){std::cout<<Read(dir/"companion-reply");return 0;}
+    if(a==std::vector<std::string>{"pm","path","org.cyinsights.ovr"}){std::cout<<"package:/data/app/~~fixture/org.cyinsights.ovr-fixture/base.apk\n";return 0;}
+    if(a.size()==9&&a[0]=="run-as"&&a[1]=="org.cyinsights.ovr"&&a[2]=="/system/bin/env"&&a[3]=="CLASSPATH=/data/app/~~fixture/org.cyinsights.ovr-fixture/base.apk"&&a[4]=="app_process"&&a[5]=="/system/bin"&&a[6]=="org.cyinsights.ovr.ShellClient"&&a[7]=="--app-request"){
+        Write(dir/"companion-own-apk","passed");std::cout<<Read(dir/"companion-reply");return 0;
+    }
     if(a[0]=="ovrgpuprofiler"){
         if(a.at(1)=="-i"){if(fs::exists(dir/"query-failed"))return 2;std::cout<<(fs::exists(dir/"disabled")?"Detailed GPU profiling is disabled.":"Detailed GPU profiling is enabled.");return 0;}
         Write(dir/"enabled",a.at(2));std::cout<<"Detailed GPU profiling enabled";return 0;
@@ -93,8 +101,14 @@ int main(int argc,char** argv){
         std::atomic<bool> cancel{false};cyinsights::MetaQuestOptions options;check(!options.restart_game,"Running-game capture does not restart by default");options.restart_game=true;options.adb=exe;options.package="com.test.Game";auto metadata=cygi::Json::Object();
         {cyinsights::MetaQuestCapture companion(cancel);check(companion.SelectDevice(options,"192.0.2.5",metadata),"Companion device selected");auto request=cygi::Json::Object();request["operation"]="tiles_record_status";
          Write(dir/"companion-reply",R"({"active":true,"recording_id":"owned-recording","error":""})");check(companion.Companion(request)["recording_id"].AsString()=="owned-recording","Successful tile start retains ownership despite its empty error field");
+         check(Read(dir/"companion-own-apk")=="passed","Desktop uses the installed APK under its own UID without a shell helper JAR");
          Write(dir/"companion-reply",R"({"active":false,"recording_id":"owned-recording","error":"writer failed"})");check(companion.Companion(request)["error"].AsString()=="writer failed","Recording failure status remains readable for cleanup");
-         Write(dir/"companion-reply",R"({"error":"screen sharing unavailable"})");bool rejected=false;try{companion.Companion(request);}catch(const std::exception& e){rejected=std::string(e.what())=="screen sharing unavailable";}check(rejected,"Bridge dispatch refusal remains an exception");}
+         Write(dir/"companion-reply",R"({"error":"screen sharing unavailable"})");bool rejected=false;try{companion.Companion(request);}catch(const std::exception& e){rejected=std::string(e.what())=="screen sharing unavailable";}check(rejected,"Bridge dispatch refusal remains an exception");
+         auto payload=dir/"tile-input";fs::create_directory(payload);const std::string id="11111111-2222-4333-8444-555555555555";
+         Write(payload/"manifest.json",R"({"format":"cycapture","version":1,"session_id":"11111111-2222-4333-8444-555555555555","sources":[{"id":"quest.ovr.tiles","status":"measured","path":"info.json"}]})");Write(payload/"info.json","{\"sample_count\":1}");
+         std::string export_error;check(cyinsights::Pack(payload,dir/"companion-export.cycapture",export_error),"Streaming tile export fixture packs");companion.PullTiles(id,dir/"tile-received");check(Read(dir/"tile-received/info.json")==Read(payload/"info.json"),"Own-UID tile export streams and verifies the native container");
+         auto valid=Read(dir/"companion-export.cycapture");Write(dir/"companion-export.cycapture",valid+"corrupt");bool corrupt=false;try{companion.PullTiles(id,dir/"tile-invalid");}catch(...){corrupt=true;}check(corrupt&&!fs::exists(dir/"tile-invalid"),"Invalid binary export is rejected before extraction");
+         Write(dir/"companion-export.cycapture",valid);bool wrong_id=false;try{companion.PullTiles("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",dir/"tile-wrong-id");}catch(...){wrong_id=true;}check(wrong_id&&!fs::exists(dir/"tile-wrong-id"),"Another recording identity is rejected");}
         {cyinsights::MetaQuestCapture capture(cancel);check(capture.Prepare(options,"192.0.2.5",metadata),capture.Message().c_str());check(capture.Restarted(),"Selected game restarted before capture");auto stage=dir/"capture_test";fs::create_directory(stage);check(capture.Begin(stage,1),capture.Message().c_str());capture.BindSession("session-test");capture.End();auto source=capture.Source();check(Read(stage/"meta-gpu.info.json").find("session-test")!=std::string::npos,"Native and Meta session identity preserved");check(source["stage_count"].AsString()=="2"&&source["status"].AsString()=="measured","Collected file inspected and source manifest measured");check(source["render_stage_transport"].AsString()=="track_event/gpu_renderstage"&&source["hardware_detail_status"].AsString()=="measured"&&source["fine_stage_count"].AsString()=="2"&&source["stage_types"].Items().size()==2,"Advertised Meta TrackEvent transport and measured detail preserved in source manifest");check(source["profiling_driver_status"].AsString()=="enabled"&&source["timed_stage_packet_count"].AsString()=="3"&&source["stage_source_advertised"].AsBool(),"Driver verification and actual packet diagnostics retained");check(Read(dir/"enabled")=="com.test.Game"&&Read(dir/"stopped")=="987","Scoped activation and owned Perfetto cleanup");}
         check(Read(dir/"launch-component")=="com.test.Game/com.epicgames.unreal.GameActivity","Restart launches the resolved target activity rather than random input injection");
         options.restart_game=false;

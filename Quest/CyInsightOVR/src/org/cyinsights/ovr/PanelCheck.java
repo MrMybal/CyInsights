@@ -51,7 +51,7 @@ final class PanelCheck {
                 hudStarted=VrHudService.running;check(hudStarted&&!main.isFinishing(),"Starting the HUD closed configuration or failed to start");out.put("configuration_stayed_open",true);
             }
             out.put("result","passed");
-        }catch(Exception e){try{out.put("error",e.toString());}catch(JSONException ignored){}}
+        }catch(Exception e){try{out.put("error",e.toString());out.put("ui_at_failure",main.uiReportForTest());}catch(Exception ignored){}}
         finally{
             if(hudStarted)try{BridgeClient.request(main,new JSONObject().put("operation","overlay_meta_off"));runUi(()->main.stopService(new Intent(main,VrHudService.class)));}catch(Exception e){android.util.Log.e("CyInsightOVR","Cannot restore HUD after check",e);}
             SharedPreferences.Editor edit=prefs.edit();if(original==null)edit.remove("display_settings");else edit.putString("display_settings",original);edit.commit();main.reloadDisplaySettingsForTest();

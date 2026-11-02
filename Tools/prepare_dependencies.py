@@ -19,9 +19,15 @@ def main():
         file = source / name
         if not file.is_file() or hashlib.sha256(file.read_bytes()).hexdigest() != expected:
             errors.append(name)
+    cyui_root = ROOT / 'ThirdParty/CyUI'
+    cyui = json.loads((cyui_root / 'source-sha256.json').read_text(encoding='utf-8'))
+    for name, expected in cyui.items():
+        file = cyui_root / name
+        if not file.is_file() or hashlib.sha256(file.read_bytes()).hexdigest() != expected:
+            errors.append('CyUI/' + name)
     if errors:
-        raise SystemExit('Dependency snapshot differs from DEPENDENCIES.lock.json:\n' + '\n'.join(errors))
-    print(f"Verified {len(lock['sha256'])} dependency files. No external checkout or binary copy required.")
+        raise SystemExit('Dependency snapshot differs from its hash manifest:\n' + '\n'.join(errors))
+    print(f"Verified {len(lock['sha256'])} core dependency files and {len(cyui)} pinned CyUI files. No external checkout or binary copy required.")
 
 if __name__ == '__main__':
     main()

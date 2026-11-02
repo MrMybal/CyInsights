@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
 #pragma once
 #include "../Core/OvrRecording.hpp"
+#include "OvrHeatmapView.hpp"
 #include <d3d11.h>
 #include <future>
 #include <imgui.h>
@@ -40,6 +41,8 @@ class QuestTileReplay {
     unsigned image_width_ = 0, image_height_ = 0;
     std::string error_;
     int surface_ = 0, tile_ = -1, stage_ = 0;
+    cyovr::HeatmapState heatmap_state_;
+    cyui::ImageState photo_view_;
     float threshold_ = 500, factor_ = 2.5f, opacity_ = .35f;
     bool overlay_ = false, image_black_ = false, show_black_ = false;
 };

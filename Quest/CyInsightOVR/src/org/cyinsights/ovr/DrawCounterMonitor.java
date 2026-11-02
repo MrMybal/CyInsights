@@ -9,15 +9,18 @@ final class DrawCounterMonitor implements AutoCloseable {
     interface Runner {String run(String[] args,int seconds)throws Exception;}
     interface Sink {void sample(JSONObject sample)throws Exception;}
     private final Runner runner;private final Sink sink;
+    private AppLayerHost local;
     private static final class Session {volatile boolean closed=false;volatile Process process;Thread worker;String target;int hz;volatile JSONObject latest;}
     private volatile Session current;
     DrawCounterMonitor(Runner runner,Sink sink){this.runner=runner;this.sink=sink;}
+    DrawCounterMonitor(Runner runner,Sink sink,AppLayerHost host){this(runner,sink);local=host;}
     synchronized JSONObject start(String target,int hz)throws Exception{
+        if(local!=null)return local.startCounters(target,hz);
         DrawCounterSample.frequency(hz);if(!target.matches("[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z0-9_]+)+"))throw new IllegalArgumentException("Invalid counter target");
         if(current!=null&&current.target.equals(target)&&current.hz==hz&&!current.closed)return status();
         close();String apk="";for(String line:runner.run(new String[]{"/system/bin/pm","path","org.cyinsights.ovr"},5).split("[\\r\\n]+"))
             if(line.startsWith("package:/data/app/")&&line.endsWith("/base.apk"))apk=line.substring(8);
-        if(apk.isEmpty())throw new IOException("Cannot locate the installed companion reader");
+        if(apk.isEmpty())throw new IOException("Cannot locate the installed counter reader");
         Session session=new Session();session.target=target;session.hz=hz;
         session.process=new ProcessBuilder("/system/bin/run-as",target,"/system/bin/env","CLASSPATH="+apk,"app_process","/system/bin","--nice-name=cyinsights-draw-reader","org.cyinsights.ovr.DrawCounterStream",target,Integer.toString(hz)).redirectErrorStream(true).start();
         current=session;session.worker=new Thread(()->read(session),"CyOVR-Draw-Counters");session.worker.start();return status();
@@ -37,12 +40,13 @@ final class DrawCounterMonitor implements AutoCloseable {
         finally{try{session.process.getOutputStream().close();}catch(IOException ignored){}}
     }
     JSONObject status()throws Exception{
+        if(local!=null)return local.counterStatus();
         Session s=current;if(s==null)return new JSONObject().put("active",false).put("status","stopped");
         JSONObject value=s.latest==null?new JSONObject().put("status","waiting").put("reason","Waiting for the development Vulkan layer"):new JSONObject(s.latest.toString());
         if(value.has("observed_mono_ns")&&System.nanoTime()-DrawCounterSample.number(value,"observed_mono_ns")>2000000000L)value.put("status","unavailable").put("reason","Draw counter stream is stale");
         return value.put("active",!s.closed&&s.process.isAlive()).put("target",s.target).put("requested_hz",s.hz);
     }
-    @Override public synchronized void close(){Session s=current;current=null;if(s==null)return;s.closed=true;
+    @Override public synchronized void close(){if(local!=null){local.stopCounters();return;}Session s=current;current=null;if(s==null)return;s.closed=true;
         try{s.process.getOutputStream().close();}catch(IOException ignored){}
         try{if(!s.process.waitFor(1500,TimeUnit.MILLISECONDS)){s.process.destroyForcibly();s.process.waitFor(500,TimeUnit.MILLISECONDS);}if(s.worker!=null)s.worker.join(1000);}catch(InterruptedException error){Thread.currentThread().interrupt();}
     }

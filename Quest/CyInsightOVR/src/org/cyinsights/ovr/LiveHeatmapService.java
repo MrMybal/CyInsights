@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
 package org.cyinsights.ovr;
 import android.app.*;import android.content.*;import android.os.*;import org.json.*;
-/** Keeps a visible stop/configuration control while the shell collector streams. */
+/** Keeps a visible stop/configuration control while the app-owned GPU service streams. */
 public final class LiveHeatmapService extends Service {
     @Override public void onCreate(){super.onCreate();NotificationManager manager=getSystemService(NotificationManager.class);manager.createNotificationChannel(new NotificationChannel("cyovr-live-tiles","CyInsightOVR live tile heatmap",NotificationManager.IMPORTANCE_LOW));
         PendingIntent open=PendingIntent.getActivity(this,42,QuickAccess.configurationIntent(this).putExtra("open_heatmap_settings",true),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);

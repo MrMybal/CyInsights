@@ -48,7 +48,7 @@ public final class CaptureService extends Service {
             JSONObject accepted=BridgeClient.request(this,new JSONObject().put("operation","capture").put("package",target).put("seconds",.3));
             if(accepted.has("error"))throw new IOException(accepted.optString("error"));
             String job=accepted.optString("capture_id");
-            if(!accepted.optBoolean("accepted")||job.isEmpty())throw new IOException("Collector must be updated: no capture job identity received");
+            if(!accepted.optBoolean("accepted")||job.isEmpty())throw new IOException("GPU service returned no capture identity; update CyInsightOVR");
             long deadline=SystemClock.elapsedRealtime()+30000;
             while(!cancelled&&SystemClock.elapsedRealtime()<deadline){
                 JSONObject state=BridgeClient.request(this,new JSONObject().put("operation","snapshot"));
@@ -62,7 +62,7 @@ public final class CaptureService extends Service {
                 }
                 Thread.sleep(500);
             }
-            if(!cancelled)throw new IOException("Collector did not complete this capture within 30 seconds");
+            if(!cancelled)throw new IOException("GPU service did not complete this capture within 30 seconds");
         }catch(InterruptedException e){Thread.currentThread().interrupt();phase="cancelled";}
         catch(Exception e){phase="failed";failure=e.getMessage()==null?e.getClass().getSimpleName():e.getMessage();update("Capture failed: "+failure,false);}
         finally{

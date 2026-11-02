@@ -211,9 +211,11 @@ void Application::MeasurementRuler(float width) {
     measure_x_=p.x;measure_y_=p.y;measure_width_=width;measure_height_=height;
     const double span=std::max(.000001,view_end_-view_start_);
     auto* draw=ImGui::GetWindowDrawList();
-    draw->AddRectFilled(p,ImVec2(p.x+width,p.y+height),cyui::palette().bg1);
-    ImGui::InvisibleButton("measurement_ruler",ImVec2(width,height));
-    const bool hovered=ImGui::IsItemHovered();
+    cyui::CanvasState canvas;
+    canvas.view.origin={view_start_,0};canvas.view.zoom=width/span;
+    cyui::CanvasOptions options;options.navigation=options.grid=false;
+    cyui::CanvasScope scope("measurement_ruler",canvas,ImVec2(width,height),options);
+    const bool hovered=scope.frame().hovered;
     if(hovered)ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
     if(hovered&&ImGui::IsMouseClicked(0)&&drag_surface_==DragSurface::None) {
         BeginTimingDrag(DragSurface::Measurement,0,width,false);measure_drag_origin_=p.x;
@@ -226,7 +228,6 @@ void Application::MeasurementRuler(float width) {
     const double first=std::ceil(view_start_/minor);
     const int ticks=std::min(8192,int(std::ceil(span/minor))+2);
     const int precision=std::clamp(int(std::ceil(-std::log10(major))),3,9);
-    draw->PushClipRect(p,ImVec2(p.x+width,p.y+height),true);
     if(range_start_!=range_end_) {
         const float a=p.x+width*float((std::min(range_start_,range_end_)-view_start_)/span),
                     b=p.x+width*float((std::max(range_start_,range_end_)-view_start_)/span);
@@ -245,7 +246,6 @@ void Application::MeasurementRuler(float width) {
     else std::snprintf(label,sizeof(label),"Measure interval: drag here with the left mouse button");
     draw->AddText(ImVec2(p.x+7*scale,p.y+31*scale),cyui::palette().accent,label);
     draw->AddLine(ImVec2(p.x,p.y+height-1),ImVec2(p.x+width,p.y+height-1),cyui::palette().lineStrong);
-    draw->PopClipRect();
     if(hovered&&drag_surface_!=DragSurface::Measurement)ImGui::SetTooltip("Drag to measure a time range. The view stays fixed; statistics and histograms use this selection. Escape clears the range.");
 }
 void Application::FrameGlyphs(float width) {
@@ -982,8 +982,7 @@ void Application::Messages() {
         else
             ImGui::TextDisabled("GPU duration delta unavailable");
     }
-    for (auto i = messages_.rbegin(); i != messages_.rend(); ++i)
-        ImGui::TextWrapped("%s", i->c_str());
+    cyui::logView("##messages",messages_view_,messages_);
     ImGui::End();
 }
 } // namespace cyinsights

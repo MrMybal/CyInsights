@@ -9,7 +9,9 @@ import java.util.regex.*;
 /** Documented Meta HUD controls. No private compositor permission is assumed. */
 final class MetaHudController {
     interface Runner {String run(String[] args,int timeout)throws Exception;}
+    interface StateReader {JSONObject read()throws Exception;}
     private final Runner runner;private final File saved;
+    private final StateReader stateReader;
     private JSONObject baseline;private boolean requested;
     static final String[][] METRICS={
         {"average_frame_rate","Average FPS"},{"app_gpu_time_microseconds","App GPU Time"},
@@ -27,7 +29,8 @@ final class MetaHudController {
         {"app_private_dirty_MB","Private Dirty Memory (MB)"},{"app_private_clean_MB","Private Clean Memory (MB)"},
         {"stale_frames_consecutive","Max Consecutive Stale Frames"},{"vrshell_average_frame_rate","VrShell Average Frame Rate"},
         {"vrshell_and_guardian_gpu_time_microseconds","VrShell + Boundary GPU Time"}};
-    MetaHudController(Runner runner,File saved){this.runner=runner;this.saved=saved;}
+    MetaHudController(Runner runner,File saved){this(runner,saved,null);}
+    MetaHudController(Runner runner,File saved,StateReader stateReader){this.runner=runner;this.saved=saved;this.stateReader=stateReader;}
     private void broadcast(String action,String... extras)throws Exception{
         ArrayList<String> args=new ArrayList<>(Arrays.asList("/system/bin/am","broadcast","-n",
             "com.oculus.ovrmonitormetricsservice/.SettingsBroadcastReceiver","-a","com.oculus.ovrmonitormetricsservice."+action));
@@ -53,6 +56,7 @@ final class MetaHudController {
         throw new JSONException("No complete fresh Meta HUD configuration received");
     }
     private JSONObject readState()throws Exception{
+        if(stateReader!=null)return stateReader.read();
         long start=System.currentTimeMillis();broadcast("LOG_STATE");
         for(int i=0;i<4;++i){
             String logs=runner.run(new String[]{"/system/bin/logcat","-d","-v","brief","-t","500"},3);
@@ -139,10 +143,26 @@ final class MetaHudController {
             broadcast(stats.isEmpty()?"DISABLE_STATS":"ENABLE_STATS");Thread.sleep(200);JSONObject observed=readState();
             if(!observed.optBoolean("overlayEnabled")||observed.optBoolean("statsEnabled")!=!stats.isEmpty()||observed.optBoolean("graphEnabled")!=!graphs.isEmpty()||!observed.optBoolean("overlayHeadLocked")||Math.abs(observed.optDouble("overlayPitch")-compact.getDouble("overlayPitch"))>.05||Math.abs(observed.optDouble("overlayYaw")-compact.getDouble("overlayYaw"))>.05||Math.abs(observed.optDouble("overlayDistance")-2)>.05||Math.abs(observed.optDouble("overlayScale")-compact.getDouble("overlayScale"))>.05)
                 throw new IOException("Meta HUD did not accept the compact placement");
+            Set<String> acceptedGraphs=new LinkedHashSet<>(),acceptedStats=new LinkedHashSet<>();
+            JSONArray unavailableGraphs=new JSONArray(),unavailableStats=new JSONArray();ArrayList<String> unavailableNames=new ArrayList<>();
             for(String[] descriptor:METRICS){JSONObject item;try{item=metric(observed,descriptor[1]);}catch(JSONException absent){continue;}
-                if(item.optBoolean("graphEnabled")!=graphs.contains(descriptor[0])||item.optBoolean("statEnabled")!=stats.contains(descriptor[0]))throw new IOException("Meta HUD did not accept metric selection: "+descriptor[1]);}
+                String id=descriptor[0];boolean graph=item.optBoolean("graphEnabled"),stat=item.optBoolean("statEnabled");
+                if(graph&&!graphs.contains(id)||stat&&!stats.contains(id))throw new IOException("Meta HUD did not disable metric: "+descriptor[1]);
+                if(graph)acceptedGraphs.add(id);else if(graphs.contains(id)){unavailableGraphs.put(id);unavailableNames.add(descriptor[1]+" (graph)");}
+                if(stat)acceptedStats.add(id);else if(stats.contains(id)){unavailableStats.put(id);unavailableNames.add(descriptor[1]+" (value)");}
+            }
+            // Meta lists some hardware metrics even when IsStatAvailable rejects
+            // enabling them. Keep the usable HUD and report that exact omission.
+            if(acceptedGraphs.isEmpty()&&acceptedStats.isEmpty())throw new IOException("None of the selected HUD metrics are currently available from Meta. Try Basic: FPS + GPU time.");
+            if(acceptedGraphs.isEmpty()&&!graphs.isEmpty())broadcast("DISABLE_GRAPH");
+            if(acceptedStats.isEmpty()&&!stats.isEmpty())broadcast("DISABLE_STATS");
+            if(acceptedGraphs.isEmpty()&&!graphs.isEmpty()||acceptedStats.isEmpty()&&!stats.isEmpty()){
+                JSONObject effective=readState();if(effective.optBoolean("graphEnabled")!=!acceptedGraphs.isEmpty()||effective.optBoolean("statsEnabled")!=!acceptedStats.isEmpty())throw new IOException("Meta HUD did not hide its unavailable metric group");
+            }
             requested=true;return state().put("accepted",true).put("size",size).put("corner",location).put("settings_verified",true)
-                .put("graphs",new JSONArray(graphs)).put("stats",new JSONArray(stats));
+                .put("selection_complete",unavailableNames.isEmpty()).put("graphs",new JSONArray(acceptedGraphs)).put("stats",new JSONArray(acceptedStats))
+                .put("unavailable_graphs",unavailableGraphs).put("unavailable_stats",unavailableStats)
+                .put("warning",unavailableNames.isEmpty()?"":"Some selected HUD metrics are unavailable from Meta right now: "+String.join(", ",unavailableNames)+". Your selections are saved; Start HUD retries them.");
         }catch(Exception e){try{restore();}catch(Exception restoration){e.addSuppressed(restoration);}throw e;}
     }
     synchronized JSONObject disable()throws Exception{restore();return state().put("accepted",true).put("settings_restored",true);}

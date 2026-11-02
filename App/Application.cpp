@@ -116,7 +116,7 @@ bool Application::OpenNow(const fs::path &file) {
         }
         quest_tiles_.Clear();
         ++ai_generation_;ai_issues_cancel_=true;ai_findings_.clear();ai_issues_=cygi::Json::Object();ai_issues_a_=ai_issues_b_=NAN;
-        activity_store_.reset();activity_result_={};activity_pinned_.clear();activity_request_.clear();activity_ready_.clear();activity_details_request_.clear();activity_details_ready_.clear();activity_details_observed_.clear();activity_pending_=false;activity_requested_at_=-1;activity_message_.clear();activity_auto_started_=false;activity_search_[0]=0;activity_lane_=0;activity_page_=0;++activity_revision_;
+        activity_store_.reset();activity_result_={};activity_plot_points_.clear();activity_pinned_.clear();activity_request_.clear();activity_ready_.clear();activity_details_request_.clear();activity_details_ready_.clear();activity_details_observed_.clear();activity_pending_=false;activity_requested_at_=-1;activity_message_.clear();activity_auto_started_=false;activity_search_[0]=0;activity_lane_=0;activity_page_=0;++activity_revision_;
         activity_plot_queries_=activity_detail_queries_=0;
         tasks_store_.reset();tasks_={};selected_task_.reset();task_links_.clear();tasks_message_.clear();distribution_={};distribution_message_.clear();
         analysis_a_=analysis_b_=NAN;analysis_whole_=true;distribution_label_.clear();distribution_dirty_=true;distribution_track_=0;distribution_task_thread_=-1;tasks_thread_=-1;tasks_page_=0;tasks_auto_started_=false;
@@ -235,6 +235,16 @@ void Application::LoadGpu(const fs::path &directory) {
     }
     graph_.Build(*m);
     gpu_timeline_.Build(m->Timings(), graph_, m->LastFrame().events);
+    gpu_pass_view_={};gpu_pass_view_.view={0,std::max(1e-9,gpu_timeline_.Length())};gpu_pass_clips_.clear();
+    gpu_graph_view_={};gpu_graph_nodes_.clear();gpu_graph_links_.clear();
+    gpu_pass_indices_.clear();gpu_graph_nodes_.reserve(graph_.Passes().size());gpu_pass_clips_.reserve(graph_.Passes().size());
+    for(size_t i=0;i<graph_.Passes().size();++i){
+        const auto& pass=graph_.Passes()[i];const auto id=cyui::ItemId(pass.id)+1;
+        gpu_pass_indices_[id]=i;
+        gpu_graph_nodes_.push_back({id,{20.+(i%3)*285.,20.+(i/3)*125.},pass.name,{{id*4+1,""}},{{id*4+2,""}},int(i%12)});
+        if(i<gpu_timeline_.Spans().size()){const auto& span=gpu_timeline_.Spans()[i];gpu_pass_clips_.push_back({id,1,span.start,std::max(1e-12,span.Length()),pass.name,span.measured?1:2,true});}
+    }
+    for(const auto& edge:graph_.Edges())gpu_graph_links_.push_back({gpu_graph_links_.size()+1,(cyui::ItemId(edge.from_pass)+1)*4+2,(cyui::ItemId(edge.to_pass)+1)*4+1,0});
     gpu_info_ = info;
     gpu_ = std::move(m);
     selected_event_ = -1;
@@ -432,7 +442,7 @@ void Application::Tick() {
     }
     LoadWindow();
     if (previous_message_ != message_) {
-        messages_.push_back(message_);
+        messages_.append(cyui::LogLevel::info,message_);
         previous_message_ = message_;
     }
 }
@@ -612,7 +622,7 @@ void Application::OvrHeatmap() {
         else {
             cyui::heading("CyInsightOVR - GPU tile snapshot",2);
             cyui::textDim("Target: %s | capture: %s",ovr_capture_->package.c_str(),ovr_capture_->id.c_str());
-            cyovr::Heatmap(*ovr_capture_,ovr_surface_,ovr_tile_,ovr_stage_);
+            cyovr::Heatmap(*ovr_capture_,ovr_surface_,ovr_tile_,ovr_stage_,ovr_heatmap_state_);
         }
     }
     ImGui::End();
@@ -1040,28 +1050,17 @@ void Application::Gpu() {
                 frame.dispatch_count);
     ImGui::TextWrapped("GPU clock is separate: CPU alignment unavailable without calibration. Pass names and "
                        "graph edges are derived.");
-    auto p = ImGui::GetCursorScreenPos();
-    float width = ImGui::GetContentRegionAvail().x;
-    auto *draw = ImGui::GetWindowDrawList();
-    double length = std::max(1e-9, gpu_timeline_.Length());
-    ImGui::InvisibleButton("gpu_passes", ImVec2(width, 38));
-    for (size_t i = 0; i < graph_.Passes().size() && i < gpu_timeline_.Spans().size(); ++i) {
-        auto &s = gpu_timeline_.Spans()[i];
-        auto &pass = graph_.Passes()[i];
-        float a = p.x + width * static_cast<float>(s.start / length),
-              b = p.x + width * static_cast<float>(s.end / length);
-        draw->AddRectFilled(ImVec2(a, p.y), ImVec2(b, p.y + 30),
-                            s.measured ? cyui::palette().success : cyui::palette().warning);
-        if (b - a > 50) {
-            draw->PushClipRect(ImVec2(a, p.y), ImVec2(b, p.y + 30), true);
-            draw->AddText(ImVec2(a + 3, p.y + 5), ScopeTextColour(s.measured?cyui::palette().success:cyui::palette().warning), pass.name.c_str());
-            draw->PopClipRect();
-        }
-        if (ImGui::IsMouseHoveringRect(ImVec2(a, p.y), ImVec2(b, p.y + 30)))
-            ImGui::SetTooltip("%s (derived name, %.0f%%)\n%.4f %s; position %s", pass.name.c_str(),
-                              pass.confidence * 100, s.Length(), gpu_timeline_.Timed() ? "ms" : "commands",
-                              s.measured ? "measured" : "derived");
-    }
+    cyui::TimelineOptions passOptions;passOptions.readOnly=true;
+    passOptions.formatTime=[&](double value){char text[64];std::snprintf(text,sizeof(text),"%.3f %s",value,gpu_timeline_.Timed()?"ms":"commands");return std::string(text);};
+    passOptions.drawClip=[&](const cyui::TimelineClip& clip,const cyui::Rect& rect){
+        const auto entry=gpu_pass_indices_.find(clip.id);if(entry==gpu_pass_indices_.end())return;
+        const auto index=entry->second;const auto* pass=&graph_.Passes()[index];const auto& span=gpu_timeline_.Spans()[index];
+        const auto color=span.measured?cyui::palette().success:cyui::palette().warning;auto* draw=ImGui::GetWindowDrawList();
+        draw->AddRectFilled(rect.min,rect.max,color);
+        cyui::clippedText(draw,{rect.min.x+cyui::dp(3),rect.min.y+cyui::dp(3)},rect.size().x-cyui::dp(6),ScopeTextColour(color),pass->name.c_str());
+        if(ImGui::IsItemHovered()&&rect.contains(ImGui::GetIO().MousePos))ImGui::SetTooltip("%s (derived name, %.0f%%)\n%.4f %s; position %s",pass->name.c_str(),pass->confidence*100,span.Length(),gpu_timeline_.Timed()?"ms":"commands",span.measured?"measured":"derived");
+    };
+    cyui::timeline("gpu_passes",gpu_pass_view_,{{1,"GPU passes",30}},gpu_pass_clips_,{},cyui::dp(0,60),passOptions);
     ImGui::TextDisabled("%s", gpu_timeline_.Timed()
                                   ? (gpu_timeline_.MeasuredPositions()
                                          ? "Measured GPU offsets where available; brown bars are derived"
@@ -1107,49 +1106,23 @@ void Application::Gpu() {
                                 focus_graph_ ? ImGuiTabItemFlags_SetSelected : 0)) {
             ImGui::TextWrapped("Reconstructed resource graph. Click a pass to inspect its first command. "
                                "Names and dependency edges are derived.");
-            ImGui::BeginChild("pass_graph", ImVec2(0, 250), true, ImGuiWindowFlags_HorizontalScrollbar);
-            const auto origin = ImGui::GetCursorScreenPos();
-            const float nodeW = 220, nodeH = 68, strideX = 285, strideY = 110;
-            auto *canvas = ImGui::GetWindowDrawList();
-            std::map<uint32_t, ImVec2> positions;
-            for (size_t i = 0; i < graph_.Passes().size(); ++i)
-                positions[graph_.Passes()[i].id] =
-                    ImVec2(origin.x + 20 + (i % 3) * strideX, origin.y + 20 + (i / 3) * strideY);
-            for (const auto &edge : graph_.Edges()) {
-                auto a = positions.find(edge.from_pass), b = positions.find(edge.to_pass);
-                if (a == positions.end() || b == positions.end())
-                    continue;
-                ImVec2 start(a->second.x + nodeW, a->second.y + nodeH / 2),
-                    end(b->second.x, b->second.y + nodeH / 2);
-                canvas->AddBezierCubic(start, ImVec2(start.x + 35, start.y), ImVec2(end.x - 35, end.y), end,
-                                       cyui::alpha(cyui::palette().lineStrong,.6f), 1.5f);
+            cyui::textFaint("Wheel: zoom | Middle / Space-drag: pan | Home: fit graph | Click a pass: inspect command");
+            cyui::NodeOptions options;options.readOnly=true;options.width=220;options.row=60;
+            options.drawBody=[&](const cyui::Node& node,const cyui::Rect& rect){
+                const auto entry=gpu_pass_indices_.find(node.id);if(entry==gpu_pass_indices_.end())return;
+                const auto* pass=&graph_.Passes()[entry->second];
+                char label[128];std::snprintf(label,sizeof(label),"%u draws / %u dispatches\nDerived, confidence %.0f%%",pass->draw_count,pass->dispatch_count,pass->confidence*100);
+                cyui::ScopedFont font(nullptr,float(gpu_graph_view_.canvas.view.zoom));
+                ImGui::GetWindowDrawList()->PushClipRect(rect.min,rect.max,true);
+                ImGui::GetWindowDrawList()->AddText({rect.min.x+cyui::dp(8),rect.min.y+cyui::dp(32)*float(gpu_graph_view_.canvas.view.zoom)},cyui::palette().textDim,label);
+                ImGui::GetWindowDrawList()->PopClipRect();
+            };
+            cyui::nodeEditor("pass_graph",gpu_graph_view_,gpu_graph_nodes_,gpu_graph_links_,cyui::dp(0,250),options);
+            if(ImGui::IsItemHovered()&&ImGui::IsMouseClicked(0)&&!gpu_graph_view_.selection.empty()){
+                const auto id=gpu_graph_view_.selection.back();
+                for(const auto& pass:graph_.Passes())if(cyui::ItemId(pass.id)+1==id)
+                    for(size_t i=0;i<frame.events.size();++i)if(frame.events[i].index==pass.first_event){selected_event_=int(i);selected_cpu_=-1;break;}
             }
-            for (const auto &pass : graph_.Passes()) {
-                auto pos = positions[pass.id];
-                canvas->AddRectFilled(pos, ImVec2(pos.x + nodeW, pos.y + nodeH), cyui::palette().bg2,
-                                      4);
-                canvas->AddRect(pos, ImVec2(pos.x + nodeW, pos.y + nodeH), cyui::palette().lineStrong, 4);
-                canvas->PushClipRect(pos, ImVec2(pos.x + nodeW, pos.y + nodeH), true);
-                canvas->AddText(ImVec2(pos.x + 7, pos.y + 7), cyui::palette().text,
-                                pass.name.c_str());
-                char label[128];
-                std::snprintf(label, sizeof(label), "%u draws / %u dispatches\nDerived, confidence %.0f%%",
-                              pass.draw_count, pass.dispatch_count, pass.confidence * 100);
-                canvas->AddText(ImVec2(pos.x + 7, pos.y + 27), cyui::palette().textDim, label);
-                canvas->PopClipRect();
-                if (ImGui::IsWindowHovered() &&
-                    ImGui::IsMouseHoveringRect(pos, ImVec2(pos.x + nodeW, pos.y + nodeH)) &&
-                    ImGui::IsMouseClicked(0)) {
-                    for (size_t i = 0; i < frame.events.size(); ++i)
-                        if (frame.events[i].index == pass.first_event) {
-                            selected_event_ = static_cast<int>(i);
-                            selected_cpu_ = -1;
-                            break;
-                        }
-                }
-            }
-            ImGui::Dummy(ImVec2(strideX * 3, strideY * ((graph_.Passes().size() + 2) / 3) + 20));
-            ImGui::EndChild();
             ImGui::SeparatorText("Resource dependencies (derived)");
             for (auto &edge : graph_.Edges())
                 ImGui::Text("Pass %u -> Pass %u  /  Resource %u", edge.from_pass, edge.to_pass,

@@ -133,6 +133,7 @@ void QuestTileReplay::Poll() {
     image_black_ = detail.black_image;
     error_ = detail.error;
     loaded_ = detail.index;
+    photo_view_.fitPending=true;
     surface_ = capture_ ? cyovr::LargestSurface(*capture_) : 0;
     tile_ = -1;
     if (image_) {
@@ -273,13 +274,13 @@ void QuestTileReplay::Panel(double a, double b) {
                       observation.image_delta_ms);
         if (!overlay_&&(!black||show_black_)) {
             float w = std::min(ImGui::GetContentRegionAvail().x, cyui::dp(650));
-            ImGui::Image((ImTextureID)image_, ImVec2(w, w * image_height_ / image_width_));
+            cyui::imageViewport("##associated_image",photo_view_,{(ImTextureID)image_,int(image_width_),int(image_height_)},ImVec2(w,w*image_height_/image_width_));
         }
     } else
         cyui::textDim("No associated image was received for this snapshot.");
     if(split)ImGui::TableNextColumn();
     if (capture_) {
-        cyovr::Heatmap(*capture_, surface_, tile_, stage_, overlay_ ? (ImTextureID)image_ : 0, opacity_);
+        cyovr::Heatmap(*capture_, surface_, tile_, stage_, heatmap_state_, overlay_ ? (ImTextureID)image_ : 0, opacity_);
         if (!capture_->surfaces.empty()) {
             const auto &s = capture_->surfaces[size_t(surface_)];
             auto stats = cyovr::AnalyzeTiles(s, "Render", threshold_, factor_);

@@ -2,7 +2,7 @@
 #include "UpdateView.hpp"
 #include "ReleaseUpdate.hpp"
 #include <Windows.h>
-#include <cyui/CyUI.h>
+#include <cyui/Core.h>
 #include <imgui.h>
 #include <fstream>
 #include <future>

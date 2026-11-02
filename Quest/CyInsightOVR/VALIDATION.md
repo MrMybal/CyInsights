@@ -1,3 +1,90 @@
+# App-owned GPU runtime, 2026-11-02
+
+- The installed APK starts its own foreground GPU service as the application UID.
+  The firmware profiler inquiry and metric catalogue succeed in that identity;
+  six live system GPU metrics were received. No shell-owned GPU service was
+  running during the autonomous tests. No new root, logging, wireless debugging
+  or system authorization was granted; the existing user-authorized developer
+  settings permission is retained.
+- Authenticated SDK requests from the installed APK succeed. Unauthenticated
+  calls and arbitrary-command operations are rejected. Two Stop / Start cycles
+  executed inside the application passed; Stop does not accidentally restart the
+  service through UI polling. Normal launch and cold instrumentation launches
+  start the APK's service without a bootstrap script.
+- The external Vulkan library loaded from the CyInsightOVR APK into the dedicated
+  Development GPU test project, without modifying its APK or copying a library
+  into its private files. Direct cross-application Unix sockets were denied by
+  Android. The final transport uses an explicitly granted ContentProvider and a
+  Binder-transferred socket pair, authenticating the selected target UID and PID.
+- Real tile reception passed twice through this transport: the observations
+  contained 8 and 20 measured tiles, with sample ages of 615 and 682 ms. The
+  observed update rates in those short trials were 1.87 and 2.71 Hz. Both HUD
+  Start / Stop cycles succeeded without a game restart between them. Submitted
+  geometry also passed: 483 known draws and 11,332 known input triangles in a
+  50.10 ms interval (19.96 Hz). These are sampled tile costs and submitted
+  geometry, not exact XR-frame identity, visible-triangle counts or benchmarks.
+  A later repetition also passed (20/8 selected-surface tiles; 19.95 Hz known
+  draw observations). The user subsequently reported a visible loading screen;
+  Unreal's file log showed map load complete, the 64-cube test ready and continued
+  frame calculations. This does not prove what was visible in the headset.
+- The normally launched configuration panel also passed drag scrolling, key and
+  generic-motion scrolling, checkbox persistence and restoration. PixelCopy
+  succeeded; the observed panel rate was 89.92 FPS, draw time 0.83 ms and p95 frame
+  interval 11.78 ms at a 90 Hz target. These are panel measurements, not GPU
+  profiling overhead or a claim about what the wearer saw.
+- A cold profiling-app recovery test passed with the final native channel: the
+  GPU test process survived a complete force-stop of CyInsightOVR, then
+  reconnected after its ordinary launcher Activity was opened. No target restart
+  was needed. The client releases its unstable provider reference immediately
+  after receiving the data descriptor.
+- The Python desktop SDK exported a real stopped recording through the APK's
+  service. The existing native C++ container inspector, SHA-256 verification,
+  extraction and Quest recording reader accepted all three samples (553 measured
+  tiles in the first complete sample). A direct shell-UID pull was denied by
+  Android scoped storage; it is no longer the supported transfer path. Four new
+  native regression checks cover export integrity and recording identity. The
+  affected native suites passed: Meta GPU (81), network capture (79), submitted
+  geometry (22), capture container (18), recording (20), plus geometry/clock
+  availability. Android simulated checks passed separately: parser (12), HUD
+  (21), heatmap lifecycle (26), counters (21), stream (7), recording (17).
+- Two orphan shell-UID real-time readers from the legacy bootstrap were
+  identified by their inherited CyInsightOVR classpath, UID and exact arguments,
+  then stopped. Their absence is checked separately from the old Java helper.
+  A later post-recovery GPU trial received no fresh Meta stages; the project
+  subsequently appeared paused with no resumed Activity. Fresh tile reception
+  after cold recovery therefore still needs a continuously active target; the
+  successful cold-recovery result above establishes transport/process survival.
+- Android revokes temporary URI grants when a target is force-stopped. This was
+  reproduced during testing; refreshing our selected target's grant restored
+  the live connection without relaunching it. The APK now maintains that scoped
+  grant itself. Reopening the GPU test after this fix established the channel
+  automatically. Full headset reboot survival and visual confirmation of the new
+  data transport are not established by these programmatic checks.
+
+# Standalone statistics HUD, 2026-11-02
+
+- The updated Vulkan APK builds, verifies and is installed on the Quest 3. The
+  user explicitly authorized its one-time `WRITE_SECURE_SETTINGS` development
+  grant. No `READ_LOGS` permission or root access was granted.
+- With the shell collector stopped, the test ran as the APK UID. It read the
+  installed Meta settings provider and found 30 recognized managed HUD metrics.
+  Start verified the FPS/GPU graph selections and top-center placement. Stop
+  restored the previous Meta settings. The collector remained stopped throughout.
+- The same check passed from a cold APK process. A second real check applied the
+  user's saved selection: Meta refused two shading graphs, while the usable
+  selections were verified and the omissions reported explicitly. Original
+  placement, visibility and metric selections were compared after Stop and
+  matched. Twenty-one simulated service checks cover selection, rollback,
+  unsupported metrics, complete rejection and failure to disable an old metric.
+- Three existing preference files were preserved during the update. No game was
+  started, restarted or modified by this check. Actual headset visibility and a
+  full reboot test are not established by provider verification.
+- The first normal-panel input test exposed the unsupported-counter rejection
+  above. After its correction, the panel test was suspended before drawing by
+  the headset; a post-correction native-button/visibility check remains pending.
+- This earlier test covered only the direct statistics HUD. The app-owned GPU
+  runtime tested below supersedes its previous shell-bootstrap requirement.
+
 # Draw counters and curve cadence, 2026-10-29
 
 - The experimental APK builds and its v3 development signature verifies. The

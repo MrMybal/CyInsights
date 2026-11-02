@@ -1,5 +1,8 @@
 # Interface native CyUI
 
+L'integration modulaire actuelle, la revision figee, les vues migrees et les
+limites des adaptateurs sont detaillees dans [CyUIMigration](CyUIMigration.md).
+
 CyInsights utilise CyUI pour les thèmes, polices, contrôles et conteneurs Dear
 ImGui. La bibliothèque est incluse dans `ThirdParty/CyUI` sous licence MIT ;
 CMake la lie à l'unique cible ImGui existante. Le dépôt peut être compilé sans
@@ -14,10 +17,10 @@ ne sont pas redistribuées.
   navigation et règle de mesure conservent leurs interactions. Les commandes
   de pistes et d'analyse sont regroupées avec des infobulles ; le menu View
   donne aussi accès à tous les panneaux.
-- **Appearance** : cinq thèmes, densités Compact et Comfortable, galerie et
-  éditeur de palette CyUI. Le thème prédéfini et la densité choisis dans ce
-  menu sont enregistrés dans les réglages locaux. La palette personnalisée
-  de l'éditeur utilise son propre export `.cytheme`.
+- **Appearance** : cinq themes, densites Compact et Comfortable, langue et
+  editeur de palette filtre avec validation, annulation/reprise et import/export
+  `.cytheme`. La galerie de demonstration n'est plus compilee. Les preferences
+  de theme, densite et langue sont enregistrees localement.
 - Les couleurs de scopes identifient des catégories. Les fonds de causes
   restent conditionnés à l'analyse des dépassements de budget ; un thème
   ne transforme pas une donnée déduite ou indisponible en mesure.

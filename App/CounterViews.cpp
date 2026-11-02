@@ -3,17 +3,11 @@
 #include "UiMetrics.hpp"
 #include <algorithm>
 #include <cmath>
-#include <cctype>
 #include <imgui.h>
 #include <imgui_internal.h>
 
 namespace cyinsights {
 namespace {
-bool Match(std::string value,std::string query) {
-    for(auto& c:value)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    for(auto& c:query)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    return value.find(query)!=std::string::npos;
-}
 ImU32 Colour(size_t i) {
     return cyui::categorical(static_cast<int>(i));
 }
@@ -89,8 +83,8 @@ void Application::FrameStatsView() {
     }
     ImGui::SameLine();ImGui::SetNextItemWidth(240*UiScale());cyui::searchField("##frame_stat_search",frame_stats_search_,sizeof(frame_stats_search_),"Search statistics");
     const auto filter=groups[frame_stats_group_]+"/"+frame_stats_search_;
-    if(frame_stat_filter_key_!=filter){frame_stat_filter_key_=filter;frame_stat_metrics_.clear();
-        for(size_t i=0;i<counters_->series.size();++i){const auto& c=counters_->series[i];if(!c.availability&&(frame_stats_group_==0||c.group==groups[frame_stats_group_])&&Match(c.name,frame_stats_search_))frame_stat_metrics_.push_back(i);}
+    if(frame_stat_filter_key_!=filter){frame_stat_filter_key_=filter;frame_stat_metrics_.clear();cyui::TextFilter query;query.query=frame_stats_search_;
+        for(size_t i=0;i<counters_->series.size();++i){const auto& c=counters_->series[i];if(!c.availability&&(frame_stats_group_==0||c.group==groups[frame_stats_group_])&&query.matches(c.name))frame_stat_metrics_.push_back(i);}
     }
     const auto& metrics=frame_stat_metrics_;
     ImGui::SetNextItemWidth(-1);
@@ -177,11 +171,11 @@ void Application::Counters() {
     ImGui::TextDisabled(range_start_==range_end_?"Statistics in visible interval":"Statistics in selected interval");
     ImGui::TextDisabled("Mean: derived sample average");
     std::string filterKey=std::string(counter_search_)+"/"+std::to_string(meta_counters_only_)+std::to_string(show_availability_)+std::to_string(hide_empty_counters_)+"/"+std::to_string(counters_->series.size())+"/"+std::to_string(counter_catalog_revision_);
-    if(filterKey!=counter_filter_key_){counter_filter_key_=std::move(filterKey);counter_order_key_.clear();counter_visible_.clear();
+    if(filterKey!=counter_filter_key_){counter_filter_key_=std::move(filterKey);counter_order_key_.clear();counter_visible_.clear();cyui::TextFilter query;query.query=counter_search_;
     for(size_t i=0;i<counters_->series.size();++i) {
         auto& c=counters_->series[i];
         if((!meta_counters_only_||c.meta)&&(!c.availability||show_availability_)&&
-           (!hide_empty_counters_||!c.samples.empty())&&Match(c.name,counter_search_))counter_visible_.push_back(i);
+           (!hide_empty_counters_||!c.samples.empty())&&query.matches(c.name))counter_visible_.push_back(i);
     }}auto& visible=counter_visible_;
     // Selected metric details stay visible above the scrolling table.
     if(selected_counter_>=0&&static_cast<size_t>(selected_counter_)<counters_->series.size()) {
@@ -251,52 +245,35 @@ void Application::CounterTracks(float width) {
     for(size_t i=0;i<counters_->series.size();++i) {
         auto& c=counters_->series[i];if(!c.pinned)continue;
         ImGui::PushID(static_cast<int>(i));const auto pos=ImGui::GetCursorScreenPos();
-        ImGui::InvisibleButton("counter_lane",ImVec2(width,height));const bool hover=ImGui::IsItemHovered();
-        if(pos.y+height<clip.Min.y||pos.y>clip.Max.y){ImGui::PopID();continue;}
+        ImGui::InvisibleButton("counter_lane",ImVec2(width,header));const bool hover=ImGui::IsItemHovered();
+        if(pos.y+height<clip.Min.y||pos.y>clip.Max.y){ImGui::SetCursorScreenPos(ImVec2(pos.x,pos.y+header));ImGui::Dummy(ImVec2(width,height-header));ImGui::PopID();continue;}
         draw->AddRectFilled(pos,ImVec2(pos.x+width,pos.y+header),cyui::palette().bg2);
         std::string label=c.name+(c.meta?"  [observation]":"");
         draw->PushClipRect(pos,ImVec2(pos.x+width,pos.y+header),true);
         draw->AddText(ImVec2(pos.x+4*scale,pos.y+2*scale),Colour(i),label.c_str());draw->PopClipRect();
-        auto& cache=counter_plots_[i];int pixels=std::clamp(static_cast<int>(width),1,16384);
+        auto& cache=counter_plots_[i];int pixels=std::clamp(static_cast<int>(width),1,8192);
         if(cache.a!=view_start_||cache.b!=view_end_||cache.width!=pixels) {
             cache.a=view_start_;cache.b=view_end_;cache.width=pixels;
-            cache.buckets=counters_->Plot(i,view_start_,view_end_,pixels);
+            cache.prepared=PrepareCounterPlot(c,counters_->Plot(i,view_start_,view_end_,pixels));
         }
-        double low=0,high=0;bool any=false;size_t low_sample=0,high_sample=0;
-        for(auto& bucket:cache.buckets) {
-            double a=c.samples[bucket.minimum].Value(c.floating),b=c.samples[bucket.maximum].Value(c.floating);
-            if(!any||(c.floating?c.samples[bucket.minimum].real<c.samples[low_sample].real:c.samples[bucket.minimum].integer<c.samples[low_sample].integer))low_sample=bucket.minimum;
-            if(!any||(c.floating?c.samples[bucket.maximum].real>c.samples[high_sample].real:c.samples[bucket.maximum].integer>c.samples[high_sample].integer))high_sample=bucket.maximum;
-            low=any?std::min(low,a):a;high=any?std::max(high,b):b;any=true;
-        }
-        const double normal=std::max({std::abs(low),std::abs(high),1.});
-        auto y=[&](double value){double range=high/normal-low/normal;
-            double fraction=range>0?(value/normal-low/normal)/range:.5;
-            return pos.y+height-8*scale-static_cast<float>(fraction)*(height-header-18*scale);};
+        const auto& data=cache.prepared;
+        const bool any=data.available;
+        cyui::PlotState plot;
+        plot.x.range={view_start_,view_end_};
+        double low=data.low/data.normal,high=data.high/data.normal;
+        if(!(high>low)){low-=.5;high+=.5;}
+        plot.y.range={low,high};
+        cyui::PlotSeries series[]={{1,c.name.c_str(),data.line,cyui::PlotStyle::line,int(i)},
+                                  {2,"",data.dots,cyui::PlotStyle::points,int(i)}};
+        cyui::PlotOptions options;options.navigation=options.legend=options.axes=options.crosshair=false;
+        ImGui::SetCursorScreenPos(ImVec2(pos.x,pos.y+header));
+        const auto chart=cyui::plot("##counter_curve",plot,{series,2},ImVec2(width,height-header),options);
+        const bool curve_hover=chart.hovered;
         draw->PushClipRect(ImVec2(pos.x,pos.y+header),ImVec2(pos.x+width,pos.y+height),true);
-        for(int tick=0;tick<9;++tick) {
-            const float x=pos.x+width*static_cast<float>(tick)/8;
-            draw->AddLine(ImVec2(x,pos.y+header),ImVec2(x,pos.y+height),cyui::palette().grid);
-        }
         if(any) {
-            auto bounds="Min "+c.Text(c.samples[low_sample])+" / Max "+c.Text(c.samples[high_sample])+" "+(c.unit.empty()?"(unit unavailable)":c.unit);
+            auto bounds="Min "+c.Text(c.samples[data.minimum])+" / Max "+c.Text(c.samples[data.maximum])+" "+(c.unit.empty()?"(unit unavailable)":c.unit);
             draw->AddText(ImVec2(pos.x+5*scale,pos.y+header+2*scale),cyui::palette().textDim,bounds.c_str());
-        }
-        const CounterBucket* previous=nullptr;
-        for(const auto& bucket:cache.buckets) {
-            float x=pos.x+static_cast<float>(bucket.pixel);
-            if(previous&&previous->last+1==bucket.first){
-                bool continuous=true;
-                if(c.frame_stats){const auto& before=c.frame_samples[previous->last];const auto& after=c.frame_samples[bucket.first];
-                    continuous=(before.flags&cyfs::FrameBounds)&&(after.flags&cyfs::FrameBounds)&&before.game_frame!=UINT64_MAX&&after.game_frame==before.game_frame+1;
-                }
-                if(continuous)draw->AddLine(ImVec2(pos.x+static_cast<float>(previous->pixel),y(c.samples[previous->last].Value(c.floating))),ImVec2(x,y(c.samples[bucket.first].Value(c.floating))),Colour(i),1.5f*scale);
-            }
-            draw->AddLine(ImVec2(x,y(c.samples[bucket.minimum].Value(c.floating))),ImVec2(x,y(c.samples[bucket.maximum].Value(c.floating))),Colour(i));
-            draw->AddCircleFilled(ImVec2(x,y(c.samples[bucket.last].Value(c.floating))),1.4f*scale,Colour(i),6);
-            previous=&bucket;
-        }
-        if(!any)draw->AddText(ImVec2(pos.x+5*scale,pos.y+header+8*scale),cyui::palette().textFaint,"No available observations in this interval");
+        }else draw->AddText(ImVec2(pos.x+5*scale,pos.y+header+8*scale),cyui::palette().textFaint,cyui::tr("No available observations in this interval").c_str());
         if(c.companion>=0) {
             const auto& flag=counters_->series[static_cast<size_t>(c.companion)];
             for(size_t j=flag.Lower(view_start_);j<flag.samples.size()&&flag.samples[j].time<=view_end_;++j) {
@@ -312,7 +289,7 @@ void Application::CounterTracks(float width) {
         }
         draw->PopClipRect();
         draw->AddLine(ImVec2(pos.x,pos.y+height-1),ImVec2(pos.x+width,pos.y+height-1),cyui::palette().lineStrong);
-        if(hover) {
+        if(hover||curve_hover) {
             double t=view_start_+span*std::clamp(double((ImGui::GetIO().MousePos.x-pos.x)/width),0.,1.);
             const auto* sample=counters_->At(i,t);
             if(c.frame_stats){

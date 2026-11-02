@@ -12,8 +12,9 @@ class Publisher {
         path.replace(at,std::string::npos,"cyinsights-draw-counters.json");
         while(!stop){
             uint64_t lease=0;int hz=0;{std::ifstream control(path+".enabled");control>>lease>>hz;}
-            uint64_t now=cytiles::Now();
-            if((hz!=1&&hz!=5&&hz!=10&&hz!=20)||lease>now||now-lease>2000000000ull){std::this_thread::sleep_for(std::chrono::milliseconds(250));continue;}
+            uint64_t now=cytiles::Now();bool fileLease=(hz==1||hz==5||hz==10||hz==20)&&lease<=now&&now-lease<=2000000000ull;
+            int localHz=cylink::Host().CounterRate();if(localHz)hz=localHz;
+            if(!fileLease&&!localHz){std::this_thread::sleep_for(std::chrono::milliseconds(250));continue;}
             Counts value,done;uint64_t s,f;size_t deviceCount;
             {std::lock_guard<std::mutex> guard(lock);value=total;done=completed;s=submits;f=frames;deviceCount=pending.size();}
             char data[2048];int size=std::snprintf(data,sizeof(data),
@@ -24,7 +25,8 @@ class Publisher {
                 (unsigned long long)value.draws,(unsigned long long)value.triangles,(unsigned long long)value.indirect,
                 (unsigned long long)value.unknownTriangles,(unsigned long long)value.unknownDraws,(unsigned long long)value.missingBuffers,value.overflow?"true":"false",
                 (unsigned long long)f,(unsigned long long)done.draws,(unsigned long long)done.triangles,(unsigned long long)done.unknownDraws,(unsigned long long)done.unknownTriangles,(unsigned long long)done.missingBuffers);
-            int fd=open((path+".tmp").c_str(),O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC|O_NOFOLLOW,0600);
+            if(localHz&&size>0&&size<int(sizeof(data)))cylink::Host().Counters(std::string(data,size));
+            int fd=fileLease?open((path+".tmp").c_str(),O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC|O_NOFOLLOW,0600):-1;
             if(fd>=0){bool ok=size>0&&size<int(sizeof(data))&&write(fd,data,size)==size;close(fd);if(ok)rename((path+".tmp").c_str(),path.c_str());}
             std::this_thread::sleep_for(std::chrono::milliseconds(1000/hz));
         }

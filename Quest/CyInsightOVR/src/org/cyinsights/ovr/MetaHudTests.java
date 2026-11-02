@@ -6,7 +6,7 @@ import java.util.*;
 /** Explicit simulated service tests; they do not prove headset visibility. */
 public final class MetaHudTests {
     private static final class Fake implements MetaHudController.Runner {
-        JSONObject config;boolean failOnce=false;int calls=0;
+        JSONObject config;boolean failOnce=false;int calls=0;String rejectEnable="",rejectDisable="";
         Fake()throws Exception{config=new JSONObject().put("overlayEnabled",false).put("statsEnabled",true).put("graphEnabled",true)
             .put("overlayScale",1.5).put("overlayDistance",.6).put("overlayPitch",20).put("overlayYaw",0).put("overlayHeadLocked",true)
             .put("metrics",new JSONArray().put(new JSONObject().put("name","Average FPS").put("graphEnabled",true).put("statEnabled",true)).put(new JSONObject().put("name","App GPU Time (us)").put("graphEnabled",false).put("statEnabled",true)).put(new JSONObject().put("name","Untouched metric").put("graphEnabled",false).put("statEnabled",true))
@@ -20,7 +20,7 @@ public final class MetaHudTests {
             if(action.equals("ENABLE_GRAPH")||action.equals("DISABLE_GRAPH")){
                 boolean enabled=action.equals("ENABLE_GRAPH");
                 if(args.length==6)config.put("graphEnabled",enabled);
-                else selected(args[8]).put("graphEnabled",enabled);
+                else if(!(enabled?rejectEnable:rejectDisable).equals(args[8]))selected(args[8]).put("graphEnabled",enabled);
             }
             if(action.equals("ENABLE_STAT")||action.equals("DISABLE_STAT"))selected(args[8]).put("statEnabled",action.equals("ENABLE_STAT"));
             if(action.equals("DISABLE_OVERLAY"))config.put("overlayEnabled",false);
@@ -68,7 +68,15 @@ public final class MetaHudTests {
             hud.enable("small","upper_center");check(fake.config.getDouble("overlayYaw")==0&&fake.config.getDouble("overlayPitch")==8,"Top center placement");hud.disable();
             hud.enable("small","center");check(fake.config.getDouble("overlayYaw")==0&&fake.config.getDouble("overlayPitch")==0,"Centered placement");hud.disable();
             hud.enable("small","lower_center");check(fake.config.getDouble("overlayYaw")==0&&fake.config.getDouble("overlayPitch")==-8,"Bottom center placement");hud.disable();
-            System.out.println("16 Meta HUD checks passed (explicit simulated service)");
+            fake.rejectEnable="app_gpu_time_microseconds";response=hud.enable("small","center");
+            check(response.getBoolean("settings_verified")&&!response.getBoolean("selection_complete")&&response.getJSONArray("graphs").length()==1&&response.getJSONArray("unavailable_graphs").getString(0).equals(fake.rejectEnable)&&!response.getString("warning").isEmpty(),"Rejected hardware metric is explicit while usable HUD stays enabled");
+            hud.disable();check(!file.exists()&&fake.config.getJSONArray("metrics").toString().equals(originalGraphs),"Partial selection restores original settings");
+            try{hud.enable(new JSONObject().put("graphs",new JSONArray().put(fake.rejectEnable)));throw new AssertionError("Entirely unavailable HUD accepted");}catch(IOException expected){}
+            check(!file.exists()&&!fake.config.getBoolean("overlayEnabled"),"Entirely unavailable selection rolls back");
+            fake.rejectEnable="";fake.rejectDisable="average_frame_rate";
+            try{hud.enable(selected);throw new AssertionError("Failure to hide an old metric was silently ignored");}catch(IOException expected){}
+            check(!file.exists()&&fake.config.getJSONArray("metrics").toString().equals(originalGraphs),"Refused disable remains fatal and rolls back");
+            System.out.println("21 Meta HUD checks passed (explicit simulated service)");
         }finally{if(file.exists())file.delete();new File(file.getPath()+".tmp").delete();}
     }
 }

@@ -21,7 +21,7 @@ constexpr Chart charts[]={
     {"Vulkan Known Triangles/Presented Frame","Known triangles / presented frame",1e-6,"M triangles/frame",1}};
 J Ids(const std::set<std::string>& ids){auto a=J::Array();for(const auto& id:ids)a.Push(id);return a;}
 J DisplaySettings(){auto out=J::Object();out["chart_mask"]=chart_mask;out["curve_hz"]=curve_hz;out["hud_size"]=hud_size;out["hud_corner"]=hud_corner;out["graphs"]=Ids(hud_graphs);out["stats"]=Ids(hud_stats);out["heatmap_mode"]=heatmap_mode;out["heatmap_position"]=heatmap_position;out["heatmap_ceiling_us"]=heatmap_ceiling;out["heatmap_hud_opacity"]=heatmap_hud_opacity;out["heatmap_full_opacity"]=heatmap_full_opacity;return out;}
-void SaveDisplaySettings(){auto out=DisplaySettings();out["operation"]="panel_settings";Action(out.Write().c_str());}
+void SaveDisplaySettings(){auto out=DisplaySettings();out["ui_theme"]=cyui::currentThemeKey();out["ui_density"]=cyui::density()==cyui::Density::comfortable?"comfortable":"compact";out["ui_locale"]=cyui::locale();out["operation"]="panel_settings";Action(out.Write().c_str());}
 void StartSelectedHud(){auto options=DisplaySettings();options["operation"]="overlay_meta_on";const char* names[]={"upper_left","upper_right","lower_left","lower_right","upper_center","center_left","center","center_right","lower_center"};options["size"]=hud_size==0?"small":"medium";options["corner"]=names[hud_corner];Action(options.Write().c_str());}
 void StartSelectedHeatmap(){auto options=J::Object();options["operation"]=state["live_tiles"]["active"].AsBool()?"heatmap_update":"heatmap_start";options["mode"]=heatmap_mode==0?"hud":"fullscreen";options["position"]=heatmap_position;options["ceiling_us"]=heatmap_ceiling;options["opacity"]=heatmap_mode==0?heatmap_hud_opacity:heatmap_full_opacity;Action(options.Write().c_str());}
 int HudGroup(const std::string& id){
@@ -32,6 +32,16 @@ int HudGroup(const std::string& id){
 }
 void DisplayControls(){
     bool changed=false;
+    cyui::beginCard("##appearance",cyui::tr("Appearance").c_str());
+    if(ImGui::BeginCombo(cyui::trLabel("Theme").c_str(),cyui::currentThemeKey().c_str())){
+        for(const auto& theme:cyui::builtInThemes())if(ImGui::Selectable(theme.name.c_str(),cyui::currentThemeKey()==theme.key)){cyui::setTheme(theme.key.c_str());changed=true;}ImGui::EndCombo();
+    }
+    int density=cyui::density()==cyui::Density::comfortable?1:0;const char* densities[]={"Compact","Comfortable"};
+    if(ImGui::Combo(cyui::trLabel("Density").c_str(),&density,densities,2)){cyui::setDensity(density?cyui::Density::comfortable:cyui::Density::compact);changed=true;}
+    if(ImGui::BeginCombo(cyui::trLabel("Language").c_str(),cyui::locale().c_str())){
+        for(const auto& locale:cyui::availableLocales())if(ImGui::Selectable(locale.name.c_str(),cyui::locale()==locale.code)){cyui::setLocale(locale.code.c_str());changed=true;}ImGui::EndCombo();
+    }
+    cyui::endCard();
     cyui::beginCard("##chart_settings","Panel graphs");
     const char* rates[]={"1 Hz","5 Hz","10 Hz","20 Hz"};const int values[]={1,5,10,20};int rate=0;for(int i=0;i<4;++i)if(values[i]==curve_hz)rate=i;
     if(ImGui::Combo("Curve updates",&rate,rates,4)){curve_hz=values[rate];changed=true;}
@@ -53,7 +63,7 @@ void DisplayControls(){
     const char* groups[]={"All","Frame & GPU","CPU","Memory","Device"};cyui::segmented("##hud_groups",groups,5,&hud_group,-1);
     const auto& catalog=state["hud_catalog"]["metrics"];
     if(!catalog.IsArray()){
-        cyui::textDim("Connect the developer collector to load the headset's HUD metrics.");
+        cyui::textDim("Authorize standalone HUD in Connection, then reload this headset's HUD metrics.");
     }else if(ImGui::BeginTable("##hud_metrics",3,ImGuiTableFlags_SizingStretchProp|ImGuiTableFlags_RowBg)){
         ImGui::TableSetupColumn("Metric",ImGuiTableColumnFlags_WidthStretch);ImGui::TableSetupColumn("Graph",ImGuiTableColumnFlags_WidthFixed,cyui::dp(80));ImGui::TableSetupColumn("Value",ImGuiTableColumnFlags_WidthFixed,cyui::dp(80));ImGui::TableHeadersRow();
         for(const auto& metric:catalog.Items()){
@@ -94,6 +104,7 @@ void DrawCounterControls(){
 void HeatmapControls(){
     bool changed=false;const char* corners[]={"Top left","Top right","Bottom left","Bottom right","Top center","Center left","Center","Center right","Bottom center"};
     cyui::beginCard("##heatmap_status","Live tile heatmap - Development Vulkan");
+    if(!state["bridge"].AsBool()){cyui::callout(cyui::Tone::warning,"The on-device GPU service is stopped. Start it here; no PC is needed.");if(cyui::primaryButton("Start GPU service"))Action("gpu_service_start");}
     const auto& live=state["live_tiles"];bool fresh=live["active"].AsBool()&&live["tiles"].AsNumber()>0&&!live["sample_age_ms"].IsNull()&&live["sample_age_ms"].AsNumber()<3000;cyui::badge(fresh?"MEASURED TILES RECEIVED":live["active"].AsBool()?"WAITING FOR TARGET DATA":live["layer_ready"].AsBool()?"LAYER LOADED":"SETUP REQUIRED",fresh?cyui::Tone::success:cyui::Tone::info);
     ImGui::TextWrapped("Experimental renderer; visibility is not yet validated. An independent heatmap, in addition to the Meta statistics HUD. Requires a debuggable Vulkan target; external layers are not available on arbitrary commercial APKs.");
     cyui::textDim("Heatmap target: %s",live["prepared"].AsBool()?live["target"].AsString().c_str():state["target_package"].AsString().c_str());

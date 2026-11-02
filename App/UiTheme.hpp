@@ -1,10 +1,15 @@
 // Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
 #pragma once
-#include <cyui/CyUI.h>
+#include <cyui/Core.h>
 namespace cyinsights {
 void InitializeUi(float dpi);
 void AppearanceMenu();
 void RenderUiExtras();
+void ShowPaletteEditor();
+// Host-owned palette transactions. Drafts belong to Inspector until commit.
+void CommitUiPalette(const cyui::Palette& palette);
+bool UndoUiPalette();
+bool RedoUiPalette();
 inline ImU32 ScopeColour(const std::string& name) {
     uint32_t hash=2166136261u;for(unsigned char c:name){hash^=c;hash*=16777619u;}
     return cyui::categorical(static_cast<int>(hash%12));
