@@ -26,7 +26,28 @@ Native C++ / Dear ImGui profiler for Unreal Engine traces, with an Insights-styl
 continuous CPU/GPU timeline and optional extra GPU capture data. The interface
 is written for CyInsights; it does not reuse the CyGPUInspector standalone UI.
 
-![CyInsights logo](Assets/Branding/cyinsights-logo-ui-v1.png)
+<img src="Assets/Branding/cyinsights-logo-ui-v1.png" alt="CyInsights logo" width="96">
+
+## Screenshots
+
+Actual Windows application views using recorded traces. Click an image to open
+it at full resolution.
+
+**CPU/GPU timeline** — synchronized frames, nested CPU scopes and recorded Quest
+hardware GPU stages on the same time axis.
+
+[![CyInsights CPU and GPU timeline with synchronized frames and recorded Quest GPU stages](Docs/Images/cyinsights-timeline.png)](Docs/Images/cyinsights-timeline.png)
+
+**Function histogram** — inspect a function's duration distribution and
+percentiles within the interval selected directly on the timeline.
+
+[![CyInsights function histogram following a selected timeline interval](Docs/Images/cyinsights-function-histogram.png)](Docs/Images/cyinsights-function-histogram.png)
+
+**GPU pass inspection** — optional Windows collector data with a pass timeline,
+draw/dispatch counts and reconstructed resource dependencies. Derived passes
+and relationships are labeled in the interface.
+
+[![CyInsights GPU pass timeline and reconstructed resource graph in the light theme](Docs/Images/cyinsights-gpu-passes.png)](Docs/Images/cyinsights-gpu-passes.png)
 
 ## Current capabilities
 
