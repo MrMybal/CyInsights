@@ -11,10 +11,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 FORBIDDEN_ROOTS = {'.Dependencies', 'build', 'bin', 'AI/runtime', 'Binaries',
                    'Intermediate', 'Saved', 'DerivedDataCache', 'Source', 'Content', 'Config',
-                   '.codex', '.agents', '.aws', '.ssh', '.idea'}
+                   '.codex', '.agents', '.aws', '.ssh', '.idea', '.local'}
 FORBIDDEN_SUFFIXES = {'.utrace', '.ucache', '.cycapture', '.cyindex', '.log', '.exe',
                       '.dll', '.lib', '.pdb', '.obj', '.addon64', '.uba', '.uproject', '.sln',
-                      '.pfx', '.p12', '.key', '.dmp', '.db', '.sqlite', '.sqlite3', '.bak'}
+                      '.pfx', '.p12', '.key', '.keystore', '.jks', '.dmp', '.db', '.sqlite', '.sqlite3', '.bak'}
 SECRETS = re.compile(rb'(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|'
                      rb'(?:AKIA|ASIA)[0-9A-Z]{16}|AIza[A-Za-z0-9_-]{35}|'
                      rb'xox[baprs]-[A-Za-z0-9-]{20,}|sk-(?:proj-)?[A-Za-z0-9_-]{32,}|'
@@ -105,6 +105,14 @@ def main():
     cyui_root = ROOT / 'ThirdParty/CyUI'
     cyui_lock = json.loads((cyui_root / 'source-sha256.json').read_text(encoding='utf-8'))
     publication_files = set(files) | tracked
+    cydoc_root=ROOT/'ThirdParty/CyDoc'
+    cydoc=json.loads((cydoc_root/'snapshot.json').read_text(encoding='utf-8'))
+    for name,expected in cydoc['sha256'].items():
+        path=cydoc_root/name
+        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest()!=expected:
+            errors.append('CyDoc dependency hash mismatch: '+name)
+        if ('ThirdParty/CyDoc/'+name) not in publication_files:
+            errors.append('CyDoc dependency omitted: '+name)
     for name, expected in cyui_lock.items():
         path = cyui_root / name
         if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected:

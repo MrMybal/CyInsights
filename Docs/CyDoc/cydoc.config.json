@@ -1,0 +1,16 @@
+{
+  "name": "CyInsights & CyInsightOVR",
+  "version": "from VERSION.json",
+  "defaultLocale": "en",
+  "locales": [{"code": "en", "label": "English"}, {"code": "fr", "label": "Français"}],
+  "homePage": "welcome",
+  "content": "content",
+  "assets": "assets",
+  "out": "export",
+  "modules": ["image"],
+  "translationReport": true,
+  "sources": ["sources"],
+  "sourceIndex": {"enabled": true, "includeDirs": ["sources"]},
+  "apiImports": [{"format": "cydoc", "path": "operations.json", "prefix": "operation", "locale": "en"}],
+  "aliases": {"overview": "welcome", "manual": "welcome", "help": "welcome"}
+}

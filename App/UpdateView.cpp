@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
 #include "UpdateView.hpp"
+#include "ManualView.hpp"
 #include "ReleaseUpdate.hpp"
 #include <Windows.h>
 #include <cyui/Core.h>
@@ -59,7 +60,7 @@ struct Controller {
 };
 Controller& State(){static Controller controller;return controller;}
 }
-void UpdateMenu(){if(ImGui::BeginMenu("Help")){if(ImGui::MenuItem("Updates..."))State().visible=true;ImGui::EndMenu();}}
+void UpdateMenu(){if(ImGui::BeginMenu("Help")){if(ImGui::MenuItem("User manual...","F1"))ShowManual("welcome");if(ImGui::BeginMenu("Documentation")){if(ImGui::MenuItem("Timeline and measurements"))ShowManual("timeline");if(ImGui::MenuItem("Quest GPU capture"))ShowManual("quest-capture");if(ImGui::MenuItem("Quest HUD and counters"))ShowManual("quest-hud");if(ImGui::MenuItem("AI / MCP / SDK"))ShowManual("ai");if(ImGui::MenuItem("Troubleshooting"))ShowManual("troubleshooting");ImGui::EndMenu();}if(ImGui::MenuItem("Updates..."))State().visible=true;ImGui::EndMenu();}}
 void ShowUpdates(){State().visible=true;}
 void SuppressAutomaticUpdateCheck(){State().suppress=true;}
 bool UpdatesVisible(){return State().visible;}

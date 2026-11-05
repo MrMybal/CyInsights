@@ -16,13 +16,13 @@ public final class VrHudService extends Service {
         PendingIntent open=PendingIntent.getActivity(this,3,new Intent(this,MainActivity.class),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         PendingIntent stop=PendingIntent.getService(this,4,new Intent(this,VrHudService.class).setAction("stop"),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         startForeground(2,new Notification.Builder(this,"cyovr-vr-hud").setSmallIcon(android.R.drawable.ic_menu_view)
-            .setContentTitle("CyInsightOVR compact VR HUD").setContentText("Rendered by Meta. Open to configure, or Stop to restore previous HUD settings.")
+            .setContentTitle("CyInsightOVR compact VR HUD").setContentText("Selected curves and values. Open to configure; Stop hides all statistics HUDs.")
             .setContentIntent(open).addAction(new Notification.Action.Builder(null,"Stop HUD",stop).build()).setOngoing(true).build());
         running=true;
     }
     @Override public int onStartCommand(Intent intent,int flags,int id){
         if(intent!=null&&"stop".equals(intent.getAction()))worker.execute(()->{
-            try{JSONObject result=BridgeClient.request(this,new JSONObject().put("operation","overlay_meta_off"));
+            try{JSONObject result=BridgeClient.request(this,new JSONObject().put("operation","display_hud_off"));
                 if(result.has("error"))throw new IllegalStateException(result.optString("error"));
                 stopSelf();
             }catch(Exception e){android.util.Log.e("CyInsightOVR","HUD stop failed; reopen CyInsightOVR and retry",e);}

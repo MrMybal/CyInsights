@@ -1,3 +1,108 @@
+# Shared Meta HUD metric integration, 2026-11-04
+
+- The previous raw-counter route used a second Vulkan statistics renderer. It
+  did not add draw/triangle graphs to the existing Meta HUD. Custom definitions
+  now use the public OVR Metrics application-metric IPC, under the companion's
+  actual package/UID, with independent ShowGraph/ShowStat flags. That first
+  attempt was disproven by a real headset screenshot: only the original FPS
+  graph and native values were visible despite accepted definitions and samples.
+  The final route uses the authenticated Development layer (protocol 4), loading
+  our helper from the installed APK and publishing under the actual game's
+  Context/UID. No target APK or private game file is modified. No proprietary
+  Meta SDK implementation or binary is bundled. The Vulkan layer still supplies
+  measured geometry and the independent tile heatmap.
+- While testing the integration, a fractional custom value crashed Meta's
+  AppMetricsManager in JsonReader.nextInt. Values and range limits now use
+  integers. Millions of triangles become thousands of triangles in the HUD;
+  source data is unchanged. Missing, stale and integer-overflow values are not
+  submitted as invented zeros or clamped totals.
+- The corrected Vulkan APK was installed with an in-place update, preserving
+  preferences. The previously stalled Meta service was restarted without clearing
+  its data or changing any game. A real display_hud_on request now succeeds:
+  five custom definitions accepted, fresh measured system GPU values submitted,
+  and shared HUD graph/value visibility, scale and placement read back correctly.
+  The selected geometry target was not running at that point, so geometry stayed
+  unavailable. These results do not establish that custom graphs were visible.
+- Thirty-seven Java fixture checks pass, including integer schema conversion,
+  useful triangle units, out-of-range handling, independent selections, source
+  gaps and rollback when global HUD activation fails. Physical graph visibility
+  and live geometry in the shared HUD remain under investigation. Both APK
+  variants compile; all 37 graph fixtures and 23 simulated Meta configuration
+  checks also pass inside the installed APK on Android. A pre-final live counter
+  observation measured 1,662 known draws and 36,722 known input triangles over
+  100.11 ms (9.99 Hz); this confirms the data source, not displayed graphs. The
+  final layer was installed, but the Quest slept before its new game renderer
+  initialized. No cross-application visual success is claimed from that state.
+
+# Independent HUD curves and values, 2026-11-04
+
+- Vulkan metrics now have independent HUD graph and HUD value checkboxes. The
+  saved selection and the native-to-Java request preserve both flags; text-only
+  selections use compact rows and do not draw a curve. Previous graph selections
+  keep their formerly included text when preferences are migrated.
+- HUD startup can arm counters for a prepared game without requiring a fresh
+  layer heartbeat while configuration pauses that game. An unprepared target is
+  prepared automatically. The game still needs one complete reopen to load an
+  installed/updated layer. Target validation and application-owned service
+  permissions are retained; no game is launched or restarted by this action.
+- Layer protocol 3 carries HUD recording feedback from the authenticated game
+  PID. Curve packet version 2 carries graph/text flags. Old layer clients remain
+  supported for counters/tiles, but do not receive unsupported curve packets.
+  The panel distinguishes arming, fresh data, source gaps and recorded rendering
+  commands. Command recording is not proof of headset visibility.
+- Twenty-seven Java fixture checks pass, covering independent text/graph flags,
+  routing, source freshness, missing values, stop/restart and packet generation.
+  Native decoder/geometry checks pass with the actual Java-produced packet and
+  both packet versions. Standard and Vulkan APKs compile with verified v3
+  development signatures. Existing publication and plugin packaging tests pass.
+- Android rejected the update in place because the prior disposable development
+  key was missing. With user authorization, the Vulkan APK was reinstalled and
+  all 13 private files and 11 external files were restored with identical SHA-256
+  hashes before launch. The previous developer settings permission and app-op
+  modes were restored. The installed APK matches the final built artifact. The
+  build now keeps its development key outside disposable output to protect it
+  from a build-directory cleanup; this is still a development signature.
+- All 27 Java fixtures pass inside the installed APK using Android's JSON
+  implementation. Separate calls to the real APK-owned service passed curve
+  only, text only and combined selections, including arming while the game is
+  absent. Counters remain in a waiting state with zero measured HUD metrics in
+  that case; no sample data was injected. Each test session was stopped.
+- The normal-window input test did not render while the Quest was asleep and
+  correctly failed instead of generating offscreen frames. This attempt does
+  not validate visible checkboxes or in-game rendering. The wearer has been
+  asked to keep the headset active for the remaining test.
+
+# In-game graph selection, 2026-11-03
+
+- One native selection table routes Meta graphs/values and CyInsights Vulkan
+  curves, including draw calls and input triangles. The former application caps
+  of six Meta graphs/eight values are removed. Firmware refusals remain explicit.
+- Local Java fixtures exercise routing, start/stop/restart, complete backend
+  failure, mixed availability, missing data, source-session reset, peak retention
+  and the actual Java-to-native curve packet. Native checks exercise strict
+  decoding, geometry, source gaps and all nine placements.
+- Twenty Java fixture checks and all 28 native CTest suites pass. The Java-produced
+  packet is accepted by the actual native decoder. Standard and Vulkan arm64
+  APKs compile; development v3 signatures are verified. These are local checks,
+  not a headset visibility or profiling-overhead result.
+- The curve renderer batches text, lines and background into a single draw for
+  each eligible pass. It owns recording-specific buffers and restores vertex
+  binding, pipeline, viewport and scissor. It does not modify push constants,
+  descriptors, restart a target, or capture images.
+- On 2026-11-04 the Vulkan APK was installed on Quest 3. The installed APK's
+  SHA-256 matched the built artifact, and private display preferences were
+  preserved. The 20 Java fixture checks also passed inside the installed APK
+  using Android's JSON implementation; these remain synthetic checks.
+- The normally launched Display & HUD panel passed drag-without-click, key and
+  scroll-axis input, checkbox toggling and persistence. PixelCopy succeeded and
+  the real screenshot was inspected: the unified selection table and Draw calls
+  + triangles preset are present. The panel measured 72.07 FPS at a 72 Hz target,
+  0.64 ms draw time and a 14.61 ms p95 frame interval. Test preferences were
+  restored afterwards. These are panel measurements, not profiling overhead.
+- The dedicated GPU test launch did not produce a running game process or a
+  connected layer in this attempt. Live in-game curve visibility remains
+  unverified; the panel screenshot and local geometry preview do not prove it.
+
 # App-owned GPU runtime, 2026-11-02
 
 - The installed APK starts its own foreground GPU service as the application UID.

@@ -1,5 +1,7 @@
 # Installed Unreal task decoder
 
+**[Documentation](https://mrmybal.github.io/CyInsights/#/en/tasks)** · [Documentation en français](https://mrmybal.github.io/CyInsights/#/fr/tasks)
+
 This optional adapter reads TaskTrace lifecycle events through the **installed**
 Unreal Insights Core and TraceAnalysis DLLs. Only `NativeTasks.cpp` is compiled.
 No Unreal source, engine binary or plugin is rebuilt by this CMake project.

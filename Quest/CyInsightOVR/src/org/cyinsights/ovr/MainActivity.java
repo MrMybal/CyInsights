@@ -37,6 +37,12 @@ public final class MainActivity extends Activity {
     private static native void nativeUpdateState(String text);
     private GithubUpdater updater;
     private PanelView view;private PanelInput input;private final Handler ui=new Handler(Looper.getMainLooper());
+    private JSONObject pendingHudApply;
+    private final Runnable applySavedHud=()->{JSONObject options=pendingHudApply;pendingHudApply=null;if(options==null||this.worker==null||this.worker.isShutdown())return;
+        try{JSONArray custom=options.optJSONArray("custom_graphs"),graphs=options.optJSONArray("graphs"),stats=options.optJSONArray("stats");
+            if((custom==null||custom.length()==0)&&(graphs==null||graphs.length()==0)&&(stats==null||stats.length()==0))options.put("operation","display_hud_off");
+            options.put("package",this.target);send(options);
+        }catch(JSONException invalid){lastActionError=invalid.getMessage();}};
     private ScheduledFuture<?> pollTask;private int curveHz=10;
     private void schedulePoll(){if(pollTask!=null)pollTask.cancel(false);pollTask=worker.scheduleWithFixedDelay(this::poll,0,1000/curveHz,TimeUnit.MILLISECONDS);}
     private ScheduledExecutorService worker;private volatile boolean active=false;
@@ -48,11 +54,12 @@ public final class MainActivity extends Activity {
     private final Runnable pinRequest=new Runnable(){public void run(){if(pinRequestPending&&active&&!isFinishing()){pinRequestPending=false;QuickAccess.pin(MainActivity.this);}}};
     void reloadDisplaySettingsForTest(){String saved=getPreferences(0).getString("display_settings","{}");view.queueEvent(()->nativeSettings(saved));}
     private void maybeCheckPanel(){
-        if(!panelCheckStarted&&getIntent().getBooleanExtra("check_panel",false)&&(getApplicationInfo().flags&android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)!=0){panelCheckStarted=true;new PanelCheck(this).start();}
+        if(active&&!panelCheckStarted&&getIntent().getBooleanExtra("check_panel",false)&&(getApplicationInfo().flags&android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)!=0){panelCheckStarted=true;new PanelCheck(this).start();}
     }
     PanelView renderViewForTest(){return view;}
     void pageForTest(int page){view.queueEvent(()->nativeSelectPage(page));}
     private void requestedLaunchActions(){
+        if(getIntent().getBooleanExtra("open_help",false)){getIntent().removeExtra("open_help");HelpActivity.open(this,getIntent().getStringExtra("help_topic"),getIntent().getStringExtra("help_locale"));}
         if(getIntent().getBooleanExtra("request_view_share",false)){getIntent().removeExtra("request_view_share");startActivity(new Intent(this,ShareViewActivity.class));}
         String selected=getIntent().getStringExtra("target_package");if(selected!=null&&selected.matches("[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z0-9_]+)+")){target=selected;getPreferences(0).edit().putString("target",target).apply();getIntent().removeExtra("target_package");}
         if(getIntent().getBooleanExtra("open_settings",false)){getIntent().removeExtra("open_settings");view.queueEvent(()->nativeSelectPage(2));}
@@ -86,7 +93,7 @@ public final class MainActivity extends Activity {
     }
     private void publish(JSONObject state) {
         JSONObject live=state.optJSONObject("live_tiles");preparedHeatmapTarget=live!=null&&live.optBoolean("prepared")?live.optString("target"):"";
-        try{state.put("target_package",target);state.put("action_warning",lastActionWarning);state.put("android_overlay_attached",OverlayService.windowAttached);state.put("panel_performance",view.performance());if(xrCapabilities!=null)state.put("openxr_capabilities",xrCapabilities);if(hudCatalog!=null)state.put("hud_catalog",hudCatalog);}catch(JSONException ignored){}
+        try{state.put("app_variant",UpdateBuild.VARIANT);state.put("target_package",target);state.put("action_error",lastActionError);state.put("action_warning",lastActionWarning);state.put("android_overlay_attached",OverlayService.windowAttached);state.put("panel_performance",view.performance());if(xrCapabilities!=null)state.put("openxr_capabilities",xrCapabilities);if(hudCatalog!=null)state.put("hud_catalog",hudCatalog);}catch(JSONException ignored){}
         // Called from the worker: JSON parsing and capture preparation stay off GL.
         nativeSnapshot(state.toString());view.requestRender();
     }
@@ -117,16 +124,19 @@ public final class MainActivity extends Activity {
         if(name.equals("collector_retry")){lastPollNs=0;lastCatalogAttemptNs=0;refreshHudCatalog=true;worker.execute(this::poll);return;}
         if(name.startsWith("{")){
             try{JSONObject options=new JSONObject(name);
+                if("open_help".equals(options.optString("operation"))){HelpActivity.open(this,options.optString("topic","quest-setup"),options.optString("locale",""));return;}
                 if("panel_settings".equals(options.optString("operation"))){
-                    if(name.length()>4096)throw new IllegalArgumentException("Settings too large");
+                    if(name.length()>16384)throw new IllegalArgumentException("Settings too large");
+                    JSONObject live=options.optJSONObject("apply_hud");options.remove("apply_hud");
                     int hz=DrawCounterSample.frequency(options.optInt("curve_hz",10));
                     options.remove("operation");getPreferences(0).edit().putString("display_settings",options.toString()).apply();
-                    if(curveHz!=hz){curveHz=hz;schedulePoll();worker.execute(()->{try{JSONObject state=request(new JSONObject().put("operation","snapshot"));JSONObject counters=state.optJSONObject("draw_counters");if(counters!=null&&counters.optBoolean("active"))request(new JSONObject().put("operation","draw_counters_start").put("package",counters.getString("target")).put("hz",hz));}catch(Exception error){lastActionError=error.getMessage();}});}return;
+                    if(curveHz!=hz){curveHz=hz;schedulePoll();worker.execute(()->{try{JSONObject state=request(new JSONObject().put("operation","snapshot"));JSONObject counters=state.optJSONObject("draw_counters");if(counters!=null&&counters.optBoolean("active"))request(new JSONObject().put("operation","draw_counters_start").put("package",counters.getString("target")).put("hz",hz));}catch(Exception error){lastActionError=error.getMessage();}});}
+                    if(live!=null){pendingHudApply=live;ui.removeCallbacks(applySavedHud);ui.postDelayed(applySavedHud,400);}return;
                 }
-                if(!"overlay_meta_on".equals(options.optString("operation"))&&!"heatmap_start".equals(options.optString("operation"))&&!"heatmap_update".equals(options.optString("operation")))throw new IllegalArgumentException("Invalid HUD action");
+                if(!"display_hud_on".equals(options.optString("operation"))&&!"overlay_meta_on".equals(options.optString("operation"))&&!"heatmap_start".equals(options.optString("operation"))&&!"heatmap_update".equals(options.optString("operation")))throw new IllegalArgumentException("Invalid HUD action");
                 options.put("package",HeatmapTarget.resolve(options.optString("operation"),target,preparedHeatmapTarget));
                 send(options);return;
-            }catch(Exception e){new AlertDialog.Builder(this).setMessage("Invalid HUD configuration").setPositiveButton("OK",null).show();return;}
+            }catch(Exception e){lastActionError="Invalid HUD configuration: "+e.getMessage();new AlertDialog.Builder(this).setMessage(lastActionError).setPositiveButton("OK",null).show();return;}
         }
         if(name.equals("capture")){
             if(!target.matches("[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z0-9_]+)+")){action("target");return;}
@@ -150,7 +160,7 @@ public final class MainActivity extends Activity {
             if(!android.provider.Settings.canDrawOverlays(this))startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,android.net.Uri.parse("package:"+getPackageName())));
             else startForegroundService(new Intent(this,OverlayService.class));return;
         }
-        if(name.equals("overlay_stop")){stopService(new Intent(this,OverlayService.class));send("overlay_meta_off");return;}
+        if(name.equals("overlay_stop")){stopService(new Intent(this,OverlayService.class));send("display_hud_off");return;}
         if(name.equals("target")) {
             EditText field=new EditText(this);field.setSingleLine();field.setText(target);
             new AlertDialog.Builder(this).setTitle("Target Android package").setMessage("Exact package name. Capturing never launches or restarts the target.").setView(field).setNegativeButton("Cancel",null).setPositiveButton("Use target",(d,w)->{
@@ -175,18 +185,18 @@ public final class MainActivity extends Activity {
             try {
                 JSONObject result=request(options);
                 if(result.has("error")){lastActionError=result.optString("error");android.util.Log.w("CyInsightOVR","HUD request "+options.optString("operation")+" for "+options.optString("package")+": "+lastActionError);}else lastActionError="";
-                if("overlay_meta_on".equals(options.optString("operation"))||"overlay_meta_off".equals(options.optString("operation")))lastActionWarning=result.optString("warning");
+                if(options.optString("operation").contains("hud_")||"overlay_meta_on".equals(options.optString("operation"))||"overlay_meta_off".equals(options.optString("operation")))lastActionWarning=result.optString("warning");
                 if(result.has("error"))ui.post(()->{if(!isFinishing())new AlertDialog.Builder(this).setMessage(result.optString("error")).setPositiveButton("OK",null).show();});
                 else if("hud_catalog".equals(options.optString("operation")))hudCatalog=result;
                 else if(("heatmap_start".equals(options.optString("operation"))||"heatmap_update".equals(options.optString("operation")))&&result.optBoolean("active"))ui.post(()->startForegroundService(new Intent(this,LiveHeatmapService.class)));
                 else if("heatmap_stop".equals(options.optString("operation"))||"heatmap_remove".equals(options.optString("operation")))ui.post(()->stopService(new Intent(this,LiveHeatmapService.class)));
-                else if("overlay_meta_on".equals(options.optString("operation"))&&result.optBoolean("accepted")){
+                else if(("display_hud_on".equals(options.optString("operation"))||"overlay_meta_on".equals(options.optString("operation")))&&result.optBoolean("accepted")){
                     ui.post(()->{
                         stopService(new Intent(this,OverlayService.class));
                         startForegroundService(new Intent(this,VrHudService.class));
                         // Starting a HUD does not close the configuration panel.
                     });
-                }else if("overlay_meta_off".equals(options.optString("operation")))ui.post(()->stopService(new Intent(this,VrHudService.class)));
+                }else if("display_hud_off".equals(options.optString("operation"))||"overlay_meta_off".equals(options.optString("operation")))ui.post(()->stopService(new Intent(this,VrHudService.class)));
                 poll();
             }catch(Exception e){lastActionError=BridgeClient.failureMessage(e);ui.post(()->{
                 if(isFinishing())return;
@@ -218,6 +228,6 @@ public final class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(active)requestedLaunchActions();maybeCheckPanel();}
     @Override public void onWindowFocusChanged(boolean focus){super.onWindowFocusChanged(focus);if(focus&&pinRequestPending){ui.removeCallbacks(pinRequest);ui.postDelayed(pinRequest,200);}}
     @Override protected void onPause(){active=false;input.cancel();ui.removeCallbacks(commands);view.onPause();super.onPause();}
-    @Override protected void onDestroy(){active=false;if(updater!=null)updater.close();worker.shutdownNow();view.dispose();super.onDestroy();}
+    @Override protected void onDestroy(){active=false;ui.removeCallbacks(applySavedHud);if(updater!=null)updater.close();worker.shutdownNow();view.dispose();super.onDestroy();}
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(requestCode==941&&updater!=null){updater.installationResult(resultCode);return;}if(requestCode==40&&resultCode==RESULT_OK&&data!=null&&capture!=null){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){out.write(capture.toString().getBytes(StandardCharsets.UTF_8));}catch(Exception e){new AlertDialog.Builder(this).setMessage("Export failed: "+e.getMessage()).setPositiveButton("OK",null).show();}}}
 }

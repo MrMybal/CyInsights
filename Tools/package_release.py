@@ -88,6 +88,16 @@ def main():
             raise SystemExit('Executable failed publication inspection: '+name)
         app[name] = data
     app['windows-signatures.json'] = json.dumps(signatures, indent=2).encode()
+    app['LICENCES/CyDoc-MIT.txt']=(ROOT/'LICENCES/CyDoc-MIT.txt').read_bytes()
+    # Ship the complete checked CyDoc tree; no build tools or Node runtime.
+    help_root=binaries/'help'
+    help_manifest=json.loads((help_root/'export-sha256.json').read_text(encoding='utf-8'))
+    for name,expected in help_manifest['files'].items():
+        path=(help_root/name).resolve()
+        if not path.is_relative_to(help_root.resolve()) or hashlib.sha256(path.read_bytes()).hexdigest()!=expected:
+            raise SystemExit('Offline help export changed: '+name)
+        app['help/'+name]=path.read_bytes()
+    app['help/export-sha256.json']=(help_root/'export-sha256.json').read_bytes()
     app['Docs/Updates.md'] = (ROOT/'Docs/Updates.md').read_bytes()
     for name in tracked:
         # Preserve licensed dependency notices and the offline AI installer;

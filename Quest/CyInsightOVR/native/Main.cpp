@@ -35,6 +35,7 @@ ImVec2 capture_button_center(-1,-1);
 double previous=0;bool initialized=false;
 bool auto_open_capture=true;
 unsigned rendered_frames=0;
+std::string manual_locale="en";
 double Now(){return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();}
 void Action(const char* name){std::lock_guard<std::mutex> lock(command_mutex);if(command.empty())command=name;}
 std::string Utf(JNIEnv* env,jstring s){if(!s)return {};const char* p=env->GetStringUTFChars(s,nullptr);std::string out=p;env->ReleaseStringUTFChars(s,p);return out;}
@@ -110,13 +111,27 @@ void Draw() {
     ImGui::SameLine();if(cyui::button("Export .cyovr"))Action("export");ImGui::SameLine();if(cyui::button("Quick access"))Action("quick_access");
     ImGui::SameLine();
     if(cyui::button("Stop HUD"))Action("overlay_stop");
-    const char* pages[]={"Overview","GPU heatmap","Display & HUD","Heatmap overlay","Connection","Updates"};if(cyui::segmented("##pages",pages,6,&page,-1))auto_open_capture=false;
+    const char* pages[]={"Overview","GPU heatmap","Display & HUD","Heatmap overlay","Connection","Updates","Help"};if(cyui::segmented("##pages",pages,7,&page,-1))auto_open_capture=false;
+    if(page!=6&&cyui::button("Help for this page")){const char* topics[]={"quest-setup","quest-heatmap","quest-hud","quest-heatmap","quest-capture","updates"};auto help=J::Object();help["operation"]="open_help";help["topic"]=topics[std::clamp(page,0,5)];Action(help.Write().c_str());}
+    if(page==6){
+        cyui::heading("Offline documentation / Documentation locale",2);
+        ImGui::TextWrapped("CyDoc opens the complete local manual, screenshots and reference material. No network or PC is required. / Manuel, captures et références disponibles sans réseau ni PC.");
+        if(cyui::primaryButton("Open manual / Ouvrir le manuel"))Action("{\"operation\":\"open_help\",\"topic\":\"quest-setup\"}");
+        if(cyui::button("English"))Action("{\"operation\":\"open_help\",\"topic\":\"quest-setup\",\"locale\":\"en\"}");ImGui::SameLine();
+        if(cyui::button("Français"))Action("{\"operation\":\"open_help\",\"topic\":\"quest-setup\",\"locale\":\"fr\"}");
+        if(cyui::button("HUD graphs and values"))Action("{\"operation\":\"open_help\",\"topic\":\"quest-hud\"}");
+        if(cyui::button("Draw calls and triangles"))Action("{\"operation\":\"open_help\",\"topic\":\"quest-counters\"}");
+        if(cyui::button("Heatmap and recording"))Action("{\"operation\":\"open_help\",\"topic\":\"quest-heatmap\"}");
+        if(cyui::button("Troubleshooting"))Action("{\"operation\":\"open_help\",\"topic\":\"troubleshooting\"}");
+        cyui::renderNotifications();ImGui::End();return;
+    }
     const float footer=ImGui::GetFrameHeightWithSpacing()+cyui::dp(6);
     ImGui::BeginChild("##page_content",ImVec2(0,std::max(cyui::dp(80),ImGui::GetContentRegionAvail().y-footer)),ImGuiChildFlags_None,ImGuiWindowFlags_AlwaysVerticalScrollbar);
     if(previous_page!=page){ImGui::SetScrollY(0);pending_scroll=0;previous_page=page;}
     if(pending_scroll!=0){ImGui::SetScrollY(std::clamp(ImGui::GetScrollY()+pending_scroll,0.f,ImGui::GetScrollMaxY()));pending_scroll=0;}
     if(state["capturing"].AsBool())cyui::progressBar(-1,ImVec2(-1,cyui::dp(18)),"Capturing measured GPU stages...");
     if(!error.empty())cyui::callout(cyui::Tone::error,error.c_str());
+    if(!state["action_error"].AsString().empty())cyui::callout(cyui::Tone::error,state["action_error"].AsString().c_str());
     if(!state["action_warning"].AsString().empty())cyui::callout(cyui::Tone::warning,state["action_warning"].AsString().c_str());
     if(!connected&&!standalone&&!state["status"].AsString().empty()){
         cyui::callout(cyui::Tone::warning,state["status"].AsString().c_str());
@@ -175,7 +190,7 @@ void Draw() {
     }
     body_scroll=ImGui::GetScrollY();body_scroll_max=ImGui::GetScrollMaxY();ImGui::EndChild();
     if(cyui::button("Scroll up"))pending_scroll=-height*.55f;ImGui::SameLine();if(cyui::button("Scroll down"))pending_scroll=height*.55f;ImGui::SameLine();
-    if(page==2){ImGui::BeginDisabled(hud_graphs.empty()&&hud_stats.empty());if(cyui::button("Start HUD"))StartSelectedHud();auto a=ImGui::GetItemRectMin(),b=ImGui::GetItemRectMax();hud_button_center=ImVec2((a.x+b.x)*.5f,(a.y+b.y)*.5f);ImGui::EndDisabled();ImGui::SameLine();}
+    if(page==2){ImGui::BeginDisabled(hud_graphs.empty()&&hud_stats.empty()&&custom_graphs.empty()&&custom_values.empty());if(cyui::button(state["curve_hud"]["active"].AsBool()||state["vr_hud"]["enabled"].AsBool()?"Apply HUD":"Start HUD"))StartSelectedHud();auto a=ImGui::GetItemRectMin(),b=ImGui::GetItemRectMax();hud_button_center=ImVec2((a.x+b.x)*.5f,(a.y+b.y)*.5f);ImGui::EndDisabled();ImGui::SameLine();}
     if(page==3){ImGui::BeginDisabled(!state["live_tiles"]["layer_ready"].AsBool());if(cyui::primaryButton(state["live_tiles"]["active"].AsBool()?"Apply heatmap":"Start heatmap"))StartSelectedHeatmap();ImGui::EndDisabled();ImGui::SameLine();if(cyui::button("Stop heatmap"))Action("heatmap_stop");ImGui::SameLine();}
     cyui::textDim("Drag / stick / wheel | %.0f%%",body_scroll_max>0?body_scroll/body_scroll_max*100:0);
     cyui::renderNotifications();ImGui::End();
@@ -184,7 +199,7 @@ void Draw() {
 extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeInit(JNIEnv*,jclass) {
     if(initialized){ImGui_ImplOpenGL3_Shutdown();ImGui::DestroyContext();}
     IMGUI_CHECKVERSION();ImGui::CreateContext();auto& io=ImGui::GetIO();io.IniFilename=nullptr;io.LogFilename=nullptr;
-    cyui::Config config;config.themeKey="navy";config.density=cyui::Density::comfortable;config.dpiScale=1.2f;cyui::apply(config);cyui::loadFonts();
+    cyui::Config config;config.themeKey="navy";config.density=cyui::Density::comfortable;config.dpiScale=1.2f;cyui::apply(config);cyui::loadFonts({0,"/system/fonts",false});
     ImGui_ImplOpenGL3_Init("#version 300 es");previous=Now();hud_button_center=ImVec2(-1,-1);initialized=true;
     __android_log_print(ANDROID_LOG_INFO,"CyInsightOVR","Native panel renderer initialized");
 }
@@ -203,19 +218,23 @@ extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeWhe
 extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeScroll(JNIEnv*,jclass,jfloat pixels){if(std::isfinite(pixels))pending_scroll+=std::clamp(float(pixels),-2000.f,2000.f);}
 extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeSettings(JNIEnv* env,jclass,jstring text){
     J settings;if(!J::Parse(Utf(env,text),settings))return;
+    manual_locale=settings["manual_locale"].AsString()=="fr"?"fr":"en";
     if(initialized){const auto& theme=settings["ui_theme"].AsString();const auto& locale=settings["ui_locale"].AsString();cyui::setTheme(theme.empty()?"navy":theme.c_str());cyui::setDensity(settings["ui_density"].AsString()=="compact"?cyui::Density::compact:cyui::Density::comfortable);cyui::setLocale(locale.empty()?"en":locale.c_str());}
     chart_mask=settings["chart_mask"].AsUInt32(15|(3u<<6))&((1u<<std::size(charts))-1);curve_hz=int(settings["curve_hz"].AsNumber(10));if(curve_hz!=1&&curve_hz!=5&&curve_hz!=10&&curve_hz!=20)curve_hz=10;hud_size=int(std::clamp(settings["hud_size"].AsNumber(),0.,1.));hud_corner=int(std::clamp(settings["hud_corner"].AsNumber(),0.,8.));
     heatmap_mode=int(std::clamp(settings["heatmap_mode"].AsNumber(),0.,1.));heatmap_position=int(std::clamp(settings["heatmap_position"].AsNumber(8),0.,8.));
     heatmap_ceiling=float(std::clamp(settings["heatmap_ceiling_us"].AsNumber(500),10.,5000.));heatmap_hud_opacity=float(std::clamp(settings["heatmap_hud_opacity"].AsNumber(.25),.05,1.));heatmap_full_opacity=float(std::clamp(settings["heatmap_full_opacity"].AsNumber(.2),.05,1.));
-    if(settings["graphs"].IsArray()){hud_graphs.clear();for(const auto& id:settings["graphs"].Items())if(hud_graphs.size()<6)hud_graphs.insert(id.AsString());}
-    if(settings["stats"].IsArray()){hud_stats.clear();for(const auto& id:settings["stats"].Items())if(hud_stats.size()<8)hud_stats.insert(id.AsString());}
+    if(settings["graphs"].IsArray()){hud_graphs.clear();for(const auto& id:settings["graphs"].Items())hud_graphs.insert(id.AsString());}
+    if(settings["stats"].IsArray()){hud_stats.clear();for(const auto& id:settings["stats"].Items())hud_stats.insert(id.AsString());}
+    if(settings["custom_graph_names"].IsArray()){custom_graphs.clear();for(const auto& name:settings["custom_graph_names"].Items())for(const auto& c:charts)if(name.AsString()==c.name)custom_graphs.insert(c.name);}
+    custom_values.clear();if(settings["custom_value_names"].IsArray()){for(const auto& name:settings["custom_value_names"].Items())for(const auto& c:charts)if(name.AsString()==c.name)custom_values.insert(c.name);}else custom_values=custom_graphs;
+    custom_position=int(std::clamp(settings["custom_position"].AsNumber(8),0.,8.));custom_opacity=float(std::clamp(settings["custom_opacity"].AsNumber(.8),.1,1.));
 }
-extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeSelectPage(JNIEnv*,jclass,jint value){page=std::clamp(int(value),0,5);auto_open_capture=false;}
+extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeSelectPage(JNIEnv*,jclass,jint value){page=std::clamp(int(value),0,6);auto_open_capture=false;}
 extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeUpdateState(JNIEnv* env,jclass,jstring text){J incoming;if(J::Parse(Utf(env,text),incoming)&&incoming.IsObject()){std::lock_guard<std::mutex> lock(update_mutex);update_state=std::move(incoming);}}
 extern "C" JNIEXPORT jstring JNICALL Java_org_cyinsights_ovr_MainActivity_nativeUiReportForTest(JNIEnv* env,jclass){
-    auto out=DisplaySettings();out["page"]=page;out["scroll"]=double(body_scroll);out["scroll_max"]=double(body_scroll_max);out["choice_x"]=double(choice_center.x);out["choice_y"]=double(choice_center.y);out["rendered_frames"]=rendered_frames;out["renderer_initialized"]=initialized;out["width"]=width;out["height"]=height;{std::lock_guard<std::mutex> lock(snapshot_mutex);out["snapshot_prepare_ms"]=snapshot_prepare_ms;}return env->NewStringUTF(out.Write().c_str());
+    auto out=DisplaySettings();out["hud_request"]=SelectedHudOptions();out["draw_graph_x"]=double(draw_graph_center.x);out["draw_graph_y"]=double(draw_graph_center.y);out["draw_value_x"]=double(draw_value_center.x);out["draw_value_y"]=double(draw_value_center.y);out["page"]=page;out["scroll"]=double(body_scroll);out["scroll_max"]=double(body_scroll_max);out["choice_x"]=double(choice_center.x);out["choice_y"]=double(choice_center.y);out["rendered_frames"]=rendered_frames;out["renderer_initialized"]=initialized;out["width"]=width;out["height"]=height;{std::lock_guard<std::mutex> lock(snapshot_mutex);out["snapshot_prepare_ms"]=snapshot_prepare_ms;}return env->NewStringUTF(out.Write().c_str());
 }
-extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeDraw(JNIEnv*,jclass) {
+extern "C" JNIEXPORT void JNICALL Java_org_cyinsights_ovr_MainActivity_nativeDraw(JNIEnv* env,jclass) {
     if(!initialized)return;ApplyPreparedSnapshots();++rendered_frames;double now=Now();auto& io=ImGui::GetIO();io.DisplaySize=ImVec2(float(width),float(height));io.DeltaTime=float(std::clamp(now-previous,.001,.1));previous=now;
     ImGui_ImplOpenGL3_NewFrame();ImGui::NewFrame();Draw();ImGui::Render();glViewport(0,0,width,height);auto bg=ImGui::ColorConvertU32ToFloat4(cyui::palette().bg0);glClearColor(bg.x,bg.y,bg.z,1);glClear(GL_COLOR_BUFFER_BIT);ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }

@@ -18,6 +18,8 @@ final class PanelCheck {
     private void touch(int action,float x,float y)throws Exception{runUi(()->{long t=SystemClock.uptimeMillis();MotionEvent e=MotionEvent.obtain(t,t,action,x,y,0);main.renderViewForTest().dispatchTouchEvent(e);e.recycle();});}
     private void key(int code)throws Exception{runUi(()->main.renderViewForTest().dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN,code)));Thread.sleep(220);}
     private static void check(boolean condition,String why)throws Exception{if(!condition)throw new IOException(why);}
+    private static boolean contains(JSONArray values,String name)throws Exception{if(values!=null)for(int i=0;i<values.length();++i)if(name.equals(values.getString(i)))return true;return false;}
+    private static JSONObject hudSpec(JSONObject report,String name)throws Exception{JSONArray values=report.getJSONObject("hud_request").getJSONArray("custom_graphs");for(int i=0;i<values.length();++i)if(name.equals(values.getJSONObject(i).getString("name")))return values.getJSONObject(i);return null;}
     void start(){new Thread(this::run,"CyOVR-Panel-Check").start();}
     private void run(){JSONObject out=new JSONObject();SharedPreferences prefs=main.getSharedPreferences("MainActivity",0);String original=prefs.getString("display_settings",null);boolean hudStarted=false;
         try{
@@ -39,21 +41,35 @@ final class PanelCheck {
             touch(MotionEvent.ACTION_DOWN,x,y);Thread.sleep(120);touch(MotionEvent.ACTION_UP,x,y);Thread.sleep(450);
             after=main.uiReportForTest();check(after.getInt("chart_mask")== (mask^1),"Tap failed: "+after);out.put("rendered_choice_toggled",true);
             JSONObject saved=new JSONObject(prefs.getString("display_settings","{}"));check(saved.getInt("chart_mask")== (mask^1),"Display choice not saved");out.put("choice_saved",true);
+            final String draws="Vulkan Known Draw Calls/s";
+            for(int n=0;n<10;++n){before=main.uiReportForTest();if(before.getDouble("draw_graph_y")>=200&&before.getDouble("draw_graph_y")<before.getDouble("height")-95)break;key(before.getDouble("draw_graph_y")<200?KeyEvent.KEYCODE_PAGE_UP:KeyEvent.KEYCODE_PAGE_DOWN);}
+            before=main.uiReportForTest();check(before.getDouble("draw_graph_y")>=200&&before.getDouble("draw_graph_y")<before.getDouble("height")-95,"Draw HUD choices could not be scrolled into view");
+            boolean graph=contains(before.optJSONArray("custom_graph_names"),draws),value=contains(before.optJSONArray("custom_value_names"),draws);
+            x=(float)before.getDouble("draw_graph_x");y=(float)before.getDouble("draw_graph_y");touch(MotionEvent.ACTION_DOWN,x,y);Thread.sleep(120);touch(MotionEvent.ACTION_UP,x,y);Thread.sleep(400);
+            after=main.uiReportForTest();check(contains(after.optJSONArray("custom_graph_names"),draws)!=graph&&contains(after.optJSONArray("custom_value_names"),draws)==value,"Graph checkbox changed the text choice or failed");
+            x=(float)after.getDouble("draw_value_x");y=(float)after.getDouble("draw_value_y");touch(MotionEvent.ACTION_DOWN,x,y);Thread.sleep(120);touch(MotionEvent.ACTION_UP,x,y);Thread.sleep(400);
+            after=main.uiReportForTest();check(contains(after.optJSONArray("custom_graph_names"),draws)!=graph&&contains(after.optJSONArray("custom_value_names"),draws)!=value,"Value checkbox changed the graph choice or failed");
+            JSONObject actual=hudSpec(after,draws);check(graph&&value?actual==null:actual!=null&&actual.getBoolean("graph")==!graph&&actual.getBoolean("value")==!value,"Native HUD action lost independent flags");
+            saved=new JSONObject(prefs.getString("display_settings","{}"));check(contains(saved.optJSONArray("custom_graph_names"),draws)!=graph&&contains(saved.optJSONArray("custom_value_names"),draws)!=value,"Graph/text choices not saved");
+            main.reloadDisplaySettingsForTest();Thread.sleep(350);after=main.uiReportForTest();check(contains(after.optJSONArray("custom_graph_names"),draws)!=graph&&contains(after.optJSONArray("custom_value_names"),draws)!=value,"Graph/text choices lost on reload");out.put("independent_draw_graph_text_saved_reloaded",true);
             out.put("panel_performance",main.uiReportForTest().optJSONObject("panel_performance"));
             out.put("snapshot_prepare_ms",main.uiReportForTest().optDouble("snapshot_prepare_ms"));
             JSONObject savedCapture=CaptureStore.latest(main);
             if(savedCapture!=null&&"measured".equals(savedCapture.optString("status"))){JSONObject model=main.captureReportForTest();
                 check(savedCapture.optString("capture_id").equals(model.optString("capture_id"))&&savedCapture.optInt("tile_count")==model.optInt("tiles"),"Background-prepared capture did not reach the native model");out.put("native_capture_tiles",model.optInt("tiles"));}
             if(main.getIntent().getBooleanExtra("check_hud",false)){
-                JSONObject initial=BridgeClient.request(main,new JSONObject().put("operation","snapshot"));check(!initial.optBoolean("meta_overlay_requested"),"Stop the existing managed HUD before this check");
+                JSONObject initial=BridgeClient.request(main,new JSONObject().put("operation","snapshot"));check(!VrHudService.running&&!initial.optBoolean("meta_overlay_requested")&&!initial.optJSONObject("curve_hud").optBoolean("active")&&!initial.optJSONObject("draw_counters").optBoolean("active"),"Stop the existing managed HUD/counters before this check");
+                JSONObject isolated=new JSONObject(prefs.getString("display_settings","{}")).put("graphs",new JSONArray()).put("stats",new JSONArray()).put("custom_graph_names",new JSONArray().put(draws)).put("custom_value_names",new JSONArray().put("Vulkan Known Input Triangles/s"));
+                prefs.edit().putString("display_settings",isolated.toString()).commit();main.reloadDisplaySettingsForTest();Thread.sleep(350);
                 float[] point=main.hudButtonForTest();touch(MotionEvent.ACTION_DOWN,point[0],point[1]);Thread.sleep(120);touch(MotionEvent.ACTION_UP,point[0],point[1]);
                 long until=SystemClock.elapsedRealtime()+15000;while(SystemClock.elapsedRealtime()<until&&!VrHudService.running&&!main.isFinishing())Thread.sleep(100);
-                hudStarted=VrHudService.running;check(hudStarted&&!main.isFinishing(),"Starting the HUD closed configuration or failed to start");out.put("configuration_stayed_open",true);
+                hudStarted=VrHudService.running;check(hudStarted&&!main.isFinishing(),"Starting the HUD closed configuration or failed to start");
+                JSONObject running=BridgeClient.request(main,new JSONObject().put("operation","snapshot")).getJSONObject("curve_hud");check(running.optBoolean("active")&&contains(running.getJSONArray("graphs"),draws)&&contains(running.getJSONArray("values"),"Vulkan Known Input Triangles/s"),"Real Start HUD lost graph/text routing");out.put("configuration_stayed_open",true);out.put("real_start_graph_and_text",true);out.put("game_layer_connected",running.optBoolean("layer_ready"));
             }
             out.put("result","passed");
         }catch(Exception e){try{out.put("error",e.toString());out.put("ui_at_failure",main.uiReportForTest());}catch(Exception ignored){}}
         finally{
-            if(hudStarted)try{BridgeClient.request(main,new JSONObject().put("operation","overlay_meta_off"));runUi(()->main.stopService(new Intent(main,VrHudService.class)));}catch(Exception e){android.util.Log.e("CyInsightOVR","Cannot restore HUD after check",e);}
+            if(hudStarted)try{BridgeClient.request(main,new JSONObject().put("operation","display_hud_off"));BridgeClient.request(main,new JSONObject().put("operation","draw_counters_stop"));runUi(()->main.stopService(new Intent(main,VrHudService.class)));}catch(Exception e){android.util.Log.e("CyInsightOVR","Cannot restore HUD after check",e);}
             SharedPreferences.Editor edit=prefs.edit();if(original==null)edit.remove("display_settings");else edit.putString("display_settings",original);edit.commit();main.reloadDisplaySettingsForTest();
             try{
                 Thread.sleep(250);main.pageForTest(2);Thread.sleep(250);

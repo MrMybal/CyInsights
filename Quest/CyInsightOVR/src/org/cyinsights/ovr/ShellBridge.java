@@ -14,6 +14,7 @@ import java.util.concurrent.*;
 public final class ShellBridge {
     private android.content.Context application;
     private AppLayerHost layerHost;
+    private MetaMetricPublisher metaMetrics;
     private volatile ServerSocket endpoint;
     private final Set<java.lang.Process> children=ConcurrentHashMap.newKeySet();
     android.os.ParcelFileDescriptor openLayerChannel(int uid,int pid)throws IOException{AppLayerHost host=layerHost;if(host==null)throw new IOException("GPU layer service is starting");return host.openChannel(uid,pid);}
@@ -24,15 +25,16 @@ public final class ShellBridge {
     private final ArrayDeque<JSONObject> HISTORY=new ArrayDeque<>();
     private String historySession=Long.toString(System.nanoTime());
     private long historySequence=0;
-    private void appendSample(JSONObject sample)throws Exception{sample.put("history_sequence",Long.toString(++historySequence));METRICS.put(sample.getString("name"),sample);HISTORY.addLast(sample);while(HISTORY.size()>32768)HISTORY.removeFirst();}
+    private void appendSample(JSONObject sample)throws Exception{sample.put("history_sequence",Long.toString(++historySequence));METRICS.put(sample.getString("name"),sample);HISTORY.addLast(sample);while(HISTORY.size()>32768)HISTORY.removeFirst();if(layerHost!=null)layerHost.graphs.sample(sample);}
     private JSONObject capture,slowSnapshot;
     private long slowSnapshotAt=0;
     private DrawCounterMonitor drawCounters;
     private DrawCounterMonitor createDrawCounters(){DrawCounterMonitor.Runner commands=(args,timeout)->{
         Output value=command(args,timeout);if(!value.complete)throw new IOException("Counter setup command failed");return value.text;
     };return new DrawCounterMonitor(commands,this::drawSample,layerHost);}
-    private void drawSample(JSONObject sample)throws Exception{synchronized(LOCK){JSONArray values=sample.getJSONArray("metrics");for(int i=0;i<values.length();++i)appendSample(values.getJSONObject(i));}}
-    private void clearDrawHistory(){synchronized(LOCK){METRICS.entrySet().removeIf(e->e.getKey().startsWith("Vulkan "));HISTORY.removeIf(e->e.optString("name").startsWith("Vulkan "));}}
+    private String drawSourceSession="";
+    private void drawSample(JSONObject sample)throws Exception{synchronized(LOCK){String session=sample.getInt("pid")+":"+sample.getString("session");if(!session.equals(drawSourceSession)){clearDrawHistory();drawSourceSession=session;}JSONArray values=sample.getJSONArray("metrics");for(int i=0;i<values.length();++i)appendSample(values.getJSONObject(i));}}
+    private void clearDrawHistory(){synchronized(LOCK){METRICS.entrySet().removeIf(e->e.getKey().startsWith("Vulkan "));HISTORY.removeIf(e->e.optString("name").startsWith("Vulkan "));if(layerHost!=null)layerHost.graphs.clearDrawHistory();}}
     private volatile boolean capturing=false,running=true;
     private volatile boolean metaOverlayRequested=false;
     private TileRecording recording;
@@ -123,6 +125,14 @@ public final class ShellBridge {
     }
     private JSONObject dispatch(JSONObject request) throws Exception {
         String op=request.optString("operation","");if(!op.equals("snapshot"))slowSnapshot=null;JSONObject out=new JSONObject();out.put("protocol","cyinsightovr.bridge/1");
+        if(application!=null&&(op.equals("display_hud_on")||op.equals("display_hud_off"))){
+            JSONObject result=DisplayHudController.apply(request,this::dispatch);
+            if(op.equals("display_hud_on"))application.startForegroundService(new android.content.Intent(application,VrHudService.class));else application.stopService(new android.content.Intent(application,VrHudService.class));
+            return result;
+        }
+        if(application!=null&&DirectMetaHud.available(application)&&DirectMetaHud.handles(op)){
+            JSONObject result=DirectMetaHud.request(application,request);if(op.equals("overlay_meta_on"))metaOverlayRequested=true;else if(op.equals("overlay_meta_off"))metaOverlayRequested=false;return result;
+        }
         if(op.equals("snapshot")) {
             out.put("status",message);out.put("bridge",true);out.put("service_owner",application==null?"shell":"application");out.put("pc_bootstrap_required",application==null);out.put("capturing",capturing);out.put("android_boot_id",boot);out.put("observed_mono_ns",Long.toString(System.nanoTime()));
             out.put("cross_game_overlay_backend","meta.ovrmetrics.documented_hud");out.put("meta_overlay_requested",metaOverlayRequested);out.put("execution_frame_identity",JSONObject.NULL);
@@ -135,6 +145,7 @@ public final class ShellBridge {
             }
             for(String key:new String[]{"vr_hud","shared_view","tile_recording","live_tiles"})out.put(key,slowSnapshot.opt(key));
             out.put("draw_counters",drawCounters.status());out.put("history_session",historySession);
+            if(layerHost!=null){String target=layerHost.graphs.status().optString("target");if(target.isEmpty())target=liveTiles.status().optString("target");JSONObject curves=layerHost.curveStatus(target);if(metaMetrics!=null)curves.put("meta_publisher",metaMetrics.status());out.put("curve_hud",curves);}
 
             out.put("custom_cross_game_hud",new JSONObject().put("status","unavailable")
                 .put("reason","No validated public Quest compositor API for a custom HUD over unmodified games. Meta HUD uses the installed Meta renderer."));
@@ -142,11 +153,22 @@ public final class ShellBridge {
                 JSONArray history=new JSONArray();long after=0;try{after=Long.parseLong(request.optString("after","0"));}catch(NumberFormatException ignored){}
                 long sequence=request.optLong("after_sequence",-1);if(sequence>=0&&!historySession.equals(request.optString("history_session")))sequence=0;if(request.optBoolean("include_history",false))for(JSONObject v:HISTORY)if(sequence>=0?Long.parseLong(v.getString("history_sequence"))>sequence:Long.parseLong(v.getString("observed_mono_ns"))>after)history.put(v);
                 out.put("history",history);out.put("capture",capture==null||capture.optString("capture_id").equals(request.optString("after_capture",""))?JSONObject.NULL:capture);}
+        }else if(op.equals("graph_hud_start")) {
+            String target=packageName(request);if(layerHost==null)throw new IOException("The in-game graph HUD requires the application-owned GPU service");GraphHudController.validate(request);
+            JSONArray selected=request.getJSONArray("custom_graphs");boolean needsDraws=false;for(int i=0;i<selected.length();++i)needsDraws|=selected.getJSONObject(i).getString("name").startsWith("Vulkan ");
+            JSONObject prepared=liveTiles.status();if(!prepared.optBoolean("prepared")||!target.equals(prepared.optString("target")))liveTiles.prepare(target);
+            if(needsDraws){JSONObject counters=drawCounters.status();int hz=DrawCounterSample.frequency(request.optInt("curve_hz",10));if(!counters.optBoolean("active")||!target.equals(counters.optString("target"))||hz!=counters.optInt("requested_hz")){clearDrawHistory();drawCounters.start(target,hz);}}
+            layerHost.resetHudReport();out=layerHost.graphs.start(request);
+            if(metaMetrics==null)throw new IOException("Meta custom HUD publishing requires the on-device application service");
+            try{metaMetrics.sync();}catch(Exception error){layerHost.graphs.stop();throw error;}
+            out.put("meta_publisher",metaMetrics.status());if(!layerHost.curvesReady(target))out.put("warning","HUD metrics prepared; waiting for the selected game's Meta publisher. Fully reopen "+target+" once after preparing or updating the Vulkan layer.");
+        }else if(op.equals("graph_hud_stop")) {
+            out=layerHost==null?new JSONObject().put("active",false):layerHost.graphs.stop();if(metaMetrics!=null)metaMetrics.sync();
         }else if(op.equals("draw_counters_prepare")) {
             drawCounters.close();clearDrawHistory();out=liveTiles.prepare(packageName(request));
         }else if(op.equals("draw_counters_start")) {
             String target=packageName(request);int hz=DrawCounterSample.frequency(request.optInt("hz",10));JSONObject layer=liveTiles.status();
-            if(!layer.optBoolean("prepared")||!layer.optBoolean("layer_ready")||!target.equals(layer.optString("target")))throw new IOException("Prepare the selected development Vulkan target, then completely reopen it once before starting draw counters");
+            if(!layer.optBoolean("prepared")||layerHost==null&&!layer.optBoolean("layer_ready")||!target.equals(layer.optString("target")))throw new IOException("Prepare the selected development Vulkan target, then completely reopen it once before starting draw counters");
             clearDrawHistory();out=drawCounters.start(target,hz);
         }else if(op.equals("draw_counters_stop")) {
             drawCounters.close();clearDrawHistory();out=drawCounters.status();
@@ -237,12 +259,12 @@ public final class ShellBridge {
         if(Process.myUid()!=context.getApplicationInfo().uid)throw new SecurityException("Local GPU service must run as its owning APK");serve(context.getApplicationContext(),ready);
     }
     synchronized void stopLocal(){running=false;for(Socket socket:exports)try{socket.close();}catch(IOException ignored){}ServerSocket server=endpoint;if(server!=null)try{server.close();}catch(IOException ignored){}
-        continuousTiles.close();if(liveTiles!=null)try{liveTiles.stop();}catch(Exception ignored){}if(drawCounters!=null)drawCounters.close();terminate(realtime);for(java.lang.Process process:children)terminate(process);if(layerHost!=null)layerHost.close();
+        continuousTiles.close();if(liveTiles!=null)try{liveTiles.stop();}catch(Exception ignored){}if(drawCounters!=null)drawCounters.close();if(metaMetrics!=null)metaMetrics.close();terminate(realtime);for(java.lang.Process process:children)terminate(process);if(layerHost!=null)layerHost.close();
         if(recording!=null&&recording.active())try{recording.stop(recording.status().getString("recording_id"));}catch(Exception error){android.util.Log.w("CyInsightOVR","Recording shutdown could not finish",error);}
     }
     private void serve(android.content.Context context,Runnable ready)throws Exception{
         application=context;running=true;capturing=false;selectedMetrics="";historySession=Long.toString(System.nanoTime());synchronized(LOCK){METRICS.clear();HISTORY.clear();historySequence=0;}
-        if(context!=null)layerHost=new AppLayerHost(context,this::drawSample);drawCounters=createDrawCounters();liveTiles=createLiveTiles();
+        if(context!=null){layerHost=new AppLayerHost(context,this::drawSample);metaMetrics=new MetaMetricPublisher(layerHost);}drawCounters=createDrawCounters();liveTiles=createLiveTiles();
         boot=readSmall("/proc/sys/kernel/random/boot_id");
         try{liveTiles.recoverMissingIntegration();}catch(Exception recovery){System.err.println("CyOVR integration recovery: "+recovery);}
         recording=context==null?new TileRecording(this::recordedView,boot):new TileRecording(this::recordedView,boot,new File(context.getExternalFilesDir(null),"Recordings"));liveTiles.observe(value->recording.offer(value));new Thread(this::monitor,"CyOVR-GPU-Counters").start();

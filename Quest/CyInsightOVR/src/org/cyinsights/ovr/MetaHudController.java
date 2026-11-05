@@ -89,6 +89,24 @@ final class MetaHudController {
     }
     private void graph(String id,boolean enabled)throws Exception{broadcast(enabled?"ENABLE_GRAPH":"DISABLE_GRAPH","--es","stat",id);}
     private void stat(String id,boolean enabled)throws Exception{broadcast(enabled?"ENABLE_STAT":"DISABLE_STAT","--es","stat",id);}
+    private static boolean matchesPlacement(JSONObject state,JSONObject compact,boolean graphs,boolean stats)throws JSONException{
+        return state.optBoolean("overlayEnabled")&&state.optBoolean("statsEnabled")==stats&&state.optBoolean("graphEnabled")==graphs
+            &&state.optBoolean("overlayHeadLocked")&&Math.abs(state.optDouble("overlayPitch")-compact.getDouble("overlayPitch"))<=.05
+            &&Math.abs(state.optDouble("overlayYaw")-compact.getDouble("overlayYaw"))<=.05&&Math.abs(state.optDouble("overlayDistance")-2)<=.05
+            &&Math.abs(state.optDouble("overlayScale")-compact.getDouble("overlayScale"))<=.05;
+    }
+    private JSONObject awaitPlacement(JSONObject compact,boolean graphs,boolean stats)throws Exception{
+        long until=System.nanoTime()+3_000_000_000L;JSONObject observed=null;Exception last=null;
+        do{try{observed=readState();if(matchesPlacement(observed,compact,graphs,stats))return observed;}catch(Exception error){last=error;}
+            Thread.sleep(100);
+        }while(System.nanoTime()<until);
+        String details=observed==null?(last==null?"no settings response":last.getMessage()):new JSONObject()
+            .put("visible",observed.optBoolean("overlayEnabled")).put("graphs",observed.optBoolean("graphEnabled"))
+            .put("values",observed.optBoolean("statsEnabled")).put("headlocked",observed.optBoolean("overlayHeadLocked"))
+            .put("pitch",observed.optDouble("overlayPitch",0)).put("yaw",observed.optDouble("overlayYaw",0))
+            .put("distance",observed.optDouble("overlayDistance",0)).put("scale",observed.optDouble("overlayScale",0)).toString();
+        throw new IOException("Meta HUD did not confirm the requested settings: "+details);
+    }
     synchronized JSONObject catalog()throws Exception{
         JSONObject observed=readState();JSONArray items=new JSONArray();
         for(String[] descriptor:METRICS){boolean available=true;try{metric(observed,descriptor[1]);}catch(JSONException missing){available=false;}
@@ -123,9 +141,11 @@ final class MetaHudController {
         String size=request.optString("size","small"),location=request.optString("corner","upper_left");
         if(!size.equals("small")&&!size.equals("medium"))throw new IllegalArgumentException("HUD size must be small or medium");
         if(!Arrays.asList("upper_left","upper_right","lower_left","lower_right","upper_center","center_left","center","center_right","lower_center").contains(location))throw new IllegalArgumentException("Invalid HUD position");
-        Set<String> graphs=selection(request.has("graphs")?request.getJSONArray("graphs"):new JSONArray().put("average_frame_rate").put("app_gpu_time_microseconds"),6);
-        Set<String> stats=selection(request.has("stats")?request.getJSONArray("stats"):new JSONArray(),8);
-        if(graphs.isEmpty()&&stats.isEmpty())throw new IllegalArgumentException("Choose at least one HUD graph or value");
+        Set<String> graphs=selection(request.has("graphs")?request.getJSONArray("graphs"):new JSONArray().put("average_frame_rate").put("app_gpu_time_microseconds"),METRICS.length);
+        Set<String> stats=selection(request.has("stats")?request.getJSONArray("stats"):new JSONArray(),METRICS.length);
+        boolean customGraphs=request.optBoolean("custom_graphs_present"),customValues=request.optBoolean("custom_values_present");
+        boolean graphGroup=!graphs.isEmpty()||customGraphs,statGroup=!stats.isEmpty()||customValues;
+        if(!graphGroup&&!statGroup)throw new IllegalArgumentException("Choose at least one HUD graph or value");
         if(!runner.run(new String[]{"/system/bin/pm","path","com.oculus.ovrmonitormetricsservice"},3).contains("package:"))throw new IOException("Meta's VR HUD service is not installed");
         load();JSONObject current=readState();
         for(String[] descriptor:METRICS)if(graphs.contains(descriptor[0])||stats.contains(descriptor[0]))metric(current,descriptor[1]);
@@ -137,12 +157,10 @@ final class MetaHudController {
             for(String[] descriptor:METRICS){JSONObject item;try{item=metric(current,descriptor[1]);}catch(JSONException absent){continue;}
                 if(item.optBoolean("graphEnabled")!=graphs.contains(descriptor[0]))graph(descriptor[0],graphs.contains(descriptor[0]));
                 if(item.optBoolean("statEnabled")!=stats.contains(descriptor[0]))stat(descriptor[0],stats.contains(descriptor[0]));}
-            broadcast(graphs.isEmpty()?"DISABLE_GRAPH":"ENABLE_GRAPH");
+            broadcast(graphGroup?"ENABLE_GRAPH":"DISABLE_GRAPH");
             // ENABLE_OVERLAY can reapply persisted display settings. Hide the
             // tall table only after placement, then verify settled state.
-            broadcast(stats.isEmpty()?"DISABLE_STATS":"ENABLE_STATS");Thread.sleep(200);JSONObject observed=readState();
-            if(!observed.optBoolean("overlayEnabled")||observed.optBoolean("statsEnabled")!=!stats.isEmpty()||observed.optBoolean("graphEnabled")!=!graphs.isEmpty()||!observed.optBoolean("overlayHeadLocked")||Math.abs(observed.optDouble("overlayPitch")-compact.getDouble("overlayPitch"))>.05||Math.abs(observed.optDouble("overlayYaw")-compact.getDouble("overlayYaw"))>.05||Math.abs(observed.optDouble("overlayDistance")-2)>.05||Math.abs(observed.optDouble("overlayScale")-compact.getDouble("overlayScale"))>.05)
-                throw new IOException("Meta HUD did not accept the compact placement");
+            broadcast(statGroup?"ENABLE_STATS":"DISABLE_STATS");JSONObject observed=awaitPlacement(compact,graphGroup,statGroup);
             Set<String> acceptedGraphs=new LinkedHashSet<>(),acceptedStats=new LinkedHashSet<>();
             JSONArray unavailableGraphs=new JSONArray(),unavailableStats=new JSONArray();ArrayList<String> unavailableNames=new ArrayList<>();
             for(String[] descriptor:METRICS){JSONObject item;try{item=metric(observed,descriptor[1]);}catch(JSONException absent){continue;}
@@ -153,11 +171,11 @@ final class MetaHudController {
             }
             // Meta lists some hardware metrics even when IsStatAvailable rejects
             // enabling them. Keep the usable HUD and report that exact omission.
-            if(acceptedGraphs.isEmpty()&&acceptedStats.isEmpty())throw new IOException("None of the selected HUD metrics are currently available from Meta. Try Basic: FPS + GPU time.");
-            if(acceptedGraphs.isEmpty()&&!graphs.isEmpty())broadcast("DISABLE_GRAPH");
-            if(acceptedStats.isEmpty()&&!stats.isEmpty())broadcast("DISABLE_STATS");
+            if(acceptedGraphs.isEmpty()&&acceptedStats.isEmpty()&&!customGraphs&&!customValues)throw new IOException("None of the selected HUD metrics are currently available from Meta. Try Basic: FPS + GPU time.");
+            if(acceptedGraphs.isEmpty()&&!graphs.isEmpty()&&!customGraphs)broadcast("DISABLE_GRAPH");
+            if(acceptedStats.isEmpty()&&!stats.isEmpty()&&!customValues)broadcast("DISABLE_STATS");
             if(acceptedGraphs.isEmpty()&&!graphs.isEmpty()||acceptedStats.isEmpty()&&!stats.isEmpty()){
-                JSONObject effective=readState();if(effective.optBoolean("graphEnabled")!=!acceptedGraphs.isEmpty()||effective.optBoolean("statsEnabled")!=!acceptedStats.isEmpty())throw new IOException("Meta HUD did not hide its unavailable metric group");
+                JSONObject effective=readState();if(effective.optBoolean("graphEnabled")!=(!acceptedGraphs.isEmpty()||customGraphs)||effective.optBoolean("statsEnabled")!=(!acceptedStats.isEmpty()||customValues))throw new IOException("Meta HUD did not hide its unavailable metric group");
             }
             requested=true;return state().put("accepted",true).put("size",size).put("corner",location).put("settings_verified",true)
                 .put("selection_complete",unavailableNames.isEmpty()).put("graphs",new JSONArray(acceptedGraphs)).put("stats",new JSONArray(acceptedStats))

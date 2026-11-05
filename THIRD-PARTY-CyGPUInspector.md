@@ -8,6 +8,8 @@ dependency inventory of this application.
 | Component | Scope | License / full notice |
 | --- | --- | --- |
 | Dear ImGui docking (1.93 WIP snapshot) | Native app | MIT; `LICENCES/DearImGui/LICENSE.txt`, source tree license |
+| CyDoc 0.1.0 at pinned revision | Offline local documentation reader and compiler | MIT; LICENCES/CyDoc-MIT.txt, exported dependency notices |
+| CyUI 1.2.0 at pinned revision | Modular native interface | MIT; `LICENCES/CyUI-MIT.txt` |
 | ReShade SDK 6.8.x/API 20 headers | Windows collector only | BSD-3-Clause; `LICENCES/ReShade-SDK/LICENSE.md` |
 | ReShade ImGui 1.92.5 declarations | Collector overlay only | MIT; `LICENCES/DearImGui-ReShade/LICENSE.txt` |
 | ReShade runtime DLL | External install; not committed | `LICENCES/ReShade/LICENSE-ReShade.txt`; preserve full applicable runtime notices when distributing it |

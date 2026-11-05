@@ -6,6 +6,7 @@
 #include "QuestTileReplay.hpp"
 #include "UiTheme.hpp"
 #include "UpdateView.hpp"
+#include "ManualView.hpp"
 #include "ResourceIds.h"
 #include <chrono>
 #include <algorithm>
@@ -207,6 +208,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
     cyinsights::InitializeUi(ImGui_ImplWin32_GetDpiScaleForHwnd(window));
     ImGui_ImplWin32_Init(window);
     ImGui_ImplDX11_Init(device, context);
+    cyinsights::InitializeManual(device);
     ShowWindow(window, SW_MAXIMIZE);
     UpdateWindow(window);
     {
@@ -244,6 +246,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             if (argument == L"--snapshot" && i + 1 < count)
                 snapshot = args[++i];
             else if(argument==L"--updates-view")cyinsights::ShowUpdates();
+            else if(argument==L"--manual-view")cyinsights::ShowManual();
+            else if(argument==L"--manual-topic"&&i+1<count)cyinsights::ShowManual(std::filesystem::path(args[++i]).u8string());
+            else if(argument==L"--manual-language"&&i+1<count)cyinsights::ShowManual({},std::filesystem::path(args[++i]).u8string());
+            else if(argument==L"--manual-media"&&i+1<count)cyinsights::SelectManualMedia(std::filesystem::path(args[++i]).u8string());
+            else if(argument==L"--manual-anchor"&&i+1<count)cyinsights::SelectManualAnchor(std::filesystem::path(args[++i]).u8string());
             else if(argument==L"--no-update-check")cyinsights::SuppressAutomaticUpdateCheck();
             else if(argument==L"--ui-theme"&&i+1<count){auto theme=std::filesystem::path(args[++i]).u8string();if(!cyui::setTheme(theme.c_str()))return 23;}
             else if(argument==L"--ui-comfortable")cyui::setDensity(cyui::Density::comfortable);
@@ -484,6 +491,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             auto draw_begin=std::chrono::steady_clock::now();
             ImGui::NewFrame();
             workspace.Draw();
+            cyinsights::DrawManual();
             const bool updates_visible=cyinsights::UpdatesVisible();
             cyinsights::DrawUpdates(updates_visible&&workspace.CanUpdate(),updates_visible?workspace.OpenPaths():std::vector<std::filesystem::path>{});
             if(cyinsights::UpdateExitRequested())done=true;
@@ -562,6 +570,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
                 if (!SaveSnapshot(snapshot))
                     return 2;
                 auto report=snapshot;report+=L".json";app.WriteAnalysisReport(report);auto documents=snapshot;documents+=L".documents.json";workspace.WriteReport(documents);
+                auto manual=snapshot;manual+=L".manual.json";std::ofstream(manual)<<cyinsights::ManualReport().Write(2);
                 if(multi_trace_smoke){
                     if(workspace.Count()!=2)return 14;
                     ImGuiID viewport_ids[2]{};
@@ -600,6 +609,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             report<<"}}";
         }
     }
+    cyinsights::ShutdownManual();
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();

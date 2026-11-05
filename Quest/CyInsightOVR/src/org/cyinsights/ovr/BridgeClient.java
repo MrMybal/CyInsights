@@ -31,6 +31,8 @@ final class BridgeClient {
     private static final String BOOT=bootId();
     static JSONObject request(Context context,JSONObject req) throws Exception {
         String operation=req.optString("operation");boolean standalone=DirectMetaHud.available(context);
+        if(operation.equals("display_hud_on")||operation.equals("display_hud_off"))return DisplayHudController.apply(req,options->request(context,options));
+        if(operation.equals("graph_hud_stop")&&!GpuDataService.running())return new JSONObject().put("active",false);
         if(standalone&&DirectMetaHud.handles(operation))return DirectMetaHud.request(context,req);
         if(operation.equals("snapshot")&&!GpuDataService.enabled(context))return (standalone?DirectMetaHud.snapshot(context):new JSONObject().put("bridge",false)).put("gpu_service_stopped",true).put("status","GPU service stopped. Start it in Connection to use GPU curves and the tile heatmap.");
         GpuDataService.require(context);
@@ -75,7 +77,7 @@ final class BridgeClient {
         JSONObject wire=new JSONObject(req.toString()).put("authentication",token);
         try(Socket socket=new Socket()) {
             socket.connect(new InetSocketAddress(InetAddress.getByName("127.0.0.1"),port),2000);
-            socket.setSoTimeout((req.optString("operation").startsWith("overlay_meta_")||req.optString("operation").startsWith("heatmap_")||req.optString("operation").startsWith("tiles_record_"))?30000:7000);socket.getOutputStream().write((wire.toString()+"\n").getBytes(StandardCharsets.UTF_8));
+            socket.setSoTimeout((req.optString("operation").startsWith("display_hud_")||req.optString("operation").startsWith("overlay_meta_")||req.optString("operation").startsWith("heatmap_")||req.optString("operation").startsWith("tiles_record_"))?30000:7000);socket.getOutputStream().write((wire.toString()+"\n").getBytes(StandardCharsets.UTF_8));
             InputStream input=socket.getInputStream();ByteArrayOutputStream data=new ByteArrayOutputStream();byte[] b=new byte[8192];int n;
             while((n=input.read(b))>0){if(data.size()+n>8*1024*1024)throw new Unavailable(Failure.RESPONSE);data.write(b,0,n);if(b[n-1]=='\n')break;}
             JSONObject response=new JSONObject(new String(data.toByteArray(),StandardCharsets.UTF_8));

@@ -25,6 +25,12 @@ def main():
         file = cyui_root / name
         if not file.is_file() or hashlib.sha256(file.read_bytes()).hexdigest() != expected:
             errors.append('CyUI/' + name)
+    cydoc_root=ROOT/'ThirdParty/CyDoc'
+    cydoc=json.loads((cydoc_root/'snapshot.json').read_text(encoding='utf-8'))
+    for name,expected in cydoc['sha256'].items():
+        file=cydoc_root/name
+        if not file.is_file() or hashlib.sha256(file.read_bytes()).hexdigest()!=expected:
+            errors.append('CyDoc/'+name)
     if errors:
         raise SystemExit('Dependency snapshot differs from its hash manifest:\n' + '\n'.join(errors))
     print(f"Verified {len(lock['sha256'])} core dependency files and {len(cyui)} pinned CyUI files. No external checkout or binary copy required.")

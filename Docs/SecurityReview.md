@@ -26,7 +26,7 @@ The final unsigned executable's SHA-256 is `f5a48f913b9ea79c0babec0466f13e284077
 
 Evidence: [source manifest](../build/release-20261009-audit/source-manifest.json), [full build](../build/release-20261009-audit/build-full.log), [final build/tests](../build/release-20261009-audit/build.log), [scan](../build/release-20261009-audit/kaspersky-scan.txt), [opening/interaction result](../build/release-20261009-audit/opening.json), [real screenshot](../build/release-20261009-audit/ui-navigation.png), [release manifest](../bin/Release-20261009/release-manifest.json).
 
-## Disk-index revision, Release-20261008.1
+## Disk-index revision, Release-20261008.1 {#index-20261008-1}
 
 The revised application removes timing CSV-byte/event-count caps and streams native timings into an on-disk cache. It shows loading/cancellation/errors and publishes matching window events and models together; the latter fixes a crash found during the opening smoke test. The source-owned navigation harness verifies horizontal drag, vertical drag zoom and wheel zoom on a real 49,648,645-byte trace containing 14,192,325 events. The trace hash is unchanged. Eight isolated suites pass 249 checks.
 

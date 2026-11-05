@@ -1,5 +1,7 @@
 # CyInsights
 
+**[Documentation](https://mrmybal.github.io/CyInsights/#/en/welcome)** · [Documentation en français](https://mrmybal.github.io/CyInsights/#/fr/welcome)
+
 ## Download the current alpha
 
 **[CyInsights 0.2.2 Alpha 3 - all downloads](https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.3)**
@@ -50,6 +52,12 @@ and relationships are labeled in the interface.
 [![CyInsights GPU pass timeline and reconstructed resource graph in the light theme](Docs/Images/cyinsights-gpu-passes.png)](Docs/Images/cyinsights-gpu-passes.png)
 
 ## Current capabilities
+
+- **Offline illustrated manual**: **Help > User manual** / **F1** on Windows,
+  **Help** in CyInsightOVR. English by default, complete French translation,
+  24 chapters, full-text search, three actual screenshots and nine explanatory
+  diagrams. The complete local CyDoc reader ships in `help/` and the APK assets;
+  see [manual authoring and build](Docs/CyDoc/README.md). No server or network is required.
 
 - Stable-only GitHub updates: **Help > Updates** on Windows and **Updates** in CyInsightOVR. Alpha/prerelease builds are ignored; see [update behavior and publishing](Docs/Updates.md).
 - Open `.utrace` and versioned `.cycapture` archives. Preserve the original trace.
@@ -108,9 +116,12 @@ From the repository root:
 
 ```powershell
 python Tools/prepare_dependencies.py
+npm --prefix Tools/Documentation ci --omit=peer --ignore-scripts
 ./build.cmd Release
 ```
 
+Node.js 22+ and npm are needed to generate the help during builds, along with
+Python 3.11+. The installed reader needs neither. Preserve `help/` beside the EXE.
 The executable is produced in `bin/Release/CyInsightsApp.exe`. Binaries, native
 captures, intermediate indexes, caches and the local Unreal test project are not
 committed. `CYINSIGHTS_VS` can select an installed Visual Studio directory.

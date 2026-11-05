@@ -1,5 +1,7 @@
 # CyInsights Unreal plugin
 
+**[Documentation](https://mrmybal.github.io/CyInsights/#/en/unreal-plugin)** · [Documentation en français](https://mrmybal.github.io/CyInsights/#/fr/unreal-plugin)
+
 Our Trace, Runtime, Editor and Quest integration sources are MIT-licensed (LICENSE).
 Unreal Engine and OpenXR dependencies retain their own licenses and are supplied
 by your licensed engine installation. See ../../Docs/Licensing.md.

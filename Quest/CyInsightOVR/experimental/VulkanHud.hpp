@@ -3,15 +3,19 @@
 #include "LiveTiles.hpp"
 #include "TileShaders.hpp"
 namespace cytiles {
-struct Pass {std::vector<VkSampleCountFlagBits> samples;std::vector<bool> color;std::vector<VkPipeline> pipelines,labels;bool logged=false;};
-struct Command {VkRenderPass pass=VK_NULL_HANDLE;VkRect2D area{};uint32_t subpass=0;VkSubpassContents contents=VK_SUBPASS_CONTENTS_INLINE;VkPipeline pipeline=VK_NULL_HANDLE;VkViewport viewport{};VkRect2D scissor{};std::array<float,4> blend{};bool hasViewport=false,hasScissor=false;};
+struct Pass {std::vector<VkSampleCountFlagBits> samples;std::vector<bool> color;std::vector<VkPipeline> pipelines,labels,graphs;bool logged=false;};
+struct Command {VkRenderPass pass=VK_NULL_HANDLE;VkRect2D area{};uint32_t subpass=0;VkSubpassContents contents=VK_SUBPASS_CONTENTS_INLINE;VkPipeline pipeline=VK_NULL_HANDLE;VkViewport viewport{};VkRect2D scissor{};std::array<float,4> blend{};bool hasViewport=false,hasScissor=false;
+    VkBuffer vertex0=VK_NULL_HANDLE;VkDeviceSize vertexOffset=0,vertexSize=VK_WHOLE_SIZE;bool vertexBinding2=false;};
 template<class F,class D> F Proc(D& d,const char* name){return reinterpret_cast<F>(d.gpa(d.handle,name));}
 template<class D> bool Shader(D& d,const uint32_t* code,size_t size,VkShaderModule& module){if(module)return true;VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};info.codeSize=size;info.pCode=code;return Proc<PFN_vkCreateShaderModule>(d,"vkCreateShaderModule")(d.handle,&info,nullptr,&module)==VK_SUCCESS;}
-template<class D> VkPipeline Pipeline(D& d,VkRenderPass rp,uint32_t subpass,VkSampleCountFlagBits samples,bool label){
+template<class D> VkPipeline Pipeline(D& d,VkRenderPass rp,uint32_t subpass,VkSampleCountFlagBits samples,bool label,bool graph=false){
     if(!Shader(d,Vert,sizeof(Vert),d.vert)||!Shader(d,Frag,sizeof(Frag),d.frag)||!Shader(d,Label,sizeof(Label),d.label))return VK_NULL_HANDLE;
     if(!d.layout){VkPipelineLayoutCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};if(Proc<PFN_vkCreatePipelineLayout>(d,"vkCreatePipelineLayout")(d.handle,&info,nullptr,&d.layout)!=VK_SUCCESS)return VK_NULL_HANDLE;}
     VkPipelineShaderStageCreateInfo shaders[2]{};for(auto& s:shaders){s.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;s.pName="main";}shaders[0].stage=VK_SHADER_STAGE_VERTEX_BIT;shaders[0].module=d.vert;shaders[1].stage=VK_SHADER_STAGE_FRAGMENT_BIT;shaders[1].module=label?d.label:d.frag;
+    if(graph){if(!Shader(d,GraphVert,sizeof(GraphVert),d.graphVert)||!Shader(d,GraphFrag,sizeof(GraphFrag),d.graphFrag))return VK_NULL_HANDLE;shaders[0].module=d.graphVert;shaders[1].module=d.graphFrag;}
     VkPipelineVertexInputStateCreateInfo vertex{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+    VkVertexInputBindingDescription binding{0,sizeof(cygraphs::Vertex),VK_VERTEX_INPUT_RATE_VERTEX};VkVertexInputAttributeDescription attributes[]={{0,0,VK_FORMAT_R32G32_SFLOAT,0},{1,0,VK_FORMAT_R32G32B32A32_SFLOAT,8}};
+    if(graph){vertex.vertexBindingDescriptionCount=1;vertex.pVertexBindingDescriptions=&binding;vertex.vertexAttributeDescriptionCount=2;vertex.pVertexAttributeDescriptions=attributes;}
     VkPipelineInputAssemblyStateCreateInfo assembly{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};assembly.topology=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     VkPipelineViewportStateCreateInfo viewport{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};viewport.viewportCount=viewport.scissorCount=1;
     VkPipelineRasterizationStateCreateInfo raster{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};raster.polygonMode=VK_POLYGON_MODE_FILL;raster.cullMode=VK_CULL_MODE_NONE;raster.frontFace=VK_FRONT_FACE_COUNTER_CLOCKWISE;raster.lineWidth=1;
@@ -19,13 +23,14 @@ template<class D> VkPipeline Pipeline(D& d,VkRenderPass rp,uint32_t subpass,VkSa
     VkPipelineDepthStencilStateCreateInfo depth{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};depth.depthCompareOp=VK_COMPARE_OP_ALWAYS;
     VkPipelineColorBlendAttachmentState attachment{};attachment.blendEnable=VK_TRUE;attachment.srcColorBlendFactor=VK_BLEND_FACTOR_CONSTANT_COLOR;attachment.dstColorBlendFactor=VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;attachment.colorBlendOp=VK_BLEND_OP_ADD;attachment.srcAlphaBlendFactor=VK_BLEND_FACTOR_ZERO;attachment.dstAlphaBlendFactor=VK_BLEND_FACTOR_ONE;attachment.alphaBlendOp=VK_BLEND_OP_ADD;attachment.colorWriteMask=VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT;
     VkPipelineColorBlendStateCreateInfo blend{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};blend.attachmentCount=1;blend.pAttachments=&attachment;
+    if(graph){attachment.srcColorBlendFactor=VK_BLEND_FACTOR_SRC_ALPHA;attachment.dstColorBlendFactor=VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;}
     VkDynamicState dynamicValues[]={VK_DYNAMIC_STATE_VIEWPORT,VK_DYNAMIC_STATE_SCISSOR,VK_DYNAMIC_STATE_BLEND_CONSTANTS};VkPipelineDynamicStateCreateInfo dynamic{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};dynamic.dynamicStateCount=3;dynamic.pDynamicStates=dynamicValues;
     VkGraphicsPipelineCreateInfo info{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};info.stageCount=2;info.pStages=shaders;info.pVertexInputState=&vertex;info.pInputAssemblyState=&assembly;info.pViewportState=&viewport;info.pRasterizationState=&raster;info.pMultisampleState=&multi;info.pDepthStencilState=&depth;info.pColorBlendState=&blend;info.pDynamicState=&dynamic;info.layout=d.layout;info.renderPass=rp;info.subpass=subpass;
     VkPipeline out=VK_NULL_HANDLE;VkResult result=Proc<PFN_vkCreateGraphicsPipelines>(d,"vkCreateGraphicsPipelines")(d.handle,VK_NULL_HANDLE,1,&info,nullptr,&out);
     if(result!=VK_SUCCESS)__android_log_print(ANDROID_LOG_ERROR,"CyOVRVulkan","HUD pipeline failed result=%d",int(result));return out;
 }
-template<class D> void DestroyPass(D& d,Pass& p){auto destroy=Proc<PFN_vkDestroyPipeline>(d,"vkDestroyPipeline");for(auto pipeline:p.pipelines)if(pipeline)destroy(d.handle,pipeline,nullptr);for(auto pipeline:p.labels)if(pipeline)destroy(d.handle,pipeline,nullptr);}
-template<class D> void Cleanup(D& d){for(auto& p:d.passes)DestroyPass(d,p.second);d.passes.clear();auto destroy=Proc<PFN_vkDestroyShaderModule>(d,"vkDestroyShaderModule");for(auto m:{d.vert,d.frag,d.label})if(m)destroy(d.handle,m,nullptr);if(d.layout)Proc<PFN_vkDestroyPipelineLayout>(d,"vkDestroyPipelineLayout")(d.handle,d.layout,nullptr);}
+template<class D> void DestroyPass(D& d,Pass& p){auto destroy=Proc<PFN_vkDestroyPipeline>(d,"vkDestroyPipeline");for(auto pipeline:p.pipelines)if(pipeline)destroy(d.handle,pipeline,nullptr);for(auto pipeline:p.labels)if(pipeline)destroy(d.handle,pipeline,nullptr);for(auto pipeline:p.graphs)if(pipeline)destroy(d.handle,pipeline,nullptr);}
+template<class D> void Cleanup(D& d){for(auto& p:d.passes)DestroyPass(d,p.second);d.passes.clear();auto destroy=Proc<PFN_vkDestroyShaderModule>(d,"vkDestroyShaderModule");for(auto m:{d.vert,d.frag,d.label,d.graphVert,d.graphFrag})if(m)destroy(d.handle,m,nullptr);if(d.layout)Proc<PFN_vkDestroyPipelineLayout>(d,"vkDestroyPipelineLayout")(d.handle,d.layout,nullptr);}
 template<class D> void Rect(D& d,VkCommandBuffer command,const Command& state,float x,float y,float w,float h,float r,float g,float b,float opacity){
     if(w<1||h<1)return;VkViewport viewport{x,y,w,h,0,1};
     int32_t left=std::max(int32_t(std::ceil(x)),state.area.offset.x),top=std::max(int32_t(std::ceil(y)),state.area.offset.y);

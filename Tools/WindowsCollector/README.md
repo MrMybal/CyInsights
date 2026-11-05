@@ -1,5 +1,7 @@
 # Windows collector (MIT)
 
+**[Documentation](https://mrmybal.github.io/CyInsights/#/en/gpu-desktop)** · [Documentation en français](https://mrmybal.github.io/CyInsights/#/fr/gpu-desktop)
+
 This CMake project builds CyInsights' optional internal Windows collector from
 the retained MIT Core/ReShade collector code. The source directory keeps its
 upstream attribution; no CyGPUInspector executable or Unreal plugin is used.

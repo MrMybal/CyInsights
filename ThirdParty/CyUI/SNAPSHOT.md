@@ -9,12 +9,13 @@ This is a minimal, unmodified selection of upstream files: Core and the Canvas,
 Plots, Timeline, Nodes, Inspector, Images and Diagnostics implementations, public
 headers, CMake, integration documentation and MIT LICENSE. `source-sha256.json`
 records every imported byte. No bundled ImGui, Audio/Gallery implementation,
-lexers, text editor, CEF, fonts, binaries or repository metadata are copied.
+text editor, CEF, fonts, binaries or repository metadata are copied. The former
+DocumentViews/Code/Lexilla dependency was removed after migration to CyDoc.
 The distribution retains `LICENCES/CyUI-MIT.txt`.
 
 The host CMake files select the production modules before `add_subdirectory` and
-supply the existing ImGui target. The desktop uses all seven optional modules;
-Quest only uses Canvas, Plots, Inspector and Images. Dependencies are resolved by
+supply the existing ImGui target. The desktop uses those optional modules;
+Quest uses Canvas, Plots, Inspector and Images. Dependencies are resolved by
 upstream CMake. Demo, Gallery, Audio and CEF are explicitly disabled. Only the
 selected families' headers are packaged; another family requires a reviewed
 snapshot refresh.

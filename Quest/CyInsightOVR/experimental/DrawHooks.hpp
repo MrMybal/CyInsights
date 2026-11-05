@@ -55,7 +55,7 @@ CY_TOPOLOGY(vkCmdSetPrimitiveTopologyEXT)
 CY_RESTART(vkCmdSetPrimitiveRestartEnable)
 CY_RESTART(vkCmdSetPrimitiveRestartEnableEXT)
 #undef CY_RESTART
-VKAPI_ATTR void VKAPI_CALL vkCmdExecuteCommands(VkCommandBuffer cb,uint32_t count,const VkCommandBuffer* buffers){auto d=GetDevice(cb);if(!d)return;{std::lock_guard<std::mutex> g(d->mutex);for(uint32_t i=0;i<count;++i)d->drawBook.Execute(reinterpret_cast<uintptr_t>(cb),reinterpret_cast<uintptr_t>(buffers[i]));}Next<PFN_vkCmdExecuteCommands>(*d,"vkCmdExecuteCommands")(cb,count,buffers);}
+VKAPI_ATTR void VKAPI_CALL vkCmdExecuteCommands(VkCommandBuffer cb,uint32_t count,const VkCommandBuffer* buffers){auto d=GetDevice(cb);if(!d)return;{std::lock_guard<std::mutex> g(d->mutex);for(uint32_t i=0;i<count;++i)d->drawBook.Execute(reinterpret_cast<uintptr_t>(cb),reinterpret_cast<uintptr_t>(buffers[i]));auto& c=d->commands[cb];c.pipeline=VK_NULL_HANDLE;c.vertex0=VK_NULL_HANDLE;c.hasViewport=c.hasScissor=false;}Next<PFN_vkCmdExecuteCommands>(*d,"vkCmdExecuteCommands")(cb,count,buffers);}
 VKAPI_ATTR VkResult VKAPI_CALL vkResetCommandBuffer(VkCommandBuffer cb,VkCommandBufferResetFlags flags){auto d=GetDevice(cb);if(!d)return VK_ERROR_INITIALIZATION_FAILED;auto result=Next<PFN_vkResetCommandBuffer>(*d,"vkResetCommandBuffer")(cb,flags);if(result==VK_SUCCESS){std::lock_guard<std::mutex> g(d->mutex);d->drawBook.Erase(reinterpret_cast<uintptr_t>(cb));d->geometry.erase(cb);d->commands.erase(cb);}return result;}
 VKAPI_ATTR VkResult VKAPI_CALL vkQueueSubmit(VkQueue queue,uint32_t count,const VkSubmitInfo* info,VkFence fence){
     auto d=GetDevice(queue);if(!d)return VK_ERROR_INITIALIZATION_FAILED;std::vector<cydraw::Handle> buffers;

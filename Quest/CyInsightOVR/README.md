@@ -1,5 +1,7 @@
 # CyInsightOVR - standalone Quest GPU tools
 
+**[Documentation](https://mrmybal.github.io/CyInsights/#/en/quest-setup)** · [Documentation en français](https://mrmybal.github.io/CyInsights/#/fr/quest-setup)
+
 Native Android arm64 application, C++ / Dear ImGui / CyUI. No Unreal installation,
 web runtime or game modification is needed to open this app. The first version is
 a **Quest panel** with system-counter curves and tile-stage snapshots. The
@@ -12,7 +14,11 @@ a custom universal VR compositor overlay is **not validated**.
 `python Quest/CyInsightOVR/build.py` uses the installed Android SDK 34, build-tools
 35.0.1, NDK 27.2 and Android Studio JBR. Override `--sdk`, `--java`, `--output` as
 needed. No Gradle/network download is used. This produces a development APK signed
-with a local development-only key in ignored `build/CyInsightOVR/`. Do not use that
+with a local development-only key in ignored `.local/signing/`, outside disposable
+build output. An existing legacy `build/CyInsightOVR/development.keystore` is
+retained by copying it there on first use. `--keystore` can select an existing
+development key explicitly. Back up this key: Android cannot update an installed
+APK signed with a lost key without reinstalling it. Do not use this development
 key for a public production release. Android debuggability is explicit.
 
 Install the standard or Vulkan APK, then open **CyInsightOVR** from the Quest
@@ -119,8 +125,8 @@ and **Bottom center**, in addition to the corners and side centers:
   the game through the Quest menu when ready; the native stop/configuration
   notification remains available.
 - FPS and app GPU time are the default graphs. Choose graphs and numerical values
-  independently from the documented metrics detected on this headset. The limits
-  are six graphs and eight values; unavailable metrics are disabled. Settings are
+  independently from the documented metrics detected on this headset. There is no application-imposed six-graph/eight-value limit; unavailable
+  firmware metrics remain identified. Settings are
   saved automatically and restored when the panel is reopened. Selections outside
   our documented list remain untouched in Meta; enabling values may also show
   those existing statistics.
@@ -252,7 +258,7 @@ The header, tabs and Scroll up / Scroll down buttons stay visible while the page
 content scrolls. Pointer drags scroll without activating the control underneath;
 Android scroll-axis events, forwarded controller stick axes and page/directional
 keys are routed to native scrolling. The footer buttons provide a fallback when
-the Quest host does not forward the controller axes. **Display & HUD > Panel graphs**
+the Quest host does not forward the controller axes. **Display & HUD > Graphs & HUD > Overview**
 selects the sampled system curves shown in Overview.
 
 The APK has an Android MAIN/LAUNCHER entry named **CyInsightOVR**. As a sideloaded
@@ -310,6 +316,62 @@ and fragment operations. A hot tile does not identify a unique shader, mesh or
 actor. Detailed GPU profiling changes scheduling and adds overhead; short
 diagnostic snapshots are not the baseline for final performance measurements.
 
+## Embedded offline help
+
+Open **Help > Open manual** or **Help for this page**. CyDoc opens a dedicated
+local WebView at file:///android_asset/help/index.html, with English by default
+and French for all 24 user chapters. The same export contains screenshots,
+SVG diagrams, references and code/API pages. It works without the GPU service,
+network or PC. Touch scrolling, local search, a collapsible contents menu,
+reader themes and in-window image enlargement are provided by CyDoc. Back returns
+to configuration. See [documentation build and modules](../../Docs/CyDoc/README.md).
+
+## One graph selection list, including the in-game HUD
+
+**Display & HUD > Graphs & HUD** has one searchable table. **HUD graph** selects
+an in-game curve, **HUD value** selects numerical text, and **Overview** selects
+the configuration panel's curves. Graph and text selections are independent.
+**Add draw calls + triangles** adds both forms without clearing other choices.
+Changes apply automatically while the HUD is running, after a short debounce;
+**Apply HUD** also applies the current selection explicitly. Starting the HUD
+keeps the configuration application open and never restarts the target game.
+
+Custom metrics are registered through the public OVR Metrics application-metric
+interface in Meta's installed service, alongside the existing native HUD. Meta
+scopes those definitions to the active VR application: our optional Vulkan layer
+loads the app-owned Java helper from the installed APK and publishes under the
+game's actual Context and UID. Companion-only definitions are insufficient.
+Measured packets and publication feedback use the authenticated layer channel;
+no render callback binds a service or submits IPC. The
+application contains an independent IPC client; it does not bundle Meta SDK
+code or binaries. Placement and size apply to the shared statistics HUD. The
+separate tile heatmap retains its own placement and opacity controls.
+The former separate Vulkan statistics-rendering path is no longer sent to games.
+HUD configuration is read back and verified; definition acceptance alone is not
+reported as proof that a wearer saw a graph.
+
+Draw calls and input triangles still need the Vulkan APK and a compatible
+Development Vulkan target. Start HUD prepares the selected target and starts
+its counter stream at the selected 1/5/10/20 Hz cadence. Fully reopen that game
+once after preparation or an APK layer update. Raw system GPU curves added as custom HUD metrics also use that
+layer publication path. Native Meta HUD metrics do not need a Vulkan layer. No missing source values are invented: stale or absent metrics
+are registered with **[N/A]**, and partial geometry is labelled **[partial]**.
+Per-presented-frame values remain unavailable if the source does not provide a
+Vulkan presentation boundary; XR queue submissions are not treated as frames.
+
+The installed Quest service requires integer custom values. Geometry uses
+**K triangles** in that HUD to preserve useful precision, while Overview retains
+its original units and values. Other custom HUD values are rounded to their
+nearest displayed unit. Out-of-range values are unavailable rather than clamped
+to a fabricated total. This representation does not modify recorded source data.
+Meta hardware counters retain their own sampling cadence. The selected stream
+frequency does not create additional samples from a slower source.
+
+The application no longer imposes its old six-graph/eight-value limits. Meta
+firmware can still reject a metric or lack custom application-metric support;
+these failures are reported. Actual cross-application graph visibility requires
+a headset check and is distinct from successful service configuration.
+
 ## Draw calls, input triangles and faster curves
 
 The **Overview** page includes **Draw calls & input triangles** controls. Select
@@ -347,7 +409,7 @@ to be a frame.** When the XR runtime provides no Vulkan presentation boundary,
 these per-frame curves remain unavailable; measured submission-window counts and
 draws/triangles per second still work. These are process-submission observations,
 not proof of visible triangles, GPU execution timing, per-eye or mesh attribution.
-This feature adds panel graphs; Meta's HUD metric catalog is unchanged.
+These curves are available in both Overview and the in-game Vulkan HUD. Meta's own metric catalog remains separate at the renderer level, with all choices presented in one table.
 
 The same operations are available through `Tools/OvrBridge.py`:
 `draw_counters_prepare --package org.example.game`,

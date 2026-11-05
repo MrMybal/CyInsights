@@ -13,7 +13,11 @@ ID3D11ShaderResourceView* LoadBrandLogo(HINSTANCE instance,ID3D11Device* device,
     auto bytes=resource?SizeofResource(instance,resource):0;
     auto loaded=resource?LoadResource(instance,resource):nullptr;
     auto data=loaded?static_cast<BYTE*>(LockResource(loaded)):nullptr;
-    if(!device||!data||!bytes){error="Embedded CyInsights logo missing";return nullptr;}
+    int width=0,height=0;return LoadEmbeddedPng(device,data,bytes,width,height,error);
+}
+ID3D11ShaderResourceView* LoadEmbeddedPng(ID3D11Device* device,const unsigned char* data,std::size_t bytes,int& imageWidth,int& imageHeight,std::string& error){
+    error.clear();imageWidth=imageHeight=0;
+    if(!device||!data||!bytes||bytes>std::numeric_limits<DWORD>::max()){error="Embedded image missing or too large";return nullptr;}
     auto initialized=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);
     if(FAILED(initialized)&&initialized!=RPC_E_CHANGED_MODE){error="Cannot initialize logo decoder";return nullptr;}
     struct ComScope{bool owned;~ComScope(){if(owned)CoUninitialize();}} com{SUCCEEDED(initialized)};
@@ -24,14 +28,14 @@ ID3D11ShaderResourceView* LoadBrandLogo(HINSTANCE instance,ID3D11Device* device,
     ComPtr<IWICFormatConverter> converter;
     auto hr=CoCreateInstance(CLSID_WICImagingFactory,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&factory));
     if(SUCCEEDED(hr))hr=factory->CreateStream(&stream);
-    if(SUCCEEDED(hr))hr=stream->InitializeFromMemory(data,bytes);
+    if(SUCCEEDED(hr))hr=stream->InitializeFromMemory(const_cast<BYTE*>(data),static_cast<DWORD>(bytes));
     if(SUCCEEDED(hr))hr=factory->CreateDecoderFromStream(stream.Get(),nullptr,WICDecodeMetadataCacheOnLoad,&decoder);
     if(SUCCEEDED(hr))hr=decoder->GetFrame(0,&frame);
     if(SUCCEEDED(hr))hr=factory->CreateFormatConverter(&converter);
     if(SUCCEEDED(hr))hr=converter->Initialize(frame.Get(),GUID_WICPixelFormat32bppRGBA,WICBitmapDitherTypeNone,nullptr,0,WICBitmapPaletteTypeCustom);
     UINT width=0,height=0;
     if(SUCCEEDED(hr))hr=converter->GetSize(&width,&height);
-    if(FAILED(hr)||!width||!height||width>std::numeric_limits<UINT>::max()/4/height){error="Cannot decode embedded logo";return nullptr;}
+    if(FAILED(hr)||!width||!height||width>8192||height>8192||width>std::numeric_limits<UINT>::max()/4/height){error="Cannot decode embedded image";return nullptr;}
     std::vector<BYTE> pixels(size_t(width)*height*4);
     hr=converter->CopyPixels(nullptr,width*4,static_cast<UINT>(pixels.size()),pixels.data());
     if(FAILED(hr)){error="Cannot read embedded logo pixels";return nullptr;}
@@ -45,6 +49,6 @@ ID3D11ShaderResourceView* LoadBrandLogo(HINSTANCE instance,ID3D11Device* device,
     ID3D11ShaderResourceView* view=nullptr;
     if(SUCCEEDED(hr))hr=device->CreateShaderResourceView(texture.Get(),nullptr,&view);
     if(FAILED(hr)){error="Cannot upload CyInsights logo to renderer";return nullptr;}
-    return view;
+    imageWidth=static_cast<int>(width);imageHeight=static_cast<int>(height);return view;
 }
 }

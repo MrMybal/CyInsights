@@ -76,7 +76,12 @@ public final class MetaHudTests {
             fake.rejectEnable="";fake.rejectDisable="average_frame_rate";
             try{hud.enable(selected);throw new AssertionError("Failure to hide an old metric was silently ignored");}catch(IOException expected){}
             check(!file.exists()&&fake.config.getJSONArray("metrics").toString().equals(originalGraphs),"Refused disable remains fatal and rolls back");
-            System.out.println("21 Meta HUD checks passed (explicit simulated service)");
+            fake.rejectDisable="";
+            hud.enable(new JSONObject().put("graphs",new JSONArray()).put("stats",new JSONArray()).put("custom_graphs_present",true));
+            check(fake.config.getBoolean("overlayEnabled")&&fake.config.getBoolean("graphEnabled")&&!fake.config.getBoolean("statsEnabled"),"Custom-only graphs keep the shared HUD graph group enabled");hud.disable();
+            hud.enable(new JSONObject().put("graphs",new JSONArray()).put("stats",new JSONArray()).put("custom_values_present",true));
+            check(fake.config.getBoolean("overlayEnabled")&&!fake.config.getBoolean("graphEnabled")&&fake.config.getBoolean("statsEnabled"),"Custom-only text keeps the shared HUD stat group enabled");hud.disable();
+            System.out.println("23 Meta HUD checks passed (explicit simulated service)");
         }finally{if(file.exists())file.delete();new File(file.getPath()+".tmp").delete();}
     }
 }

@@ -1,5 +1,7 @@
 # Installed Unreal timing reader
 
+**[Documentation](https://mrmybal.github.io/CyInsights/#/en/install-desktop)** · [Documentation en français](https://mrmybal.github.io/CyInsights/#/fr/install-desktop)
+
 This optional MIT adapter reads `.utrace` through the licensed installed Unreal
 Insights Core, TraceAnalysis and TraceServices providers. It exports CPU scopes,
 old GPU timelines, supported GPU queue scopes, game/rendering frames, and a small

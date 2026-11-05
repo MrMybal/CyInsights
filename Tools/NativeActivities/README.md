@@ -1,5 +1,7 @@
 # Installed Unreal activity reader
 
+**[Documentation](https://mrmybal.github.io/CyInsights/#/en/activities)** · [Documentation en français](https://mrmybal.github.io/CyInsights/#/fr/activities)
+
 This optional, MIT-licensed adapter reads native network, file, asset loading,
 LLM and allocation summary providers from a licensed **installed** Unreal
 Insights. Only our adapter is compiled. No Epic source, DLL or import library is

@@ -1,0 +1,14 @@
+{
+  "repository": "https://github.com/MrMybal/CyDoc.git",
+  "revision": "774f2a7eabf7dd181a98ffc5add115b580b67f42",
+  "version": "0.1.0",
+  "sha256": {
+    "cydoc-0.1.0.tgz": "1814680c5891b047d54ecb608b5b69599cc3268df34ba89b423d3f1ac2b1523a",
+    "LICENSE": "60aaa0ed2087332acbaee219c088240f5ddda7e7fe393ad5c162b8c617e62bf0",
+    "cydoc_link.hpp": "da4ad935277caf8069a7f7da4d8a2648dc9811c66fccac7abef71ff5167f1aa4"
+  },
+  "omittedFiles": [
+    "package/tools/create-example-docs.py"
+  ],
+  "officialPackageSha256": "c7a6acf0e7ff982a937312ac43fda4393fea200094e0563ca10c2221b0b10ea7"
+}

@@ -1,5 +1,7 @@
 # CyInsightsAI
 
+**[Documentation](https://mrmybal.github.io/CyInsights/#/en/ai)** · [Documentation en français](https://mrmybal.github.io/CyInsights/#/fr/ai)
+
 CyToolsCore companion for the existing native CyInsights application.
 See ../README.md for tested setup, MCP connection, operations and limitations.
 The SDK runtime/scheduler is installed from the pinned MIT wheel, not copied.

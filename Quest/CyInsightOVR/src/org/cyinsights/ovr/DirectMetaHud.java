@@ -46,7 +46,7 @@ final class DirectMetaHud {
         String text=result.getString("Config");if(text.length()>128*1024)throw new IOException("Invalid Meta HUD settings response");
         JSONObject state=new JSONObject(text);
         for(String field:new String[]{"overlayEnabled","overlayScale","overlayDistance","statsEnabled","graphEnabled","overlayPitch","overlayYaw","overlayHeadLocked","metrics"})
-            if(!state.has(field))throw new IOException("Unsupported Meta HUD settings schema");
+            if(!state.has(field))throw new IOException("Meta HUD settings response is missing: "+field);
         return state;
     }
     private String run(String[] args,int timeout)throws Exception{

@@ -3,7 +3,8 @@
 CyInsights vendors an unmodified selection of [CyUI](https://github.com/MrMybal/CyUI)
 1.2.0 at revision `ff023e646c6a3038b3dfbfd53f6d2b4a2f5955e3`.
 The upstream HEAD was checked on 2 November 2026. No external checkout or
-download is needed to build the application. See the vendored
+download is needed for the native CyUI build. CyDoc generation has separate
+Node/npm build requirements. See the vendored
 [integration guide](../ThirdParty/CyUI/docs/AI_GUIDE.md),
 [module contract](../ThirdParty/CyUI/docs/MODULES.md) and
 [snapshot manifest](../ThirdParty/CyUI/SNAPSHOT.md).
@@ -37,11 +38,14 @@ previews do not become history entries; accepted property edits commit once.
 Changing the external palette advances the inspector revision and cancels stale
 drafts. The developer Gallery menu has been removed.
 
-AudioViews, Curves, Assets, Viewport, Code, CodeEditor, Diff, Commands,
-DocumentViews, Web, CEF, Lexilla and TextEditor are not required. The AI workflow
-is structured application controls/JSON, not a Markdown/code editor or browser.
+AudioViews, Curves, Assets, Viewport, CodeEditor, Diff, Commands, Web, CEF and
+TextEditor are not required. DocumentViews and its transitive Code/Lexilla
+dependency were removed when the offline manual migrated to CyDoc on 5 November
+2026. The AI workflow remains structured application controls/JSON.
 Trace A/B comparisons are numerical results, not source-code diffs. No new
-external dependency, bundled font or browser process is introduced.
+bundled font is introduced. Help opens in the Windows default browser or a local
+Android WebView; no native CEF/Web module is added. See Docs/CyDoc/README.md for
+the independent documentation build dependencies.
 
 The Unreal plugin does not embed a CyUI/ImGui Editor panel, and Python does not
 render this interface. Their existing engine/SDK integration stays independent;

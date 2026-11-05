@@ -1,0 +1,29 @@
+{
+  "note": "Preserved French translations baseline. Advance a value only after reviewing changes to its English source.",
+  "fr": {
+    "activities": "d706de3d5900",
+    "ai": "0a36b2191a9b",
+    "comparison": "4dfed9d4f068",
+    "counters": "43a9a33928f4",
+    "frames": "32c36296c726",
+    "functions": "a3cb78a58c35",
+    "glossary": "220336fb564f",
+    "gpu-desktop": "6e68c65639a9",
+    "install-desktop": "80fddc2aa75a",
+    "opening-traces": "8e99730f292a",
+    "profiles": "03cd65e24b7c",
+    "quest-capture": "4accfb197943",
+    "quest-counters": "880a7fd89ef5",
+    "quest-heatmap": "2761813e9d3c",
+    "quest-hud": "8d721dc99a56",
+    "quest-setup": "293c4eddb38e",
+    "shortcuts": "a8d285eef524",
+    "tasks": "09b73dcd7c3e",
+    "tile-recording": "b195f461986a",
+    "timeline": "a8ab275715cc",
+    "troubleshooting": "20d857af25a9",
+    "unreal-plugin": "1d1df376856e",
+    "updates": "b0d2a848d8f3",
+    "welcome": "36f03ddc6fb2"
+  }
+}

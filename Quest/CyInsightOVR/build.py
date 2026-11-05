@@ -6,7 +6,7 @@ import argparse, os, pathlib, shutil, subprocess, zipfile, json
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 HERE=pathlib.Path(__file__).resolve().parent
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--sdk',type=pathlib.Path,default=pathlib.Path(os.environ.get('ANDROID_HOME',str(pathlib.Path.home()/'AppData/Local/Android/Sdk'))));p.add_argument('--java',type=pathlib.Path,default=pathlib.Path(os.environ.get('JAVA_HOME','C:/Program Files/Android/Android Studio/jbr')));p.add_argument('--output',type=pathlib.Path,default=ROOT/'bin/CyInsightOVR');p.add_argument('--experimental-vulkan-layer',action='store_true');a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--sdk',type=pathlib.Path,default=pathlib.Path(os.environ.get('ANDROID_HOME',str(pathlib.Path.home()/'AppData/Local/Android/Sdk'))));p.add_argument('--java',type=pathlib.Path,default=pathlib.Path(os.environ.get('JAVA_HOME','C:/Program Files/Android/Android Studio/jbr')));p.add_argument('--output',type=pathlib.Path,default=ROOT/'bin/CyInsightOVR');p.add_argument('--keystore',type=pathlib.Path,help='Existing development signing key (default: .local/signing/cyinsightovr-development.keystore, outside disposable build output)');p.add_argument('--experimental-vulkan-layer',action='store_true');a=p.parse_args()
     sdk=a.sdk;out=a.output.resolve();work=ROOT/'build/CyInsightOVR';work.mkdir(parents=True,exist_ok=True);out.mkdir(parents=True,exist_ok=True)
     ndk=sdk/'ndk/27.2.12479018';cmake=sdk/'cmake/3.22.1/bin/cmake.exe';ninja=sdk/'cmake/3.22.1/bin/ninja.exe';bt=sdk/'build-tools/35.0.1';android=sdk/'platforms/android-34/android.jar'
     env=os.environ.copy();env['JAVA_HOME']=str(a.java);env['PATH']=str(a.java/'bin')+os.pathsep+env.get('PATH','')
@@ -23,7 +23,7 @@ def main():
         import struct
         shader_arrays=[]
         compiler=ndk/'shader-tools/windows-x86_64/glslc.exe'
-        for symbol,source in [('Vert','heatmap.vert'),('Frag','heatmap.frag'),('Label','heatmap_label.frag')]:
+        for symbol,source in [('Vert','heatmap.vert'),('Frag','heatmap.frag'),('Label','heatmap_label.frag'),('GraphVert','graph.vert'),('GraphFrag','graph.frag')]:
             binary=work/(source+'.spv');run(compiler,'--target-env=vulkan1.1',HERE/'native'/source,'-o',binary)
             data=binary.read_bytes();values=struct.unpack('<'+'I'*(len(data)//4),data)
             shader_arrays.append('inline constexpr uint32_t '+symbol+'[]={'+','.join(hex(v) for v in values)+'};')
@@ -53,7 +53,13 @@ def main():
     manifest.getroot().set(ns+'versionCode',str(version['android_version_code']));manifest.getroot().set(ns+'versionName',version['version']);ET.register_namespace('android','http://schemas.android.com/apk/res/android')
     manifest_path=work/'AndroidManifest.xml';manifest.write(manifest_path,encoding='utf-8',xml_declaration=True)
     unsigned=work/'unsigned.apk';run(bt/'aapt2.exe','link','-o',unsigned,'--manifest',manifest_path,'-I',android,work/'resources.zip')
+    # Use the same checked, file:// export as the Windows distribution.
+    import sys
+    help_dir=work/'documentation/help'
+    run(sys.executable,ROOT/'Tools/build_docs.py','--output',help_dir)
     with zipfile.ZipFile(unsigned,'a',zipfile.ZIP_DEFLATED) as z:
+        for f in help_dir.rglob('*'):
+            if f.is_file():z.write(f,'assets/help/'+f.relative_to(help_dir).as_posix())
         z.write(dex/'classes.dex','classes.dex');z.write(packaged/'libcyinsightovr.so','lib/arm64-v8a/libcyinsightovr.so')
         z.write(ROOT/'ThirdParty/OpenXR/Android/arm64-v8a/libopenxr_loader.so','lib/arm64-v8a/libopenxr_loader.so')
         if a.experimental_vulkan_layer:z.write(packaged/'libVkLayer_CyInsightOVR.so','lib/arm64-v8a/libVkLayer_CyInsightOVR.so')
@@ -63,7 +69,11 @@ def main():
         z.write(ROOT/'LICENSE','assets/LICENSE')
         z.writestr('assets/update-build.json',json.dumps({'version':version['version'],'variant':flavor}))
     aligned=work/'aligned.apk';run(bt/'zipalign.exe','-f','-p','4',unsigned,aligned)
-    key=work/'development.keystore'
+    key=a.keystore.resolve() if a.keystore else ROOT/'.local/signing/cyinsightovr-development.keystore'
+    if a.keystore and not key.is_file():raise ValueError('The specified development signing key does not exist')
+    key.parent.mkdir(parents=True,exist_ok=True)
+    legacy=work/'development.keystore'
+    if not a.keystore and not key.exists() and legacy.is_file():shutil.copy2(legacy,key)
     if not key.exists():run(a.java/'bin/keytool.exe','-genkeypair','-keystore',key,'-storepass','android','-keypass','android','-alias','androiddebugkey','-dname','CN=CyInsightOVR Development','-keyalg','RSA','-keysize','2048','-validity','10000')
     apk=out/('CyInsights-v'+version['version']+'-Quest-'+('Vulkan' if a.experimental_vulkan_layer else 'Standard')+'-arm64.apk');run(bt/'apksigner.bat','sign','--ks',key,'--ks-key-alias','androiddebugkey','--ks-pass','pass:android','--key-pass','pass:android','--out',apk,aligned)
     run(bt/'apksigner.bat','verify','--verbose',apk)

@@ -16,3 +16,4 @@
 # This snapshot is hash-pinned byte for byte, including upstream line endings.
 /ThirdParty/CyGPUInspector/** -text
 /ThirdParty/CyUI/** -text
+/ThirdParty/CyDoc/** -text

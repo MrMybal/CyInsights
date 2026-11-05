@@ -1,5 +1,7 @@
 # CyInsights AI companion
 
+**[Documentation](https://mrmybal.github.io/CyInsights/#/en/ai)** · [Documentation en français](https://mrmybal.github.io/CyInsights/#/fr/ai)
+
 Current local adapter: **39 native operations**, contract version **0.2.0**.
 Use `get_capabilities` and `get_analysis_guide` before analysis. The versioned
 method, catalogue and translations are embedded in the native executable.

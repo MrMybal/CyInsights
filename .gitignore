@@ -9,6 +9,7 @@ DerivedDataCache/
 Plugins/*/Binaries/
 Plugins/*/Intermediate/
 __pycache__/
+node_modules/
 .pytest_cache/
 AI/runtime/
 .codex/
@@ -16,6 +17,7 @@ AI/runtime/
 .aws/
 .ssh/
 .idea/
+.local/
 .gitleaks-report*
 *gitleaks-report.json
 *.pfx
@@ -35,6 +37,7 @@ AI/runtime/
 *.cycapture
 *.cyovr
 *.keystore
+*.jks
 *.cyindex
 *.pdb
 *.exe
