@@ -10,6 +10,7 @@ Plugins/*/Binaries/
 Plugins/*/Intermediate/
 __pycache__/
 node_modules/
+/Documentation/
 .pytest_cache/
 AI/runtime/
 .codex/

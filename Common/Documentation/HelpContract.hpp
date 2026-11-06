@@ -9,7 +9,7 @@
  * @section API
  * @symbol cyhelp::Route
  * ## Local route {#route}
- * The host converts its installed index.html path to a file URL. Route keeps
+ * The host converts its installed Documentation.html path to a file URL. Route keeps
  * stable page, section and media identifiers encoded through CyDoc's C++ helper.
  * English is the default; unsupported requested locales fall back to English.
  * The legacy --manual-topic, --manual-language and --manual-media arguments
@@ -22,7 +22,7 @@
  * @section API
  * @symbol cyhelp::Route
  * ## Adresse locale {#route}
- * L’application convertit le chemin installé index.html en URL file://. Route
+ * L’application convertit le chemin installé Documentation.html en URL file://. Route
  * encode les identifiants stables de page, section et média avec l’aide C++ de
  * CyDoc. L’anglais est la langue par défaut et de repli. Les arguments historiques
  * --manual-topic, --manual-language et --manual-media restent pris en charge.

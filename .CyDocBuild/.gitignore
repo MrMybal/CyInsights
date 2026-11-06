@@ -1,0 +1,5 @@
+/work/
+/node_modules/
+/generated.config.json
+/internal/
+__pycache__/

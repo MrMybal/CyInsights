@@ -55,11 +55,11 @@ def main():
     unsigned=work/'unsigned.apk';run(bt/'aapt2.exe','link','-o',unsigned,'--manifest',manifest_path,'-I',android,work/'resources.zip')
     # Use the same checked, file:// export as the Windows distribution.
     import sys
-    help_dir=work/'documentation/help'
+    help_dir=work/'documentation/Documentation'
     run(sys.executable,ROOT/'Tools/build_docs.py','--output',help_dir)
     with zipfile.ZipFile(unsigned,'a',zipfile.ZIP_DEFLATED) as z:
         for f in help_dir.rglob('*'):
-            if f.is_file():z.write(f,'assets/help/'+f.relative_to(help_dir).as_posix())
+            if f.is_file():z.write(f,'assets/Documentation/'+f.relative_to(help_dir).as_posix())
         z.write(dex/'classes.dex','classes.dex');z.write(packaged/'libcyinsightovr.so','lib/arm64-v8a/libcyinsightovr.so')
         z.write(ROOT/'ThirdParty/OpenXR/Android/arm64-v8a/libopenxr_loader.so','lib/arm64-v8a/libopenxr_loader.so')
         if a.experimental_vulkan_layer:z.write(packaged/'libVkLayer_CyInsightOVR.so','lib/arm64-v8a/libVkLayer_CyInsightOVR.so')

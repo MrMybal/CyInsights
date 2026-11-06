@@ -4,14 +4,14 @@
 
 ## Download the current alpha
 
-**[CyInsights 0.2.2 Alpha 3 - all downloads](https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.3)**
+**[CyInsights 0.2.2 Alpha 4 - all downloads](https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.4)**
 
-- **[Quest APK - Vulkan heatmap and draw counters (experimental)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.3/CyInsights-v0.2.2-alpha.3-Quest-Vulkan-arm64.apk)**
-- [Quest APK - standard](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.3/CyInsights-v0.2.2-alpha.3-Quest-Standard-arm64.apk)
-- [Quest complete bundle - APKs, optional developer authorization and guide](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.3/CyInsights-v0.2.2-alpha.3-Quest-arm64.zip)
-- [Windows desktop application](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.3/CyInsights-v0.2.2-alpha.3-Windows-x64.zip)
-- [Unreal plugin sources](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.3/CyInsights-v0.2.2-alpha.3-Unreal-Plugins-Source.zip)
-- [Standalone MCP / AI SDK](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.3/CyInsights-v0.2.2-alpha.3-AI-SDK.zip)
+- **[Quest APK - Vulkan heatmap and draw counters (experimental)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Quest-Vulkan-arm64.apk)**
+- [Quest APK - standard](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Quest-Standard-arm64.apk)
+- [Quest complete bundle - APKs, optional developer authorization and guide](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Quest-arm64.zip)
+- [Windows desktop application](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Windows-x64.zip)
+- [Unreal plugin sources](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Unreal-Plugins-Source.zip)
+- [Standalone MCP / AI SDK](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-AI-SDK.zip)
 
 This build remains an **alpha prerelease**. GitHub's **Latest** shortcut can open
 an older non-prerelease; use the current-alpha link above for these APKs.
@@ -55,9 +55,10 @@ and relationships are labeled in the interface.
 
 - **Offline illustrated manual**: **Help > User manual** / **F1** on Windows,
   **Help** in CyInsightOVR. English by default, complete French translation,
-  24 chapters, full-text search, three actual screenshots and nine explanatory
-  diagrams. The complete local CyDoc reader ships in `help/` and the APK assets;
-  see [manual authoring and build](Docs/CyDoc/README.md). No server or network is required.
+  24 guides, public API references, full-text search, actual screenshots and
+  explanatory diagrams. The complete CyDoc reader ships in `Documentation/` and
+  the APK assets. Open `Documentation/Documentation.html`; no server or network
+  is required. Authoring and build tools belong to `.CyDocBuild/`.
 
 - Stable-only GitHub updates: **Help > Updates** on Windows and **Updates** in CyInsightOVR. Alpha/prerelease builds are ignored; see [update behavior and publishing](Docs/Updates.md).
 - Open `.utrace` and versioned `.cycapture` archives. Preserve the original trace.
@@ -116,12 +117,12 @@ From the repository root:
 
 ```powershell
 python Tools/prepare_dependencies.py
-npm --prefix Tools/Documentation ci --omit=peer --ignore-scripts
+npm --prefix .CyDocBuild ci --omit=peer --ignore-scripts
 ./build.cmd Release
 ```
 
 Node.js 22+ and npm are needed to generate the help during builds, along with
-Python 3.11+. The installed reader needs neither. Preserve `help/` beside the EXE.
+Python 3.11+. The installed reader needs neither. Preserve `Documentation/` beside the EXE.
 The executable is produced in `bin/Release/CyInsightsApp.exe`. Binaries, native
 captures, intermediate indexes, caches and the local Unreal test project are not
 committed. `CYINSIGHTS_VS` can select an installed Visual Studio directory.
@@ -241,4 +242,4 @@ Read [licensing and distribution scope](Docs/Licensing.md), [third-party invento
 and the component LICENSE files. No Epic source, libraries or binaries are
 distributed. A future public distribution of Unreal-linked tools must use the
 appropriate Epic channel where the EULA requires it. AGPL binary distribution
-requires corresponding sources. The repository is currently private.
+requires corresponding sources. The complete third-party notices are included in the source and release packages.

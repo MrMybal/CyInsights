@@ -12,7 +12,8 @@ import android.widget.*;
 /** Dedicated offline CyDoc reader; no JavaScript/native bridge is exposed. */
 public final class HelpActivity extends Activity {
     private WebView reader;
-    private static final String BASE="file:///android_asset/help/index.html";
+    private Button back;
+    private static final String BASE="file:///android_asset/Documentation/Documentation.html";
     static void open(Activity host,String page,String locale) {
         // Preserve the retired native manual's independent language preference.
         android.content.SharedPreferences prefs=host.getSharedPreferences("documentation",0);
@@ -21,12 +22,12 @@ public final class HelpActivity extends Activity {
     }
     private static boolean local(Uri uri) {
         return "file".equals(uri.getScheme())&&(uri.getAuthority()==null||uri.getAuthority().isEmpty())&&uri.getPath()!=null&&
-            uri.getPath().startsWith("/android_asset/help/")&&!uri.getPath().contains("..");
+            uri.getPath().startsWith("/android_asset/Documentation/")&&!uri.getPath().contains("..");
     }
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
-        Button back=new Button(this);back.setText("Back to CyInsightOVR / Retour");back.setOnClickListener(v->finish());root.addView(back);
+        back=new Button(this);String locale=getIntent().getStringExtra("locale");if(locale==null||locale.isEmpty())locale=getSharedPreferences("documentation",0).getString("locale","en");back.setText("fr".equals(locale)?"Retour à CyInsightOVR":"Back to CyInsightOVR");back.setOnClickListener(v->finish());root.addView(back);
         reader=new WebView(this);
         WebSettings s=reader.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);
         s.setAllowFileAccess(true);s.setAllowContentAccess(false);s.setAllowFileAccessFromFileURLs(false);s.setAllowUniversalAccessFromFileURLs(false);
@@ -41,7 +42,7 @@ public final class HelpActivity extends Activity {
         root.addView(reader,new LinearLayout.LayoutParams(-1,0,1));setContentView(root);
         if(saved==null||reader.restoreState(saved)==null)openRoute(getIntent());
     }
-    private void remember(String url){String fragment=Uri.parse(url).getFragment();if(fragment!=null&&fragment.startsWith("/fr/"))getSharedPreferences("documentation",0).edit().putString("locale","fr").apply();else if(fragment!=null&&fragment.startsWith("/en/"))getSharedPreferences("documentation",0).edit().putString("locale","en").apply();}
+    private void remember(String url){String fragment=Uri.parse(url).getFragment();if(fragment!=null&&fragment.startsWith("/fr/")){getSharedPreferences("documentation",0).edit().putString("locale","fr").apply();back.setText("Retour à CyInsightOVR");}else if(fragment!=null&&fragment.startsWith("/en/")){getSharedPreferences("documentation",0).edit().putString("locale","en").apply();back.setText("Back to CyInsightOVR");}}
     private void openRoute(Intent intent) {
         String page=intent.getStringExtra("page"),locale=intent.getStringExtra("locale");
         if(page==null||page.isEmpty())page="quest-setup";

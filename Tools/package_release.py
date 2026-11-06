@@ -90,19 +90,18 @@ def main():
     app['windows-signatures.json'] = json.dumps(signatures, indent=2).encode()
     app['LICENCES/CyDoc-MIT.txt']=(ROOT/'LICENCES/CyDoc-MIT.txt').read_bytes()
     # Ship the complete checked CyDoc tree; no build tools or Node runtime.
-    help_root=binaries/'help'
-    help_manifest=json.loads((help_root/'export-sha256.json').read_text(encoding='utf-8'))
+    help_root=binaries/'Documentation'
+    help_manifest=json.loads((help_root/'DocData/export-sha256.json').read_text(encoding='utf-8'))
     for name,expected in help_manifest['files'].items():
         path=(help_root/name).resolve()
         if not path.is_relative_to(help_root.resolve()) or hashlib.sha256(path.read_bytes()).hexdigest()!=expected:
             raise SystemExit('Offline help export changed: '+name)
-        app['help/'+name]=path.read_bytes()
-    app['help/export-sha256.json']=(help_root/'export-sha256.json').read_bytes()
-    app['Docs/Updates.md'] = (ROOT/'Docs/Updates.md').read_bytes()
+        app['Documentation/'+name]=path.read_bytes()
+    app['Documentation/DocData/export-sha256.json']=(help_root/'DocData/export-sha256.json').read_bytes()
     for name in tracked:
         # Preserve licensed dependency notices and the offline AI installer;
         # do not copy an existing virtualenv or its machine-specific config.
-        if name.startswith(('LICENCES/', 'Docs/', 'AI/')) or name in ('LICENSE', 'THIRD-PARTY-CyGPUInspector.md'):
+        if name.startswith(('LICENCES/', 'AI/')) or name in ('LICENSE', 'THIRD-PARTY-CyGPUInspector.md'):
             app[name] = (ROOT/name).read_bytes()
         if name.startswith(('Tools/NativeTiming/', 'Tools/NativeTasks/', 'Tools/NativeActivities/')) or name == 'Tools/InstallNativeReaders.ps1':
             app[name] = (ROOT/name).read_bytes()
@@ -110,6 +109,7 @@ def main():
         'CyInsights '+args.version+' / Windows x64\n'
         'Extract the complete archive and run CyInsightsApp.exe.\n'
         'Keep CyInsightsUpdater.exe alongside the application. Help > Updates checks stable GitHub releases.\n'
+        'Keep the complete Documentation folder. Open Documentation/Documentation.html for the English/French manual.\n'
         'Register your Unreal engine root folder in Session; no automatic installation scan is performed.\n'
         'On first launch, native readers are built automatically in the background, with\n'
         'progress, log and cancellation. No script needs to be run manually. Results are\n'
@@ -121,7 +121,7 @@ def main():
         'Only the optional external AI/SDK companion needs Python 3.11 x64 and\n'
         'powershell -File AI/SetupRuntime.ps1.\n'
         'Native Unreal adapters are supplied as sources, not prebuilt Engine Tools.\n'
-        'See Docs/Licensing.md, Docs/NativeTiming.md and the matching release sources.\n'
+        'See Documentation/Documentation.html and the matching release sources for licensing and native readers.\n'
     ).encode()
     app['release-manifest.json'] = json.dumps({
         'version': args.version, 'source_commit': git('rev-parse', 'HEAD').decode().strip(),
@@ -131,6 +131,9 @@ def main():
         'files': {name: hashlib.sha256(data).hexdigest() for name, data in sorted(app.items())},
     }, indent=2).encode()
     plugins = plugin_sources()
+    for name in help_manifest['files']:
+        plugins['Documentation/'+name]=(help_root/name).read_bytes()
+    plugins['Documentation/DocData/export-sha256.json']=(help_root/'DocData/export-sha256.json').read_bytes()
     for name in ('Docs/UnrealCompatibility.md', 'Docs/Licensing.md', 'LICENSE'):
         plugins[name] = (ROOT/name).read_bytes()
     plugins['README.txt'] = b'Unreal plugin sources. Copy Plugins/CyInsights into your project Plugins directory and build with your licensed engine. See Docs/UnrealCompatibility.md and Docs/Licensing.md. No compiled Unreal binaries are included.\n'

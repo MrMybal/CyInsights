@@ -44,7 +44,7 @@ dependency were removed when the offline manual migrated to CyDoc on 5 November
 2026. The AI workflow remains structured application controls/JSON.
 Trace A/B comparisons are numerical results, not source-code diffs. No new
 bundled font is introduced. Help opens in the Windows default browser or a local
-Android WebView; no native CEF/Web module is added. See Docs/CyDoc/README.md for
+Android WebView; no native CEF/Web module is added. See .CyDocBuild/README.md for
 the independent documentation build dependencies.
 
 The Unreal plugin does not embed a CyUI/ImGui Editor panel, and Python does not

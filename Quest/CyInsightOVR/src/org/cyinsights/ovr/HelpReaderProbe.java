@@ -30,10 +30,10 @@ public final class HelpReaderProbe extends Instrumentation {
         evaluate("document.querySelector('[data-cydoc-module]')?.scrollIntoView({block:'center'})");
         evaluate("location.hash='/fr/timeline/navigate'");await("document.documentElement.lang==='fr' && !!document.getElementById('navigate')");
         evaluate("document.querySelector('[data-cydoc-module]')?.scrollIntoView({block:'center'})");
-        await("[...document.images].some(i=>i.complete&&i.naturalWidth>0)");
+        await("[...document.querySelectorAll('.cy-image img')].some(i=>i.complete&&i.naturalWidth>0)");
         boolean[] safe={false};runOnMainSync(()->safe[0]=web.getSettings().getBlockNetworkLoads()&&!web.getSettings().getAllowUniversalAccessFromFileURLs());
         if(!safe[0])throw new Exception("Unsafe help WebView settings");
-        result.putString("help_reader",evaluate("JSON.stringify({url:location.href,locale:document.documentElement.lang,images:document.images.length,imageDecoded:[...document.images].some(i=>i.complete&&i.naturalWidth>0),theme:document.querySelector('.cydoc-viewer').dataset.theme})"));
+        result.putString("help_reader",evaluate("JSON.stringify({url:location.href,locale:document.documentElement.lang,images:document.images.length,imageDecoded:[...document.querySelectorAll('.cy-image img')].some(i=>i.complete&&i.naturalWidth>0),theme:document.querySelector('.cydoc-viewer').dataset.theme})"));
         result.putString("status","passed; real packaged file:// reader; no visual headset assertion");finish(Activity.RESULT_OK,result);
     }catch(Exception error){result.putString("error",error.toString());try{if(web!=null)result.putString("diagnostic",evaluate("JSON.stringify({url:location.href,ready:document.readyState,lang:document.documentElement.lang,text:document.body?.innerText?.slice(0,400),images:[...document.images].map(i=>({src:i.src,complete:i.complete,width:i.naturalWidth})),mediaError:document.querySelector('.media-error')?.textContent})"));}catch(Exception ignored){}finish(Activity.RESULT_CANCELED,result);}finally{if(activity!=null)runOnMainSync(()->activity.finish());}}
 }

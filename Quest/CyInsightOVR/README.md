@@ -319,12 +319,12 @@ diagnostic snapshots are not the baseline for final performance measurements.
 ## Embedded offline help
 
 Open **Help > Open manual** or **Help for this page**. CyDoc opens a dedicated
-local WebView at file:///android_asset/help/index.html, with English by default
+local WebView at file:///android_asset/Documentation/Documentation.html, with English by default
 and French for all 24 user chapters. The same export contains screenshots,
 SVG diagrams, references and code/API pages. It works without the GPU service,
 network or PC. Touch scrolling, local search, a collapsible contents menu,
 reader themes and in-window image enlargement are provided by CyDoc. Back returns
-to configuration. See [documentation build and modules](../../Docs/CyDoc/README.md).
+to configuration. Documentation sources and build tools are in `.CyDocBuild/` at the repository root.
 
 ## One graph selection list, including the in-game HUD
 

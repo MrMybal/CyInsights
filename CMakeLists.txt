@@ -106,7 +106,7 @@ target_link_libraries(CyInsightsApp PRIVATE shlwapi)
 add_dependencies(CyInsightsApp CyDocumentation)
 # Also refresh help when Ninja only runs the always-dirty documentation target.
 add_custom_target(CyDocumentationCopy ALL
-    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/Tools/build_docs.py" --copy-from "${CMAKE_SOURCE_DIR}/build/help" --output "$<TARGET_FILE_DIR:CyInsightsApp>/help"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/Tools/build_docs.py" --copy-from "${CMAKE_SOURCE_DIR}/Documentation" --output "$<TARGET_FILE_DIR:CyInsightsApp>/Documentation"
     DEPENDS CyDocumentation VERBATIM)
 add_dependencies(CyInsightsApp CyDocumentationCopy)
 set_property(SOURCE "${CMAKE_CURRENT_BINARY_DIR}/generated/CyInsights.rc" PROPERTY OBJECT_DEPENDS
