@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="{{TEXT:meta.description}}">
+  <meta name="theme-color" content="#12161b">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>{{TEXT:meta.title}}</title>
+  <link rel="icon" href="{{IMAGE:logo}}" type="image/png">
+  <link rel="stylesheet" href="{{STYLE}}">
+  <script src="{{SCRIPT}}" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main" data-i18n="skip">{{TEXT:skip}}</a>
+  <header class="site-header">
+    <div class="header-inner wrap">
+      <a class="brand" href="#" aria-label="CyInsights"><img src="{{IMAGE:logo}}" width="38" height="38" alt=""><span>CyInsights<span class="brand-dot">.</span></span></a>
+      <nav class="primary-nav" id="primary-nav" aria-label="Main navigation" data-i18n-aria="nav.label">
+        <a href="#timeline" data-i18n="nav.features">{{TEXT:nav.features}}</a>
+        <a href="#quest" data-i18n="nav.quest">{{TEXT:nav.quest}}</a>
+        <a href="#capture" data-i18n="nav.capture">{{TEXT:nav.capture}}</a>
+        <a data-doc="welcome" href="Documentation.html#/en/welcome"><span data-i18n="nav.docs">{{TEXT:nav.docs}}</span> <span aria-hidden="true">↗</span></a>
+      </nav>
+      <div class="header-actions">
+        <div class="language" role="group" aria-label="Language" data-i18n-aria="language"><button type="button" data-language="en" aria-pressed="true" lang="en">EN</button><button type="button" data-language="fr" aria-pressed="false" lang="fr">FR</button></div>
+        <a class="button button-github" href="https://github.com/MrMybal/CyInsights"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="currentColor" d="M12 .9a11.1 11.1 0 0 0-3.5 21.6c.6.1.8-.2.8-.5v-2.2c-3.3.7-4-1.4-4-1.4-.5-1.3-1.3-1.7-1.3-1.7-1.1-.8.1-.8.1-.8 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.6 0-1.2.4-2.2 1.2-3-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.1 1.2a10.8 10.8 0 0 1 5.7 0c2.1-1.5 3.1-1.2 3.1-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3 0 4.3-2.8 5.3-5.5 5.6.4.4.8 1.1.8 2.2V22c0 .3.2.6.8.5A11.1 11.1 0 0 0 12 .9Z"/></svg> GitHub <span aria-hidden="true">↗</span></a>
+        <a class="button button-small header-download" href="#download" data-i18n="nav.download">{{TEXT:nav.download}}</a>
+        <button class="menu-toggle" type="button" aria-controls="primary-nav" aria-expanded="false" aria-label="Open menu" data-i18n-aria="menu.open"><span></span><span></span></button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span><span data-i18n="hero.status">{{TEXT:hero.status}}</span> <span class="version">{{VERSION}}</span></p>
+        <h1 id="hero-title">CyInsights<span class="accent">.</span></h1>
+        <p class="hero-description" data-i18n="hero.description">{{TEXT:hero.description}}</p>
+        <div class="hero-actions"><a class="button button-primary" href="#download"><span aria-hidden="true">↓</span><span data-i18n="hero.download">{{TEXT:hero.download}}</span></a><a class="text-link" href="#timeline"><span data-i18n="hero.explore">{{TEXT:hero.explore}}</span> <span aria-hidden="true">↘</span></a></div>
+        <p class="platform-line" data-i18n="hero.platforms">{{TEXT:hero.platforms}}</p>
+      </div>
+      <figure class="hero-figure">
+        <div class="window-bar"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span data-i18n="hero.window">{{TEXT:hero.window}}</span><span aria-hidden="true">↗</span></div>
+        <button class="image-button hero-image" type="button" data-lightbox data-caption="image.timeline" aria-label="{{TEXT:image.timeline}}"><img src="{{IMAGE:timeline}}" width="1600" height="1000" alt="{{TEXT:image.timeline}}" data-i18n-alt="image.timeline" fetchpriority="high" decoding="async"></button>
+        <figcaption data-i18n="hero.caption">{{TEXT:hero.caption}}</figcaption>
+      </figure>
+    </section>
+
+    <div class="signal-strip wrap"><span data-i18n="strip.lead">{{TEXT:strip.lead}}</span><span>CPU + GPU</span><span>UNREAL</span><span>META QUEST</span><span>.utrace / .cycapture</span></div>
+    <nav class="chapters" aria-label="Page chapters" data-i18n-aria="chapters.label"><div class="wrap chapter-links">
+      <a href="#timeline" data-i18n="chapter.timeline">{{TEXT:chapter.timeline}}</a><a href="#functions" data-i18n="chapter.functions">{{TEXT:chapter.functions}}</a><a href="#gpu">GPU</a><a href="#data" data-i18n="chapter.data">{{TEXT:chapter.data}}</a><a href="#quest">CyInsightOVR</a><a href="#capture" data-i18n="chapter.capture">{{TEXT:chapter.capture}}</a><a href="#ai" data-i18n="chapter.ai">{{TEXT:chapter.ai}}</a><a href="#download" data-i18n="nav.download">{{TEXT:nav.download}}</a>
+    </div></nav>
+
+    <section class="intro section wrap">
+      <p class="eyebrow" data-i18n="intro.eyebrow">{{TEXT:intro.eyebrow}}</p>
+      <div class="intro-grid"><h2 data-i18n="intro.title">{{TEXT:intro.title}}</h2><p class="lead" data-i18n="intro.body">{{TEXT:intro.body}}</p></div>
+      <p class="media-note" data-i18n="intro.note">{{TEXT:intro.note}}</p>
+    </section>
+
+    <section id="timeline" class="section wrap feature split">
+      <div class="feature-copy"><p class="eyebrow">01 / <span data-i18n="timeline.eyebrow">{{TEXT:timeline.eyebrow}}</span></p><h2 data-i18n="timeline.title">{{TEXT:timeline.title}}</h2><p data-i18n="timeline.body">{{TEXT:timeline.body}}</p><ul class="feature-list"><li data-i18n="timeline.point1">{{TEXT:timeline.point1}}</li><li data-i18n="timeline.point2">{{TEXT:timeline.point2}}</li><li data-i18n="timeline.point3">{{TEXT:timeline.point3}}</li></ul><a class="text-link" data-doc="timeline" href="Documentation.html#/en/timeline"><span data-i18n="read.guide">{{TEXT:read.guide}}</span> ↗</a></div>
+      <figure><button class="image-button" type="button" data-lightbox data-caption="image.timelineDetail"><img src="{{IMAGE:timeline-detail}}" width="1300" height="620" loading="lazy" alt="{{TEXT:image.timelineDetail}}" data-i18n-alt="image.timelineDetail"></button><figcaption data-i18n="timeline.caption">{{TEXT:timeline.caption}}</figcaption></figure>
+    </section>
+
+    <section id="functions" class="section section-surface"><div class="wrap">
+      <div class="section-heading"><div><p class="eyebrow">02 / <span data-i18n="functions.eyebrow">{{TEXT:functions.eyebrow}}</span></p><h2 data-i18n="functions.title">{{TEXT:functions.title}}</h2></div><p data-i18n="functions.body">{{TEXT:functions.body}}</p></div>
+      <figure class="wide-figure"><button class="image-button" type="button" data-lightbox data-caption="image.histogram"><img src="{{IMAGE:histogram}}" width="1600" height="1000" loading="lazy" alt="{{TEXT:image.histogram}}" data-i18n-alt="image.histogram"></button><figcaption data-i18n="functions.caption">{{TEXT:functions.caption}}</figcaption></figure>
+      <div class="three-notes"><article><span class="note-index">A</span><h3 data-i18n="functions.filterTitle">{{TEXT:functions.filterTitle}}</h3><p data-i18n="functions.filterBody">{{TEXT:functions.filterBody}}</p></article><article><span class="note-index">B</span><h3 data-i18n="functions.rangeTitle">{{TEXT:functions.rangeTitle}}</h3><p data-i18n="functions.rangeBody">{{TEXT:functions.rangeBody}}</p></article><article><span class="note-index">C</span><h3 data-i18n="functions.compareTitle">{{TEXT:functions.compareTitle}}</h3><p data-i18n="functions.compareBody">{{TEXT:functions.compareBody}}</p></article></div>
+      <a class="text-link" data-doc="functions" href="Documentation.html#/en/functions"><span data-i18n="functions.link">{{TEXT:functions.link}}</span> ↗</a>
+    </div></section>
+
+    <section id="gpu" class="section wrap">
+      <div class="section-heading"><div><p class="eyebrow">03 / GPU</p><h2 data-i18n="gpu.title">{{TEXT:gpu.title}}</h2></div><p data-i18n="gpu.body">{{TEXT:gpu.body}}</p></div>
+      <div class="split gpu-layout"><figure><button class="image-button" type="button" data-lightbox data-caption="image.gpu"><img src="{{IMAGE:gpu-passes}}" width="1600" height="1000" loading="lazy" alt="{{TEXT:image.gpu}}" data-i18n-alt="image.gpu"></button><figcaption data-i18n="gpu.caption">{{TEXT:gpu.caption}}</figcaption></figure><div class="gpu-notes"><article><span class="line-icon" aria-hidden="true">⌁</span><h3 data-i18n="gpu.nativeTitle">{{TEXT:gpu.nativeTitle}}</h3><p data-i18n="gpu.nativeBody">{{TEXT:gpu.nativeBody}}</p></article><article><span class="line-icon" aria-hidden="true">⌘</span><h3 data-i18n="gpu.collectorTitle">{{TEXT:gpu.collectorTitle}}</h3><p data-i18n="gpu.collectorBody">{{TEXT:gpu.collectorBody}}</p></article><a class="text-link" data-doc="gpu-desktop" href="Documentation.html#/en/gpu-desktop"><span data-i18n="gpu.link">{{TEXT:gpu.link}}</span> ↗</a></div></div>
+      <div class="evidence-note"><span class="evidence-mark" aria-hidden="true">≠</span><div><h3 data-i18n="gpu.evidenceTitle">{{TEXT:gpu.evidenceTitle}}</h3><p data-i18n="gpu.evidenceBody">{{TEXT:gpu.evidenceBody}}</p></div></div>
+    </section>
+
+    <section id="data" class="section section-surface"><div class="wrap">
+      <div class="section-heading"><div><p class="eyebrow">04 / <span data-i18n="data.eyebrow">{{TEXT:data.eyebrow}}</span></p><h2 data-i18n="data.title">{{TEXT:data.title}}</h2></div><p data-i18n="data.body">{{TEXT:data.body}}</p></div>
+      <div class="gallery-pair"><article><figure><button class="image-button" type="button" data-lightbox data-caption="image.stats"><img src="{{IMAGE:frame-stats}}" width="1920" height="333" loading="lazy" alt="{{TEXT:image.stats}}" data-i18n-alt="image.stats"></button><figcaption data-i18n="data.statsCaption">{{TEXT:data.statsCaption}}</figcaption></figure><h3 data-i18n="data.statsTitle">{{TEXT:data.statsTitle}}</h3><p data-i18n="data.statsBody">{{TEXT:data.statsBody}}</p><a class="text-link" data-doc="counters" href="Documentation.html#/en/counters"><span data-i18n="data.statsLink">{{TEXT:data.statsLink}}</span> ↗</a></article><article><figure><button class="image-button" type="button" data-lightbox data-caption="image.activities"><img src="{{IMAGE:activities}}" width="1920" height="870" loading="lazy" alt="{{TEXT:image.activities}}" data-i18n-alt="image.activities"></button><figcaption data-i18n="data.activitiesCaption">{{TEXT:data.activitiesCaption}}</figcaption></figure><h3 data-i18n="data.activitiesTitle">{{TEXT:data.activitiesTitle}}</h3><p data-i18n="data.activitiesBody">{{TEXT:data.activitiesBody}}</p><a class="text-link" data-doc="activities" href="Documentation.html#/en/activities"><span data-i18n="data.activitiesLink">{{TEXT:data.activitiesLink}}</span> ↗</a></article></div>
+      <div class="inline-feature"><div><p class="eyebrow" data-i18n="tasks.eyebrow">{{TEXT:tasks.eyebrow}}</p><h3 data-i18n="tasks.title">{{TEXT:tasks.title}}</h3></div><p data-i18n="tasks.body">{{TEXT:tasks.body}}</p><a class="text-link" data-doc="tasks" href="Documentation.html#/en/tasks"><span data-i18n="read.guide">{{TEXT:read.guide}}</span> ↗</a></div>
+    </div></section>
+
+    <section id="quest" class="section wrap">
+      <div class="split quest-intro"><div class="feature-copy"><p class="eyebrow">05 / META QUEST</p><h2>CyInsightOVR<span class="accent">.</span></h2><p class="lead" data-i18n="quest.lead">{{TEXT:quest.lead}}</p><p data-i18n="quest.body">{{TEXT:quest.body}}</p><div class="tag-row"><span>Quest APK</span><span data-i18n="quest.standalone">{{TEXT:quest.standalone}}</span><span>Standard / Vulkan</span></div><a class="text-link" data-doc="quest-setup" href="Documentation.html#/en/quest-setup"><span data-i18n="quest.link">{{TEXT:quest.link}}</span> ↗</a></div><figure><button class="image-button" type="button" data-lightbox data-caption="image.quest"><img src="{{IMAGE:quest-settings}}" width="1280" height="800" loading="lazy" alt="{{TEXT:image.quest}}" data-i18n-alt="image.quest"></button><figcaption data-i18n="quest.caption">{{TEXT:quest.caption}}</figcaption></figure></div>
+      <div class="quest-detail"><figure><button class="image-button" type="button" data-lightbox data-caption="image.hud"><img src="{{IMAGE:hud-curve}}" width="1400" height="540" loading="lazy" alt="{{TEXT:image.hud}}" data-i18n-alt="image.hud"></button><figcaption data-i18n="quest.hudCaption">{{TEXT:quest.hudCaption}}</figcaption></figure><div><h3 data-i18n="quest.hudTitle">{{TEXT:quest.hudTitle}}</h3><p data-i18n="quest.hudBody">{{TEXT:quest.hudBody}}</p><a class="text-link" data-doc="quest-counters" href="Documentation.html#/en/quest-counters"><span data-i18n="quest.counterLink">{{TEXT:quest.counterLink}}</span> ↗</a></div></div>
+      <div class="three-notes quest-notes"><article><span class="note-index">01</span><h3 data-i18n="quest.tilesTitle">{{TEXT:quest.tilesTitle}}</h3><p data-i18n="quest.tilesBody">{{TEXT:quest.tilesBody}}</p><a class="text-link" data-doc="quest-heatmap" href="Documentation.html#/en/quest-heatmap"><span data-i18n="read.guide">{{TEXT:read.guide}}</span> ↗</a></article><article><span class="note-index">02</span><h3 data-i18n="quest.imagesTitle">{{TEXT:quest.imagesTitle}}</h3><p data-i18n="quest.imagesBody">{{TEXT:quest.imagesBody}}</p><a class="text-link" data-doc="tile-recording" href="Documentation.html#/en/tile-recording"><span data-i18n="read.guide">{{TEXT:read.guide}}</span> ↗</a></article><article><span class="note-index">03</span><h3 data-i18n="quest.limitsTitle">{{TEXT:quest.limitsTitle}}</h3><p data-i18n="quest.limitsBody">{{TEXT:quest.limitsBody}}</p></article></div>
+    </section>
+
+    <section id="capture" class="section section-surface"><div class="wrap">
+      <div class="section-heading"><div><p class="eyebrow">06 / <span data-i18n="capture.eyebrow">{{TEXT:capture.eyebrow}}</span></p><h2 data-i18n="capture.title">{{TEXT:capture.title}}</h2></div><p data-i18n="capture.body">{{TEXT:capture.body}}</p></div>
+      <ol class="workflow"><li><span>01</span><h3 data-i18n="capture.step1Title">{{TEXT:capture.step1Title}}</h3><p data-i18n="capture.step1Body">{{TEXT:capture.step1Body}}</p></li><li><span>02</span><h3 data-i18n="capture.step2Title">{{TEXT:capture.step2Title}}</h3><p data-i18n="capture.step2Body">{{TEXT:capture.step2Body}}</p></li><li><span>03</span><h3 data-i18n="capture.step3Title">{{TEXT:capture.step3Title}}</h3><p data-i18n="capture.step3Body">{{TEXT:capture.step3Body}}</p></li></ol>
+      <div class="capture-bottom"><p data-i18n="capture.defaults">{{TEXT:capture.defaults}}</p><a class="text-link" data-doc="profiles" href="Documentation.html#/en/profiles"><span data-i18n="capture.link">{{TEXT:capture.link}}</span> ↗</a></div>
+    </div></section>
+
+    <section id="ai" class="section wrap feature split reverse">
+      <figure><button class="image-button" type="button" data-lightbox data-caption="image.ai"><img src="{{IMAGE:ai-inspector}}" width="1298" height="327" loading="lazy" alt="{{TEXT:image.ai}}" data-i18n-alt="image.ai"></button><figcaption data-i18n="ai.caption">{{TEXT:ai.caption}}</figcaption></figure><div class="feature-copy"><p class="eyebrow">07 / AI INSPECTOR · MCP · SDK</p><h2 data-i18n="ai.title">{{TEXT:ai.title}}</h2><p data-i18n="ai.body">{{TEXT:ai.body}}</p><ul class="feature-list"><li data-i18n="ai.point1">{{TEXT:ai.point1}}</li><li data-i18n="ai.point2">{{TEXT:ai.point2}}</li><li data-i18n="ai.point3">{{TEXT:ai.point3}}</li></ul><p class="small-print" data-i18n="ai.limit">{{TEXT:ai.limit}}</p><a class="text-link" data-doc="ai" href="Documentation.html#/en/ai"><span data-i18n="ai.link">{{TEXT:ai.link}}</span> ↗</a></div>
+    </section>
+
+    <section class="section documentation-section"><div class="wrap split"><div class="feature-copy"><p class="eyebrow" data-i18n="docs.eyebrow">{{TEXT:docs.eyebrow}}</p><h2 data-i18n="docs.title">{{TEXT:docs.title}}</h2><p data-i18n="docs.body">{{TEXT:docs.body}}</p><a class="button button-primary" data-doc="welcome" href="Documentation.html#/en/welcome"><span data-i18n="docs.open">{{TEXT:docs.open}}</span> ↗</a><p class="small-print" data-i18n="docs.offline">{{TEXT:docs.offline}}</p></div><figure><button class="image-button" type="button" data-lightbox data-caption="image.manual"><img src="{{IMAGE:manual}}" width="1440" height="960" loading="lazy" alt="{{TEXT:image.manual}}" data-i18n-alt="image.manual"></button><figcaption data-i18n="docs.caption">{{TEXT:docs.caption}}</figcaption></figure></div></section>
+
+    <section class="section wrap faq"><p class="eyebrow" data-i18n="faq.eyebrow">{{TEXT:faq.eyebrow}}</p><h2 data-i18n="faq.title">{{TEXT:faq.title}}</h2><div class="faq-list">
+      <details><summary data-i18n="faq.platformsQ">{{TEXT:faq.platformsQ}}</summary><p data-i18n="faq.platformsA">{{TEXT:faq.platformsA}}</p></details>
+      <details><summary data-i18n="faq.unrealQ">{{TEXT:faq.unrealQ}}</summary><p data-i18n="faq.unrealA">{{TEXT:faq.unrealA}}</p></details>
+      <details><summary data-i18n="faq.gpuQ">{{TEXT:faq.gpuQ}}</summary><p data-i18n="faq.gpuA">{{TEXT:faq.gpuA}}</p></details>
+      <details><summary data-i18n="faq.finalQ">{{TEXT:faq.finalQ}}</summary><p data-i18n="faq.finalA">{{TEXT:faq.finalA}}</p></details>
+    </div></section>
+
+    <section id="download" class="section download-section"><div class="wrap">
+      <div class="section-heading"><div><p class="eyebrow" data-i18n="download.eyebrow">{{TEXT:download.eyebrow}}</p><h2 data-i18n="download.title">{{TEXT:download.title}}</h2></div><p data-i18n="download.body">{{TEXT:download.body}}</p></div>
+      <div class="download-grid"><article><p class="package-platform">WINDOWS x64</p><h3>CyInsights</h3><p data-i18n="download.windowsBody">{{TEXT:download.windowsBody}}</p><a class="button button-primary" data-download="Windows-x64.zip" href="{{DOWNLOAD:Windows-x64.zip}}"><span data-i18n="download.windows">{{TEXT:download.windows}}</span> ↓</a><span class="package-type">ZIP · {{VERSION}}</span></article><article><p class="package-platform">META QUEST · ARM64</p><h3>CyInsightOVR</h3><p data-i18n="download.questBody">{{TEXT:download.questBody}}</p><a class="button button-outline" data-download="Quest-Vulkan-arm64.apk" href="{{DOWNLOAD:Quest-Vulkan-arm64.apk}}"><span data-i18n="download.vulkan">{{TEXT:download.vulkan}}</span> ↓</a><a class="text-link" data-download="Quest-Standard-arm64.apk" href="{{DOWNLOAD:Quest-Standard-arm64.apk}}"><span data-i18n="download.standard">{{TEXT:download.standard}}</span> ↗</a><a class="text-link" data-download="Quest-arm64.zip" href="{{DOWNLOAD:Quest-arm64.zip}}"><span data-i18n="download.bundle">{{TEXT:download.bundle}}</span> ↗</a></article><article><p class="package-platform">UNREAL · MCP / SDK</p><h3 data-i18n="download.integrationsTitle">{{TEXT:download.integrationsTitle}}</h3><p data-i18n="download.integrationsBody">{{TEXT:download.integrationsBody}}</p><a class="button button-outline" data-download="Unreal-Plugins-Source.zip" href="{{DOWNLOAD:Unreal-Plugins-Source.zip}}"><span data-i18n="download.plugin">{{TEXT:download.plugin}}</span> ↓</a><a class="text-link" data-download="AI-SDK.zip" href="{{DOWNLOAD:AI-SDK.zip}}"><span data-i18n="download.sdk">{{TEXT:download.sdk}}</span> ↗</a></article></div>
+      <div class="download-footer"><p data-i18n="download.note">{{TEXT:download.note}}</p><a class="text-link" href="{{RELEASE}}"><span data-i18n="download.all">{{TEXT:download.all}}</span> ↗</a></div>
+    </div></section>
+  </main>
+  <footer class="site-footer wrap"><a class="brand" href="#"><img src="{{IMAGE:logo}}" width="30" height="30" alt=""><span>CyInsights.</span></a><p data-i18n="footer.credit">{{TEXT:footer.credit}}</p><div><a data-doc="welcome" href="Documentation.html#/en/welcome" data-i18n="nav.docs">{{TEXT:nav.docs}}</a><a href="https://github.com/MrMybal/CyInsights">GitHub ↗</a><a href="https://github.com/MrMybal/CyInsights/blob/main/LICENSE" data-i18n="footer.license">{{TEXT:footer.license}}</a></div><span>© 2026 CyInsights</span></footer>
+  <dialog id="lightbox" aria-label="Image preview" data-i18n-aria="lightbox.label"><div class="lightbox-shell"><div class="lightbox-top"><p id="lightbox-caption"></p><button type="button" class="lightbox-close" aria-label="Close image" data-i18n-aria="lightbox.close">✕</button></div><img id="lightbox-image" alt=""><div class="lightbox-bottom"><button type="button" data-gallery="-1" data-i18n="lightbox.previous">{{TEXT:lightbox.previous}}</button><span data-i18n="lightbox.hint">{{TEXT:lightbox.hint}}</span><button type="button" data-gallery="1" data-i18n="lightbox.next">{{TEXT:lightbox.next}}</button></div></div></dialog>
+</body>
+</html>

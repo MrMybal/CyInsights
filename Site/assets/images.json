@@ -1,0 +1,109 @@
+{
+  "timeline": {
+    "file": "timeline.webp",
+    "width": 1600,
+    "height": 1000,
+    "origin": "Recorded GPU test project, desktop timeline",
+    "source_sha256": "e0c54943f1bf9d3f10109f5ca2d664f3962eb54ab41a42155b2814d465a97c64",
+    "crop": null
+  },
+  "histogram": {
+    "file": "histogram.webp",
+    "width": 1600,
+    "height": 1000,
+    "origin": "Recorded GPU test project, duration histogram",
+    "source_sha256": "69a4311521e8b6a1e50ea358894b7f673f957539f1e90bb0c4b5a38531cfb1ec",
+    "crop": null
+  },
+  "gpu-passes": {
+    "file": "gpu-passes.webp",
+    "width": 1600,
+    "height": 1000,
+    "origin": "Windows collector example, derived resource graph",
+    "source_sha256": "d9c449f9a9f492406e2776054006b74fefbae20d0a0eb3805b988bcb4e7c1402",
+    "crop": null
+  },
+  "timeline-detail": {
+    "file": "timeline-detail.webp",
+    "width": 1300,
+    "height": 620,
+    "origin": "Detail of the recorded timeline screenshot",
+    "source_sha256": "e0c54943f1bf9d3f10109f5ca2d664f3962eb54ab41a42155b2814d465a97c64",
+    "crop": [
+      0,
+      280,
+      1300,
+      900
+    ]
+  },
+  "frame-stats": {
+    "file": "frame-stats.webp",
+    "width": 1920,
+    "height": 333,
+    "origin": "Frame statistics from the small development test project; earlier development interface",
+    "source_sha256": "42b279297716aa3e6339750e9afba5bb749ae3530bd28c93f26840e03d5b62a0",
+    "crop": [
+      0,
+      920,
+      2250,
+      1310
+    ]
+  },
+  "activities": {
+    "file": "activities.webp",
+    "width": 1920,
+    "height": 870,
+    "origin": "Synthetic network, storage and memory fixture in the real application; earlier development interface",
+    "source_sha256": "687ab376abd1db6964cef88e704ec52da49c447e3f0a680fa4be7ba10439e087",
+    "crop": [
+      0,
+      300,
+      2250,
+      1320
+    ]
+  },
+  "quest-settings": {
+    "file": "quest-settings.webp",
+    "width": 1280,
+    "height": 800,
+    "origin": "CyInsightOVR metric selection on the GPU Test target; development interface",
+    "source_sha256": "3e8decf8d8c96222ae2f7b32c95c1dc50578cf4db9cc486de0ad2d938c4cd4dd",
+    "crop": null
+  },
+  "hud-curve": {
+    "file": "hud-curve.webp",
+    "width": 1400,
+    "height": 540,
+    "origin": "Real HUD renderer with synthetic samples, not a live game measurement",
+    "source_sha256": "1065e88a0cba590b9d1f39560461ddd7e9bf07f621735cfe2086076be5f56a64",
+    "crop": null
+  },
+  "ai-inspector": {
+    "file": "ai-inspector.webp",
+    "width": 1298,
+    "height": 327,
+    "origin": "Detail of the current standalone AI method panel, isolated empty session",
+    "source_sha256": "dc1a245c5c37429141933641350591a85fd8e7251c5508840927bdcbcc48d587",
+    "crop": [
+      0,
+      585,
+      1298,
+      912
+    ]
+  },
+  "manual": {
+    "file": "manual.webp",
+    "width": 1440,
+    "height": 960,
+    "origin": "Actual bilingual CyDoc reader",
+    "source_sha256": "f0740c25454f210adc0491fab91d7e11b2ffcc293ee1fe34ad2e18ec9d02d76a",
+    "crop": null
+  },
+  "logo": {
+    "file": "logo.png",
+    "width": 128,
+    "height": 128,
+    "origin": "Application branding",
+    "source_sha256": "72fa3a24b1abd06184626a10577ff34ef890a22f5a6bb65e736c0cb2153d4698"
+  }
+}

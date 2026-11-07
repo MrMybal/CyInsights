@@ -11,6 +11,7 @@
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
 *.png binary
+*.webp binary
 *.ico binary
 *.whl binary
 # This snapshot is hash-pinned byte for byte, including upstream line endings.

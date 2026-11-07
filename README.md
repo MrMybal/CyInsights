@@ -98,6 +98,10 @@ See [capability coverage](Docs/CapabilityCoverage.md),
 
 ## Build the application
 
+The static English/French showcase and its local preview build are described in
+[Site/README.md](Site/README.md). `python Tools/build_site.py` prepares the site
+with the complete, unchanged CyDoc reader in `build/site`; it does not publish.
+
 For GitHub release packages and local native-reader installation, see
 [release instructions](Docs/GitHubRelease.md).
 
