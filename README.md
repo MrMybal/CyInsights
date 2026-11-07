@@ -1,137 +1,161 @@
-# CyInsights
+<table width="100%">
+  <tr>
+    <td width="300" align="left" valign="top">
+      <a href="https://mrmybal.github.io/CyInsights/">Website</a><br>
+      <a href="https://mrmybal.github.io/CyInsights/Documentation.html#/en/welcome">Manual</a><br>
+      <a href="https://github.com/MrMybal/CyInsights">GitHub</a><br><br>
+      <sub>README</sub><br>
+      <a href="README.md">English</a> · <a href="README.fr.md">Français</a>
+    </td>
+    <td width="400" align="center" valign="middle">
+      <a href="https://mrmybal.github.io/CyInsights/"><img src="Assets/Branding/cyinsights-logo-ui-v1.png" alt="CyInsights" width="128"></a>
+    </td>
+    <td width="300" align="right" valign="top">
+      <p><sub>Application license</sub><br><a href="LICENSE"><strong>AGPL-3.0-or-later</strong></a></p>
+      <p><sub>Version</sub><br><a href="Docs/Release-0.2.2-alpha.4.md"><strong>0.2.2-alpha.4</strong></a><br><strong>ALPHA</strong></p>
+      <p><a href="https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.4"><strong>Download</strong></a><br><sub>Windows x64 · Quest arm64</sub></p>
+    </td>
+  </tr>
+</table>
 
-**[Website](https://mrmybal.github.io/CyInsights/)** · [Site en français](https://mrmybal.github.io/CyInsights/?lang=fr)
+<h1 align="center">CyInsights</h1>
 
-**[Documentation](https://mrmybal.github.io/CyInsights/#/en/welcome)** · [Documentation en français](https://mrmybal.github.io/CyInsights/#/fr/welcome)
+A native profiler for Unreal Engine developers and technical artists. Explore
+CPU/GPU traces, frame statistics and recorded network, storage and memory activity
+on one timeline. The standalone **CyInsightOVR** Quest app adds on-headset GPU
+metrics and optional development-game profiling.
 
-## Download the current alpha
+> **ALPHA · 0.2.2-alpha.4**
+>
+> An experimental release for testing and feedback; some providers and hardware
+> paths remain incomplete. Read the [version notes and documented limitations](Docs/Release-0.2.2-alpha.4.md).
 
-**[CyInsights 0.2.2 Alpha 4 - all downloads](https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.4)**
+[![CyInsights CPU/GPU timeline with synchronized frames and recorded Quest GPU stages](Docs/Images/cyinsights-timeline.png)](Docs/Images/cyinsights-timeline.png)
 
-- **[Quest APK - Vulkan heatmap and draw counters (experimental)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Quest-Vulkan-arm64.apk)**
-- [Quest APK - standard](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Quest-Standard-arm64.apk)
-- [Quest complete bundle - APKs, optional developer authorization and guide](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Quest-arm64.zip)
-- [Windows desktop application](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Windows-x64.zip)
-- [Unreal plugin sources](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Unreal-Plugins-Source.zip)
-- [Standalone MCP / AI SDK](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-AI-SDK.zip)
+## About CyInsights
 
-This build remains an **alpha prerelease**. GitHub's **Latest** shortcut can open
-an older non-prerelease; use the current-alpha link above for these APKs.
-Install one Quest APK variant. CyInsightOVR starts its own GPU service when
-opened, including after headset reboot. Meta HUD and Vulkan-layer configuration
-require a one-time developer authorization; the complete Quest bundle includes
-the optional installer and its instructions.
+Open a `.utrace` or `.cycapture`, find a slow frame and measure an interval.
+Follow nested CPU/GPU scopes across threads, double-click a function to filter
+its exact name, or open its duration histogram from the context menu. Timers,
+callers/callees, counters, tasks and A/B comparisons help narrow the investigation.
+Several traces can stay open and move into separate windows.
 
-Native interface navigation, query preparation and performance measurements are documented in [InterfacePerformance](Docs/InterfacePerformance.md).
-The native [CyUI interface](Docs/Interface.md) provides five themes, compact or
-comfortable controls, grouped analysis tools and a responsive capture session.
+[![Function histogram for the interval selected on the CyInsights timeline](Docs/Images/cyinsights-function-histogram.png)](Docs/Images/cyinsights-function-histogram.png)
 
-Native C++ / Dear ImGui profiler for Unreal Engine traces, with an Insights-style
-continuous CPU/GPU timeline and optional extra GPU capture data. The interface
-is written for CyInsights; it does not reuse the CyGPUInspector standalone UI.
+The optional Unreal plugin records configurable frame statistics and supports
+remote development captures. Native Unreal GPU scopes remain the first source
+of detail. Supported Quest captures can include Meta hardware GPU stages;
+the optional Windows collector adds commands, resources and GPU timestamps.
+Measured values, reconstructed relationships and unavailable data stay distinct.
 
-<img src="Assets/Branding/cyinsights-logo-ui-v1.png" alt="CyInsights logo" width="96">
+[![Optional Windows GPU collector with a pass timeline and reconstructed resource dependencies](Docs/Images/cyinsights-gpu-passes.png)](Docs/Images/cyinsights-gpu-passes.png)
 
-## Screenshots
+CyInsightOVR runs on the headset and starts its own GPU service. It offers system
+counter curves, configurable HUD graphs and values, and optional tile heatmaps
+and draw/triangle counters for supported, prepared Development Vulkan targets.
+Custom Vulkan overlays do not work universally on unmodified commercial games.
 
-Actual Windows application views using recorded traces. Click an image to open
-it at full resolution.
+## Features
 
-**CPU/GPU timeline** — synchronized frames, nested CPU scopes and recorded Quest
-hardware GPU stages on the same time axis.
+- **Continuous analysis:** synchronized frames, pan/zoom, a range-measurement ruler,
+  interval statistics, duration distributions and independent A/B ranges.
+- **Recorded activities:** Unreal counters, frame-stat snapshots, tasks,
+  network packets, file operations, loading and memory samples when captured.
+- **GPU evidence:** native scopes, optional Meta Quest hardware stages,
+  tile/image replay and optional Windows command inspection.
+- **Responsive workflow:** background preparation, persistent disk indexes,
+  visible progress and cancellation; five native themes and two control densities.
+- **Configurable capture:** basic defaults, optional stat groups and GPU detail;
+  texture/buffer readbacks are off by default. Incoming traces are analyzed after stop.
+- **Local analysis and AI integration:** native AI Inspector tools and a guided
+  analysis method, plus an optional MCP/SDK companion with 39 supported operations.
+  Control and recording permissions are separate and disabled initially.
+- **Illustrated offline manual:** English and French, search, screenshots,
+  diagrams and public API references. Use **Help > User manual** / **F1** on
+  Windows or **Help** in CyInsightOVR. The same CyDoc reader is available online.
+- **Stable-release updates:** Windows and Quest check GitHub for newer stable
+  releases. Alpha builds are installed manually.
 
-[![CyInsights CPU and GPU timeline with synchronized frames and recorded Quest GPU stages](Docs/Images/cyinsights-timeline.png)](Docs/Images/cyinsights-timeline.png)
+---
 
-**Function histogram** — inspect a function's duration distribution and
-percentiles within the interval selected directly on the timeline.
+## Installation
 
-[![CyInsights function histogram following a selected timeline interval](Docs/Images/cyinsights-function-histogram.png)](Docs/Images/cyinsights-function-histogram.png)
+### Windows desktop
 
-**GPU pass inspection** — optional Windows collector data with a pass timeline,
-draw/dispatch counts and reconstructed resource dependencies. Derived passes
-and relationships are labeled in the interface.
+1. [Download the Windows x64 ZIP](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Windows-x64.zip).
+2. Extract the **whole archive**, then start `CyInsightsApp.exe`. Keep
+   `Documentation/`, helper tools and license notices beside the application.
+3. Use **Open capture**. For `.utrace` analysis, register your licensed Unreal
+   installation in **Session > Native analyzer > Add engine** using its root folder.
 
-[![CyInsights GPU pass timeline and reconstructed resource graph in the light theme](Docs/Images/cyinsights-gpu-passes.png)](Docs/Images/cyinsights-gpu-passes.png)
+Native timing/task/activity readers are prepared automatically in the background
+and cached per engine. Preparation needs a compatible licensed UE 5.5–5.8 and the
+Visual Studio C++/CMake tools; UE 5.8 needs MSVC 14.44. It builds our adapters,
+not Unreal. The CSV timing bridge remains available if native preparation cannot
+finish. No Unreal binaries are bundled. See the
+[first-launch and packaging guide](Docs/GitHubRelease.md).
 
-## Current capabilities
+The published desktop build targets **Windows x64**. No Linux/macOS desktop
+package is provided.
 
-- **Offline illustrated manual**: **Help > User manual** / **F1** on Windows,
-  **Help** in CyInsightOVR. English by default, complete French translation,
-  24 guides, public API references, full-text search, actual screenshots and
-  explanatory diagrams. The complete CyDoc reader ships in `Documentation/` and
-  the APK assets. Open `Documentation/Documentation.html`; no server or network
-  is required. Authoring and build tools belong to `.CyDocBuild/`.
+### Quest: CyInsightOVR
 
-- Stable-only GitHub updates: **Help > Updates** on Windows and **Updates** in CyInsightOVR. Alpha/prerelease builds are ignored; see [update behavior and publishing](Docs/Updates.md).
-- Open `.utrace` and versioned `.cycapture` archives. Preserve the original trace.
-- Continuous tracks, synchronized frame overview, pan/zoom and range selection.
-- Timers, callers/callees, counters, task analysis, distributions and A/B comparison.
-- Quest Vulkan subpass command arguments and bounded detail queries; see [coverage and validation](Docs/QuestSubpassContents.md).
-- Optional Meta Quest Perfetto hardware GPU sources in the same capture; see [test defaults and validation limits](Docs/MetaQuestGpu.md).
-- Separate native [CyInsightOVR Quest companion](Quest/CyInsightOVR/README.md): system GPU curves, tile-stage snapshots and an experimental heatmap HUD for prepared Development Vulkan APKs. Universal custom overlays are unavailable. Optional [tile/image recording and timeline replay](Docs/QuestTileRecording.md) includes its current hardware validation limits.
-- Unreal frame-stat snapshots, synchronized curves and per-frame tables, with source/observation times and availability retained.
-- Network packets, Unreal file operations, asset loading and memory samples on the same timeline.
-- Double-click exact function filtering and right-click interval histograms.
-- Background workers, persistent disk indexes and visible loading/cancellation.
-- Frame diagnostics with recognized wait time and measured/derived distinctions.
-- Native AI Inspector and 39 CyToolsCore/MCP operations for compact analysis,
-  findings, timeline control and permission-gated remote capture.
-- Development capture over a local network by target IPv4, including Quest metrics.
-- Windows ReShade collector for commands, pipelines, shaders, resources and GPU timestamps.
-- Basic capture defaults and session-local PC overrides, with opt-in stat groups,
-  native activity sources and bounded GPU snapshots. Image/texture readbacks are off by default.
+1. Install **one** Android arm64 APK:
+   [Standard](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Quest-Standard-arm64.apk)
+   or [Vulkan — experimental heatmap and draw counters](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Quest-Vulkan-arm64.apk).
+2. Open **CyInsightOVR** from the Quest app library / **Unknown Sources**.
+   Its GPU service starts from the app, including after a headset reboot.
+3. Configure metrics and **Display & HUD**. Meta HUD controls and external Vulkan
+   layers need a one-time developer authorization; the
+   [complete Quest bundle](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Quest-arm64.zip)
+   includes the optional installer and instructions.
 
-Configure **Project Settings > Plugins > CyInsights** or **Session > Capture options**.
-See [capture profiles and costs](Docs/CaptureProfiles.md), including current remote GPU payload limitations.
+Ordinary system-counter use does not need Unreal or a running PC helper.
+Custom Vulkan counters and heatmaps require the Vulkan variant and a supported
+debuggable target prepared for its layer. The
+[Quest setup manual](https://mrmybal.github.io/CyInsights/Documentation.html#/en/quest-setup)
+explains authorization, target reopening and firmware limits.
 
-**This is a development build, not full Unreal Insights feature parity.** Native
-timings use an optional matching installed-engine binary reader; without it,
-the Epic Unreal Insights CSV bridge remains available. Ordinary counter values still use
-the export bridge; plugin frame-stat snapshots use the native binary reader. See [direct timing reading](Docs/NativeTiming.md).
-Original traces are read-only; there is no arbitrary
-file-size/event-count rejection. Optional TaskTrace decoding uses a local adapter.
-Native activity providers use an optional installed-engine reader; memory callstack exploration, native log UI and other Insights providers remain incomplete.
-Incoming traces are analyzed after recording stops. The application targets
-Windows; it can analyze Android captures on the PC.
+### Optional Unreal plugin and AI SDK
 
-See [capability coverage](Docs/CapabilityCoverage.md),
-[interface behavior](Docs/InterfaceRevision.md), [task/distribution analysis](Docs/TraceAnalysis.md),
-[performance](Docs/TimelineFunctionAnalysis.md) and [AI integration](Docs/AiIntegration.md).
+- [Unreal plugin sources](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Unreal-Plugins-Source.zip):
+  copy `Plugins/CyInsights` into your project's `Plugins` directory and compile
+  with your licensed engine. Sources target **UE 4.27 and 5.0–5.8**; consult the
+  [compatibility matrix](Docs/UnrealCompatibility.md) for actual validation.
+  Editor, Debug, DebugGame and Development clients are supported configurations;
+  Shipping, Test and Server are excluded. Configure **Project Settings > Plugins > CyInsights**.
+- [Standalone MCP / AI SDK](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-AI-SDK.zip):
+  use Python 3.11 x64 and `./AI/SetupRuntime.ps1` for the supplied offline wheels.
+  Enable the bridge in **AI Inspector > Connection** when connecting an external
+  client. Native AI Inspector tools work without Python, MCP or CyAiCodex.
+  See the [SDK setup](AI/README.md).
 
-## Build the application
+Use the [versioned alpha release](https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.4)
+for downloads and checksums; GitHub's **Latest** shortcut can select an older
+non-prerelease.
 
-The static English/French showcase and its local preview build are described in
-[Site/README.md](Site/README.md). `python Tools/build_site.py` prepares the site
-with the complete, unchanged CyDoc reader in `build/site`; it does not publish.
+## Source, build and required libraries
 
-For GitHub release packages and local native-reader installation, see
-[release instructions](Docs/GitHubRelease.md).
+<details>
+<summary>Build the Windows application and optional components</summary>
 
-Requirements: Windows x64, Visual Studio 2022 C++ desktop workload with CMake/Ninja,
-and Python 3. Sources required by the build are versioned in this repository.
-No separate CyGPUInspector checkout is needed.
-
-[CyUI](https://github.com/MrMybal/CyUI) 1.2.0 is pinned and vendored under the
-[MIT license](LICENCES/CyUI-MIT.txt). Its currently private upstream
-[license link](https://github.com/MrMybal/CyUI/blob/ff023e646c6a3038b3dfbfd53f6d2b4a2f5955e3/LICENSE)
-requires repository access; the full license is included here and in release packages. The desktop selects Core, Canvas, Plots,
-Timeline, Nodes, Inspector, Images and Diagnostics; Quest selects a smaller
-subset. Audio, Gallery, browser and code-editor dependencies are excluded.
-See [the modular integration and validation notes](Docs/CyUIMigration.md).
-
-From the repository root:
+Use Windows x64, Visual Studio 2022 with the C++ desktop workload, CMake 3.21+,
+Ninja, Python 3.11+ and Node.js 22+ with npm. The native application uses C++17.
+Dependencies are pinned in the repository; no separate CyGPUInspector checkout
+is needed.
 
 ```powershell
+git clone https://github.com/MrMybal/CyInsights.git
+cd CyInsights
 python Tools/prepare_dependencies.py
 npm --prefix .CyDocBuild ci --omit=peer --ignore-scripts
 ./build.cmd Release
 ```
 
-Node.js 22+ and npm are needed to generate the help during builds, along with
-Python 3.11+. The installed reader needs neither. Preserve `Documentation/` beside the EXE.
-The executable is produced in `bin/Release/CyInsightsApp.exe`. Binaries, native
-captures, intermediate indexes, caches and the local Unreal test project are not
-committed. `CYINSIGHTS_VS` can select an installed Visual Studio directory.
+Start `bin/Release/CyInsightsApp.exe`. Node.js/npm compile the manual during
+builds; the installed reader needs neither. Preserve its complete
+`Documentation/Documentation.html` and `Documentation/DocData/` export.
+
 For CMake directly, use an x64 Visual Studio developer prompt:
 
 ```powershell
@@ -140,112 +164,65 @@ cmake --build build/Local --target CyInsightsApp CyCaptureTool CyComponentTests
 ctest --test-dir build/Local --output-on-failure
 ```
 
-Compile without launching/linking the UI with `./build.cmd Release --compile-only`;
-run native component tests with `./build.cmd Release --tests-only`. Optional Quest
-fake-runtime tests need the OpenXR headers: set `UE_OPENXR_INCLUDE_DIR` or the
-CMake `CYINSIGHTS_OPENXR_INCLUDE` path. No engine headers are bundled.
-The approved logo and derived embedded icon/PNG are included; Pillow is needed
-only to regenerate those assets with `Tools/prepare_branding.py`.
+`./build.cmd Release --compile-only` compiles without linking/launching the UI;
+`./build.cmd Release --tests-only` runs native component tests. `CYINSIGHTS_VS`
+can select an installed Visual Studio directory. Optional Quest fake-runtime
+tests need OpenXR headers through `UE_OPENXR_INCLUDE_DIR` or
+`CYINSIGHTS_OPENXR_INCLUDE`.
 
-## Open a trace
+CyUI 1.2.0 supplies Core, Canvas, Plots, Timeline, Nodes, Inspector, Images and
+Diagnostics on desktop; Quest uses a smaller subset. Audio, Gallery, browser and
+code-editor dependencies are excluded. See the [modular integration](Docs/CyUIMigration.md).
 
-Start the application, use **Open capture**, and select a `.utrace` or `.cycapture`.
-In **Session > Native analyzer > Add engine**, enter the root folder of the
-matching licensed engine (for example `C:/Unreal/UE_5.8`), or use **Browse engine folder**.
-Its `Engine` subfolder is also accepted. Decoding and indexing show progress; previously
-indexed files reuse their disk cache. Select an interval to constrain statistics,
-histograms and AI findings. Open **Activities** for network, storage, loading and
-memory tracks. See [capture and timeline semantics](Docs/NativeActivities.md).
+- **Quest APKs:** `python Quest/CyInsightOVR/build.py` uses Android SDK 34,
+  build-tools 35.0.1, NDK 27.2 and Android Studio JBR. See the
+  [Quest build and signing guide](Quest/CyInsightOVR/README.md#build-and-install).
+- **Windows GPU collector:** optional, built separately with
+  [Tools/WindowsCollector](Tools/WindowsCollector/README.md). The external
+  add-on-capable ReShade runtime is configured separately. Our modules and
+  collector do not launch the CyGPUInspector application.
+- **Documentation:** `python Tools/build_docs.py`; see the
+  [documentation build guide](.CyDocBuild/README.md).
+- **Website:** `python Tools/build_site.py`; see [Site/README.md](Site/README.md).
+- **Distribution:** see [release packaging](Docs/GitHubRelease.md) and
+  [update behavior](Docs/Updates.md).
 
-Open **Frame stats** for Unit, GPU, Game, UObjects, Memory and other recorded
-Unreal stat groups. Pin curves and select a timeline interval to inspect values
-per frame. New plugin captures record available snapshots automatically;
-old traces retain only the counters originally recorded. See [frame statistics](Docs/FrameStats.md).
+</details>
 
-The application keeps a list of engines you register manually. It does not scan
-the registry, Epic Launcher inventory or neighboring installations. Selecting a
-registered engine automatically prepares the native timing/task/activity readers in the background, with visible progress,
-log and cancellation. Results are cached per engine installation for future launches.
-This first-time preparation needs a licensed installed UE 5.5–5.8 and Visual Studio
-C++/CMake tools (MSVC 14.44 for UE 5.8); it does not rebuild Unreal. No manual script
-is required. If dependencies are missing or preparation is cancelled, the CSV
-timing bridge remains available. See [first launch](Docs/GitHubRelease.md).
+---
 
-Choose an engine in **Session > Registered Unreal engines**, or explicitly
-set the local `CYINSIGHTS_UNREAL_INSIGHTS` environment variable to its executable
-path before launching. Capture metadata can select a matching engine only from
-your registered list. **Remove selected engine** removes the registration without
-deleting the installation or its reader cache. Previous automatic selections
-are not imported: register your engine once after updating.
+## License
 
-The existing local development release `Release-20261010.1` predates this licensing
-adaptation and is not a GitHub release. Historical security/build evidence and
-limitations remain in [testing notes](Docs/TestingRelease.md) and
-[security review](Docs/SecurityReview.md). This repository does not certify or
-relicense historical binaries.
+**The CyInsights application uses [AGPL-3.0-or-later](LICENSE).** Our Unreal
+plugin, native-reader adapters, Windows collector and shared in-process Core/API
+have their own **MIT** component licenses. These do not replace the application's
+license or Epic's terms. See the [licensing scope](Docs/Licensing.md).
 
-## Unreal plugin and GPU collection
+### Libraries and external prerequisites
 
-Copy `Plugins/CyInsights` into your own Unreal project's Plugins directory and
-enable it. Modules permit Editor and Debug/DebugGame/Development clients;
-Shipping, Test and Server are excluded. The plugin sources target UE 4.27 and
-5.0–5.8. See the [compatibility and validation matrix](Docs/UnrealCompatibility.md)
-for tested versions and older-engine limitations. Only project/plugin modules
-are compiled; the engine is not modified.
+| Library · source | License · terms | Use / scope |
+| --- | --- | --- |
+| [Dear ImGui](https://github.com/ocornut/imgui) | [MIT and embedded notices](LICENCES/DearImGui/LICENSE.txt) | Native desktop and Quest interface; pinned 1.93 WIP snapshot. |
+| [CyUI 1.2.0](https://github.com/MrMybal/CyUI) | [MIT — included text](LICENCES/CyUI-MIT.txt) · [pinned upstream license](https://github.com/MrMybal/CyUI/blob/ff023e646c6a3038b3dfbfd53f6d2b4a2f5955e3/LICENSE) | Selected native UI modules; upstream source access may require permission. |
+| [CyDoc 0.1.0](https://github.com/MrMybal/CyDoc) | [MIT](LICENCES/CyDoc-MIT.txt) | Offline HTML reader and build-time compiler; only the image media module is included. |
+| [CyGPUInspector components](https://github.com/MrMybal/CyGPUInspector) | [Analysis: AGPL-3.0-or-later](ThirdParty/CyGPUInspector/LICENSE) · [Core: MIT](ThirdParty/CyGPUInspector/CyGPUInspectorCore/LICENSE) | Vendored analysis/session and shared IPC/format code; no separate application required. |
+| [ReShade SDK](https://github.com/crosire/reshade) | [BSD-3-Clause](LICENCES/ReShade-SDK/LICENSE.md) · [overlay ImGui: MIT](LICENCES/DearImGui-ReShade/LICENSE.txt) | Headers for the optional Windows collector. The external runtime DLL is not included; its [separate notices](LICENCES/ReShade/LICENSE-ReShade.txt) apply. |
+| [CyToolsCore 0.10.1](https://github.com/MrMybal/CyToolsCore) | [MIT](LICENCES/CyToolsCore-MIT.txt) | Optional Python SDK/MCP companion. |
+| [MCP Python SDK 1.30.0](https://github.com/modelcontextprotocol/python-sdk) | [MIT](LICENCES/AI/mcp-1.30.0-py3-none-any/LICENSE) · [dependency notices](LICENCES/AI/) | Optional external AI connection; locked offline wheels also include development/test dependencies. |
+| [CPython](https://github.com/python/cpython) | [PSF and component terms](LICENCES/AI/Python-3.11-License.txt) | External build interpreter and optional Python 3.11 x64 companion runtime. |
+| [OpenXR](https://github.com/KhronosGroup/OpenXR-SDK) | [Apache-2.0](LICENCES/OpenXR.txt) | Quest/native integration prerequisite; engine/SDK headers are supplied separately. |
+| [Unreal Engine](https://www.unrealengine.com/) | [Epic terms and integration scope](Docs/Licensing.md#unreal-engine) | External licensed plugin/native-reader prerequisite; no Epic source, libraries or binaries are bundled. |
 
-Windows GPU detail is an **optional internal CyInsights collector**. Build the
-MIT [Windows collector](Tools/WindowsCollector/README.md) and enable it in
-Project Settings > Plugins > CyInsights - Windows GPU collector. It uses its own
-`CyInsightsGpu.addon64` and CyInsights recorder. No CyGPUInspector plugin or
-application is installed or launched. Native `.utrace` GPU groups are the default;
-the extra collector stays disabled unless explicitly enabled. ReShade's add-on-capable
-runtime is configured separately; its DLL is not committed in this repository.
+The manual's compiler uses marked, PrismJS and esbuild at build time, with their
+notices retained in the exported documentation. Build tools and platform SDKs
+keep their respective terms. This table indexes the main components; retain the
+[complete component inventory](THIRD-PARTY-CyGPUInspector.md), `LICENCES/`, the
+reader's dependency notices and the corresponding source/build scripts supplied
+with distributions. No affiliation with Epic, Meta or ReShade is implied.
 
-Quest prepares native GPU timestamp queries on detected headsets before RHI initialization; native GPU scopes are recorded per render frame, with optional RDG pass detail. Meta observations default to once per game frame (`quest_hz=0`); they do not expose their GPU execution-frame identity. See [Quest GPU frames and coverage](Docs/QuestGpuFrames.md).
+## References and links
 
-Quest/Android collects Meta OpenXR performance metrics into the same native
-trace, without launching a separate headset monitor. Their sampling interval
-and observed game frame are not unique GPU execution-frame identities. A Vulkan
-command collector is not implemented. ReShade is Windows-specific; console and
-other collectors are extension points, not available backends.
-
-In **Session**, enter the target IPv4 and use **Start remote trace** / **Stop remote
-trace** / **Open received capture**. The development plugin handles control and
-streams to the PC; the PC packages after stop. See [remote capture](Docs/RemoteCapture.md),
-[archive/synchronization format](Docs/CaptureFormat.md) and [platform coverage](Docs/CapabilityCoverage.md).
-On a development network, restrict access to the capture command port to trusted
-hosts; this service is not an Internet-facing endpoint.
-
-## Local analysis tools and optional MCP companion
-
-The native **AI Inspector > Tools** and **AI method** tabs run without Python,
-MCP or CyAiCodex. Contracts, guided steps and translations are embedded in the
-application. The optional companion below connects external AI clients.
-
-
-Python 3.11 x64 is required for the provided offline Windows wheels:
-
-```powershell
-./AI/SetupRuntime.ps1
-```
-
-Open **AI Inspector > Connection**, enable the local bridge and copy the MCP
-configuration for your AI client. Application control and recording permissions
-are separate and disabled initially. The companion has no embedded chat model
-or model weights. `AI/runtime` is created locally and is not tracked. See
-[the companion README](AI/README.md); package a newly compiled application with
-`Tools/package_ai.py` to put the companion beside its executable.
-
-## Licenses
-
-The application and reused GPU Session/Analysis are **AGPL-3.0-or-later**.
-Our Unreal plugins, optional native task adapter, Windows collector and shared
-in-process Core/API copy are **MIT**. Third-party licenses are preserved.
-This scoped adaptation is authorized by owner Cyberalien (MrMybal); it does
-not change Epic's license or the original CyGPUInspector repository.
-
-Read [licensing and distribution scope](Docs/Licensing.md), [third-party inventory](THIRD-PARTY-CyGPUInspector.md)
-and the component LICENSE files. No Epic source, libraries or binaries are
-distributed. A future public distribution of Unreal-linked tools must use the
-appropriate Epic channel where the EULA requires it. AGPL binary distribution
-requires corresponding sources. The complete third-party notices are included in the source and release packages.
+- [English manual](https://mrmybal.github.io/CyInsights/Documentation.html#/en/welcome) · [Manuel en français](https://mrmybal.github.io/CyInsights/Documentation.html#/fr/welcome).
+- [Product website](https://mrmybal.github.io/CyInsights/) · [Présentation en français](https://mrmybal.github.io/CyInsights/?lang=fr).
+- [Source repository](https://github.com/MrMybal/CyInsights) · [Releases](https://github.com/MrMybal/CyInsights/releases) · [Issue tracker](https://github.com/MrMybal/CyInsights/issues).
+- [Quest app](Quest/CyInsightOVR/README.md) · [Unreal plugin](Plugins/CyInsights/README.md) · [MCP/SDK](AI/README.md).
