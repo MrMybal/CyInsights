@@ -30,6 +30,9 @@ void Zip(const fs::path& path,const Files& files,bool symlink=false,bool mismatc
 int main(int argc,char** argv){try{
     auto root=fs::temp_directory_path()/("CyInsights-update-tests-"+std::to_string(GetCurrentProcessId()));fs::create_directories(root);
     auto good=FixtureRelease();Check(Select(good,"0.2.2-alpha.1","Windows-x64.zip").has_value(),"future stable");
+    Check(SelectWindows(FixtureRelease("v9.0.0","Windows-x64-Update.zip"),"0.2.2-alpha.5").has_value(),"explicit Windows update payload selected");
+    Check(SelectWindows(good,"0.2.2-alpha.5").has_value(),"legacy Windows update payload remains supported");
+    Check(!SelectWindows(FixtureRelease("v0.2.2-alpha.5","Windows-x64-Update.zip"),"0.2.1"),"alpha never offered even without GitHub prerelease flag");
     for(auto tag:{"v0.2.1","v0.2.2-alpha.2","v9.0.0-beta.1","v9.0.0-rc.1","v99.0.0+build","v09.0.0","not-a-version"})Check(!Select(FixtureRelease(tag),"0.2.2-alpha.1","Windows-x64.zip"),"old / prerelease / invalid tag excluded");
     Check(Select(FixtureRelease("v0.2.2"),"0.2.2-alpha.1","Windows-x64.zip").has_value(),"stable final replaces installed alpha");Check(!Select(FixtureRelease("v0.2.2"),"0.2.2","Windows-x64.zip"),"equal stable excluded");
     auto flagged=good;flagged["prerelease"]=true;Check(!Select(flagged,"0.1.0","Windows-x64.zip"),"prerelease flag excluded");flagged=good;flagged["draft"]=true;Check(!Select(flagged,"0.1.0","Windows-x64.zip"),"draft excluded");flagged=good;flagged["draft"]=cygi::Json();Check(!Select(flagged,"0.1.0","Windows-x64.zip"),"missing boolean rejected");
@@ -62,7 +65,7 @@ int main(int argc,char** argv){try{
     Check(Read(locked/"CyCaptureTool.exe")=="original CLI"&&Read(locked/"CyInsightsApp.exe")=="original app","partial installation rolled back");
     if(argc>1&&std::string(argv[1])=="--network"){auto j=FetchLatest(cancel);Check(j["tag_name"].AsString().size()>0,"real GitHub metadata received");Check(!Select(j,"999999999.0.0","Windows-x64.zip"),"real metadata cannot downgrade");}
     if(argc>1&&std::string(argv[1])=="--download"){
-        auto j=FetchLatest(cancel);auto candidate=Select(j,"0.0.0","Windows-x64.zip");Check(candidate.has_value(),"real stable download fixture selected");
+        auto j=FetchLatest(cancel);auto candidate=SelectWindows(j,"0.0.0");Check(candidate.has_value(),"real stable download fixture selected");
         uint64_t received=0;Download(*candidate,root/"download.zip",cancel,[&](uint64_t n,uint64_t){received=n;});Check(received==candidate->size,"real HTTPS redirect and download");CheckZip(root/"download.zip");++checks;
         cancel=true;Reject([&]{Download(*candidate,root/"cancelled.zip",cancel);},"download cancellation");Check(!fs::exists(root/"cancelled.zip.partial")&&!fs::exists(root/"cancelled.zip"),"cancelled partial removed");
     }

@@ -1,0 +1,8 @@
+// Generated from the pinned AI/runtime-lock.json. No discovery at runtime.
+#pragma once
+namespace cyinsights::ai_runtime {
+inline constexpr char PythonVersion[]="@CY_AI_version@";
+inline constexpr char PythonUrl[]="@CY_AI_url@";
+inline constexpr char PythonSha256[]="@CY_AI_sha256@";
+inline constexpr unsigned long long PythonBytes=@CY_AI_size@ULL;
+}

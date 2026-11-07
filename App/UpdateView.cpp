@@ -27,7 +27,7 @@ struct Controller {
     void Check(){
         if(Busy())return;cancel=false;downloaded=total=0;release.reset();work.clear();status="Checking GitHub stable releases...";
         last_check=std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();Save();
-        task=std::async(std::launch::async,[this]{auto j=FetchLatest(cancel);auto selected=Select(j,VersionText,"Windows-x64.zip");Result r;r.release=selected;
+        task=std::async(std::launch::async,[this]{auto j=FetchLatest(cancel);auto selected=SelectWindows(j,VersionText);Result r;r.release=selected;
             r.status=selected?"A newer stable release is available.":"No newer compatible stable release is available. Alpha and other prereleases are ignored.";return r;});
     }
     void DownloadUpdate(){

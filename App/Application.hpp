@@ -80,6 +80,7 @@ class Application {
     void EnableAi(bool control=false,bool capture=false);
     void FocusAi(){show_ai_=true;focus_ai_=true;session_view_=false;}
     void FocusAiMethod(){FocusAi();ai_requested_tab_=3;}
+    void FocusAiConnection(){FocusAi();ai_requested_tab_=1;}
     std::future<cygi::Json> RunLocalAiTool(const std::string& operation,const cygi::Json& parameters);
     cygi::Json StandaloneAiState() const;
     void WriteAnalysisReport(const fs::path& output) const;

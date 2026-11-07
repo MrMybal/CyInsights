@@ -18,12 +18,12 @@ freshly built product binaries:
 
 ```powershell
 python Tools/prepare_installer.py
-python Tools/package_release.py --binaries bin/Release --output build/packages --version v0.2.2-alpha.4 --nsis build/packaging-tools/nsis-3.12/makensis.exe
+python Tools/package_release.py --binaries bin/Release --output build/packages --version v0.2.2-alpha.5 --nsis build/packaging-tools/nsis-3.12/makensis.exe
 ```
 
 Use a new output directory for each package build. The output includes the
-Windows Setup EXE, an explicitly named Portable ZIP, the compatibility ZIP used
-by existing update clients, plugin sources and SHA256SUMS.txt. The installer and
+Windows Setup EXE, an explicitly named Portable ZIP, the explicitly named Update ZIP for the in-app updater,
+plugin sources, optional MCP/SDK sources and SHA256SUMS.txt. The installer and
 portable ZIP use the same freshly built payload. This command does not publish.
 
 The portable ZIP contains `cyinsights-portable.txt`. Launch the EXE directly;

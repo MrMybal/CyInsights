@@ -16,6 +16,7 @@ struct Version {
 };
 struct Release {std::string tag,version,url,asset,url_download,sha256;uint64_t size=0;};
 std::optional<Release> Select(const cygi::Json& json,const std::string& installed,const std::string& product);
+std::optional<Release> SelectWindows(const cygi::Json& json,const std::string& installed);
 bool SafeRelativePath(const std::string& name);
 bool AllowedHttps(const std::string& url);
 std::string HashFile(const fs::path& file);

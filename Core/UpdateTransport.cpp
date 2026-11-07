@@ -34,7 +34,7 @@ void Read(const std::string& initial,std::atomic_bool& cancel,uint64_t limit,con
             wchar_t location[16384]{};length=sizeof(location);Check(WinHttpQueryHeaders(request,WINHTTP_QUERY_LOCATION,WINHTTP_HEADER_NAME_BY_INDEX,location,&length,WINHTTP_NO_HEADER_INDEX)!=FALSE,"Cannot read update redirect");
             std::wstring next(location);url.assign(next.begin(),next.end());continue;
         }
-        if(status!=200)throw std::runtime_error("GitHub returned HTTP "+std::to_string(status)+(status==403||status==429?". Rate limit reached; try again later.":status==404?". No public stable release is available.":"."));
+        if(status!=200)throw std::runtime_error("GitHub returned HTTP "+std::to_string(status)+(status==403||status==429?". Rate limit reached; try again later.":status==404?(initial==Api?". No public stable release is available.":". The requested download is unavailable."):"."));
         std::array<char,65536> buffer;uint64_t received=0;
         for(;;){
             if(cancel)throw std::runtime_error("Update cancelled");DWORD count=0;

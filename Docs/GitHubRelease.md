@@ -17,7 +17,7 @@ utilisent alors `Data/` dans ce même dossier. La configuration de l’édition
 installée reste indépendante. Les chemins des moteurs Unreal restent propres
 à la machine, et le navigateur/système peut conserver ses propres fichiers temporaires.
 
-`Windows-x64.zip` reste le payload compatible avec les anciens clients de mise
+`Windows-x64-Update.zip` reste le payload compatible avec les anciens clients de mise
 à jour. Il ne supprime ni le marqueur portable ni le dossier Data. Pour fabriquer
 les deux nouveaux formats, consulter le [guide du packaging Windows](../Tools/WindowsInstaller/README.md).
 
@@ -65,14 +65,13 @@ adaptateurs ; il ne recompile pas Unreal et ne copie pas ses DLL. Les sources
 sont fournies dans la release ; les exécutables liés aux outils Unreal se
 construisent localement selon [le périmètre des licences](Licensing.md).
 
-Le compagnon IA est facultatif. Il nécessite Python 3.11 x64, puis :
-
-```powershell
-powershell -File AI/SetupRuntime.ps1
-```
-
-L'installation utilise les wheels fournies, sans téléchargement de dépendances.
-Le runtime local, ses paramètres et ses journaux ne font pas partie de la release.
+Le compagnon IA est facultatif et déjà fourni avec l’application Windows.
+Dans **AI Inspector > Connection > Install MCP/SDK**, l’application télécharge
+Python privé avec une version et une empreinte SHA-256 figées, installe les
+wheels fournies hors ligne et vérifie les 39 opérations. Progression, annulation,
+réparation et journal sont intégrés. Aucun Python global ni droit administrateur
+n’est nécessaire. `AI/SetupRuntime.ps1` reste un recours manuel pour la CLI.
+Les environnements téléchargés, caches et journaux restent en dehors des paquets.
 
 Le second ZIP contient les plugins Unreal en sources. Copier `Plugins/CyInsights`
 dans le dossier `Plugins` du projet puis le compiler avec l'engine licencié.

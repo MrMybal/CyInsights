@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "version": "3.11.18",
+  "build": "20261026",
+  "platform": "windows-x64",
+  "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.11.18%2B20261026-x86_64-pc-windows-msvc-install_only.tar.gz",
+  "size": 48749854,
+  "sha256": "75cb501dc11c7b55c6b447c58e4910bce5b1f609f1017328b4f3a858dfaf5428",
+  "source": "https://github.com/astral-sh/python-build-standalone/releases/tag/20261026",
+  "license": "Python PSF and included third-party notices; retained in the private runtime"
+}

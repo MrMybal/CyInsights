@@ -7,6 +7,7 @@
 #include "UiTheme.hpp"
 #include "UpdateView.hpp"
 #include "ManualView.hpp"
+#include "AiRuntimeView.hpp"
 #include "../Core/AppPaths.hpp"
 #include "ResourceIds.h"
 #include <chrono>
@@ -229,6 +230,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
         std::filesystem::path loading_snapshot;
         std::filesystem::path ui_profile;std::vector<double> draw_profile,drag_profile,command_profile;
         bool vulkan_details_view=false,vulkan_details_focused=false;int vulkan_details_settle=0;
+        bool ai_runtime_view=false;
         bool navigation_smoke=false,drag_pan=false,drag_zoom=false,wheel_zoom=false;
         bool frame_stats_range_smoke=false,frame_stats_range_filtered=false;int frame_stats_step=0;uint64_t frame_stats_full=0;
         bool activity_range_smoke=false,activity_range_filtered=false,activity_plot_reused=false;int activity_step=0;uint64_t activity_full=0,activity_plot_before=0;
@@ -287,6 +289,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             else if(argument==L"--ai-capture")startup_app.EnableAi(true,true);
             else if(argument==L"--ai-view")startup_app.FocusAi();
             else if(argument==L"--ai-method-view")startup_app.FocusAiMethod();
+            else if(argument==L"--ai-connection-view"){startup_app.FocusAiConnection();ai_runtime_view=true;}
+            else if(argument==L"--ai-runtime-install"){startup_app.FocusAiConnection();ai_runtime_view=true;cyinsights::AiRuntimeSetup().Install();}
             else if(argument==L"--standalone-ai-smoke"){standalone_ai_smoke=true;startup_app.FocusAiMethod();}
             else if(argument==L"--session-view")startup_app.FocusSession();
             else if(argument==L"--capture-options-view")startup_app.FocusCaptureOptions();
@@ -565,10 +569,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
                 }
                 command_profile.push_back(static_cast<double>(commands));
             }
-            if(!loading_snapshot.empty()&&frames>5&&app.AnalysisBusy()) {
+            if(!loading_snapshot.empty()&&frames>5&&(app.AnalysisBusy()||ai_runtime_view&&cyinsights::AiRuntimeSetup().Busy())) {
                 SaveSnapshot(loading_snapshot);loading_snapshot.clear();
             }
-            if (!snapshot.empty() && ++frames > 20 && !workspace.Busy()&&(!standalone_ai_smoke||standalone_ai_complete)&&(!multi_trace_smoke||multi_trace_step==4)&&(!document_lifecycle_smoke||document_lifecycle_step==4&&++document_lifecycle_wait>8)&&(!vulkan_details_view||vulkan_details_settle>3)&&(!navigation_smoke||navigation_step==11)&&(!diagnostic_smoke||diagnostic_settle>5)&&(!interaction_smoke||interaction_step==16)&&(!activity_range_smoke||activity_step==4)&&(!frame_stats_range_smoke||frame_stats_step==4)) {
+            if (!snapshot.empty() && ++frames > 20 && !workspace.Busy()&&(!ai_runtime_view||!cyinsights::AiRuntimeSetup().Busy())&&(!standalone_ai_smoke||standalone_ai_complete)&&(!multi_trace_smoke||multi_trace_step==4)&&(!document_lifecycle_smoke||document_lifecycle_step==4&&++document_lifecycle_wait>8)&&(!vulkan_details_view||vulkan_details_settle>3)&&(!navigation_smoke||navigation_step==11)&&(!diagnostic_smoke||diagnostic_settle>5)&&(!interaction_smoke||interaction_step==16)&&(!activity_range_smoke||activity_step==4)&&(!frame_stats_range_smoke||frame_stats_step==4)) {
                 if (!SaveSnapshot(snapshot))
                     return 2;
                 auto report=snapshot;report+=L".json";app.WriteAnalysisReport(report);auto documents=snapshot;documents+=L".documents.json";workspace.WriteReport(documents);

@@ -123,8 +123,8 @@ def main():
         'UE 5.8 needs MSVC 14.44. Unreal is not rebuilt. The CSV bridge remains available\n'
         'if preparation is cancelled or dependencies are missing. Open a .utrace or .cycapture.\n'
         'The native AI Inspector, tools and analysis method are built into the app.\n'
-        'Only the optional external AI/SDK companion needs Python 3.11 x64 and\n'
-        'powershell -File AI/SetupRuntime.ps1.\n'
+        'For external MCP/SDK access, open AI Inspector > Connection > Install MCP/SDK.\n'
+        'The app downloads verified private Python and installs its included wheels offline.\n'
         'Native Unreal adapters are supplied as sources, not prebuilt Engine Tools.\n'
         'See Documentation/Documentation.html and the matching release sources for licensing and native readers.\n'
     ).encode()
@@ -149,8 +149,10 @@ def main():
     for name in ('Docs/UnrealCompatibility.md', 'Docs/Licensing.md', 'LICENSE'):
         plugins[name] = (ROOT/name).read_bytes()
     plugins['README.txt'] = b'Unreal plugin sources. Copy Plugins/CyInsights into your project Plugins directory and build with your licensed engine. See Docs/UnrealCompatibility.md and Docs/Licensing.md. No compiled Unreal binaries are included.\n'
+    sdk={name:data for name,data in app.items() if name.startswith(('AI/','LICENCES/')) or name in ('LICENSE','THIRD-PARTY-CyGPUInspector.md')}
+    sdk['README.txt']=b'Optional CyInsights external MCP/SDK adapter. The same sources and offline wheels are included with the Windows app. Use AI Inspector > Connection > Install MCP/SDK for automatic private runtime setup. No conversational model is included. See AI/README.md.\n'
     archives = []
-    for label, entries in (('Windows-x64', app), ('Windows-x64-Portable', portable), ('Unreal-Plugins-Source', plugins)):
+    for label, entries in (('Windows-x64-Update', app), ('Windows-x64-Portable', portable), ('Unreal-Plugins-Source', plugins), ('AI-SDK',sdk)):
         archive = output/('CyInsights-'+args.version+'-'+label+'.zip')
         if archive.exists():
             raise SystemExit('Refusing to replace an existing release archive')

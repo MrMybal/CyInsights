@@ -74,7 +74,7 @@ headset reboot remains a separate requirement.
 
 Expected stable asset names (example version):
 
-- `CyInsights-v1.2.3-Windows-x64.zip`
+- `CyInsights-v1.2.3-Windows-x64-Update.zip`
 - `CyInsights-v1.2.3-Windows-x64-Portable.zip` (manual portable download)
 - `CyInsights-v1.2.3-Windows-x64-Setup.exe` (manual per-user installer)
 - `CyInsights-v1.2.3-Quest-Standard-arm64.apk`
@@ -84,3 +84,7 @@ Keep the original Android signing key private and backed up. Changing it prevent
 an in-place update of the existing package; uninstalling would lose application
 data. Never place that key in Git or a release. This updater does not supply an
 Authenticode certificate or an antivirus verdict for Windows binaries.
+
+Windows now selects the explicitly named `Windows-x64-Update.zip` payload, with
+a fallback to legacy `Windows-x64.zip` releases. Setup, Portable and Update
+packages are built together from the same source. Alpha tags remain excluded.

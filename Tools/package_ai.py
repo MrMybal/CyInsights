@@ -10,7 +10,7 @@ for sub in ('app','wheels'):
     folder=release/'AI'/sub;folder.mkdir(parents=True,exist_ok=True)
     for source in (root/'AI'/sub).iterdir():
         if source.is_file():shutil.copy2(source,folder/source.name)
-for name in ('SetupRuntime.ps1','requirements.lock.txt','dependency-lock.json','README.md'):
+for name in ('SetupRuntime.ps1','PrepareRuntime.py','runtime-lock.json','requirements.lock.txt','dependency-lock.json','README.md'):
     shutil.copy2(root/'AI'/name,release/'AI'/name)
 shutil.copytree(root/'LICENCES',release/'LICENCES',dirs_exist_ok=True)
 for name in ('LICENSE','THIRD-PARTY-CyGPUInspector.md','DEPENDENCIES.lock.json'):

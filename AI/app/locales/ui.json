@@ -466,5 +466,209 @@
   "Embedded tool catalogue unavailable": {
     "en": "Embedded tool catalogue unavailable",
     "fr": "Catalogue embarqué des outils indisponible"
+  },
+  "External MCP/SDK runtime": {
+    "en": "External MCP/SDK runtime",
+    "fr": "Environnement MCP/SDK externe"
+  },
+  "Install the private Python runtime here. CyToolsCore, MCP and their dependencies are already included with the application.": {
+    "en": "Install the private Python runtime here. CyToolsCore, MCP and their dependencies are already included with the application.",
+    "fr": "Installez ici Python dans un environnement privé. CyToolsCore, MCP et leurs dépendances sont déjà fournis avec l’application."
+  },
+  "MCP/SDK ready": {
+    "en": "MCP/SDK ready",
+    "fr": "MCP/SDK prêt"
+  },
+  "Checking installation": {
+    "en": "Checking installation",
+    "fr": "Vérification de l’installation"
+  },
+  "Installing MCP/SDK": {
+    "en": "Installing MCP/SDK",
+    "fr": "Installation du MCP/SDK"
+  },
+  "Installation cancelled": {
+    "en": "Installation cancelled",
+    "fr": "Installation annulée"
+  },
+  "Installation needs attention": {
+    "en": "Installation needs attention",
+    "fr": "L’installation nécessite une intervention"
+  },
+  "MCP/SDK not installed": {
+    "en": "MCP/SDK not installed",
+    "fr": "MCP/SDK non installé"
+  },
+  "Downloading private Python": {
+    "en": "Downloading private Python",
+    "fr": "Téléchargement de Python privé"
+  },
+  "Extracting private Python": {
+    "en": "Extracting private Python",
+    "fr": "Extraction de Python privé"
+  },
+  "Installing included dependencies": {
+    "en": "Installing included dependencies",
+    "fr": "Installation des dépendances fournies"
+  },
+  "Verifying the complete SDK": {
+    "en": "Verifying the complete SDK",
+    "fr": "Vérification du SDK complet"
+  },
+  "Cancel setup": {
+    "en": "Cancel setup",
+    "fr": "Annuler l’installation"
+  },
+  "Repair MCP/SDK": {
+    "en": "Repair MCP/SDK",
+    "fr": "Réparer le MCP/SDK"
+  },
+  "Install MCP/SDK": {
+    "en": "Install MCP/SDK",
+    "fr": "Installer le MCP/SDK"
+  },
+  "Check installation": {
+    "en": "Check installation",
+    "fr": "Vérifier l’installation"
+  },
+  "Python 3.11 x64 is downloaded from Astral's official GitHub release and verified with a pinned SHA-256. Packages install offline. No administrator access or global Python installation is required.": {
+    "en": "Python 3.11 x64 is downloaded from Astral's official GitHub release and verified with a pinned SHA-256. Packages install offline. No administrator access or global Python installation is required.",
+    "fr": "Python 3.11 x64 est téléchargé depuis la release GitHub officielle d’Astral et vérifié avec une empreinte SHA-256 figée. Les paquets s’installent hors ligne. Aucun droit administrateur ni Python global n’est requis."
+  },
+  "Installation folder": {
+    "en": "Installation folder",
+    "fr": "Dossier d’installation"
+  },
+  "Copy installation log": {
+    "en": "Copy installation log",
+    "fr": "Copier le journal d’installation"
+  },
+  "Open installation log": {
+    "en": "Open installation log",
+    "fr": "Ouvrir le journal d’installation"
+  },
+  "Installation details": {
+    "en": "Installation details",
+    "fr": "Détails de l’installation"
+  },
+  "The external MCP/SDK runtime is not installed": {
+    "en": "The external MCP/SDK runtime is not installed",
+    "fr": "L’environnement MCP/SDK externe n’est pas installé"
+  },
+  "Runtime setup cancelled": {
+    "en": "Runtime setup cancelled",
+    "fr": "Installation de l’environnement annulée"
+  },
+  "Runtime setup or validation failed; see the installation log": {
+    "en": "Runtime setup or validation failed; see the installation log",
+    "fr": "Échec de l’installation ou de la vérification ; consultez le journal d’installation"
+  },
+  "Another CyInsights instance is preparing this runtime; retry when it finishes": {
+    "en": "Another CyInsights instance is preparing this runtime; retry when it finishes",
+    "fr": "Une autre instance de CyInsights prépare cet environnement ; réessayez après sa fin"
+  },
+  "Runtime installer timed out; see its log": {
+    "en": "Runtime installer timed out; see its log",
+    "fr": "Le délai d’installation a expiré ; consultez le journal"
+  },
+  "Runtime dependencies changed; prepare the current version": {
+    "en": "Runtime dependencies changed; prepare the current version",
+    "fr": "Les dépendances ont changé ; préparez la version actuelle"
+  },
+  "Private Python is missing; reinstall the runtime": {
+    "en": "Private Python is missing; reinstall the runtime",
+    "fr": "Python privé est manquant ; réinstallez l’environnement"
+  },
+  "Windows tar.exe is required to extract the private runtime": {
+    "en": "Windows tar.exe is required to extract the private runtime",
+    "fr": "Windows tar.exe est requis pour extraire l’environnement privé"
+  },
+  "Cannot start the private runtime installer": {
+    "en": "Cannot start the private runtime installer",
+    "fr": "Impossible de lancer l’installation de l’environnement privé"
+  },
+  "Cannot activate the verified runtime": {
+    "en": "Cannot activate the verified runtime",
+    "fr": "Impossible d’activer l’environnement vérifié"
+  },
+  "Runtime maintenance": {
+    "en": "Runtime maintenance",
+    "fr": "Maintenance de l’environnement"
+  },
+  "Update cancelled": {
+    "en": "Download cancelled",
+    "fr": "Téléchargement annulé"
+  },
+  "Runtime folders cannot cross symbolic links or junctions": {
+    "en": "Runtime folders cannot cross symbolic links or junctions",
+    "fr": "Le dossier de l’environnement ne peut pas traverser un lien symbolique ou une jonction"
+  },
+  "Runtime installation record is missing or invalid": {
+    "en": "Runtime installation record is missing or invalid",
+    "fr": "Le fichier de suivi de l’installation est manquant ou invalide"
+  },
+  "Invalid runtime installation record": {
+    "en": "Invalid runtime installation record",
+    "fr": "Fichier de suivi de l’installation invalide"
+  },
+  "Cannot create runtime transaction": {
+    "en": "Cannot create runtime transaction",
+    "fr": "Impossible de créer la préparation de l’environnement"
+  },
+  "Cannot open runtime installation log": {
+    "en": "Cannot open runtime installation log",
+    "fr": "Impossible d’ouvrir le journal d’installation"
+  },
+  "Cannot isolate runtime installer process": {
+    "en": "Cannot isolate runtime installer process",
+    "fr": "Impossible d’isoler le processus d’installation"
+  },
+  "Cannot configure runtime process lifetime": {
+    "en": "Cannot configure runtime process lifetime",
+    "fr": "Impossible de configurer la durée de vie du processus d’installation"
+  },
+  "Cannot own the runtime installer process": {
+    "en": "Cannot own the runtime installer process",
+    "fr": "Impossible de contrôler le processus d’installation"
+  },
+  "Cannot resume runtime installer": {
+    "en": "Cannot resume runtime installer",
+    "fr": "Impossible de reprendre le processus d’installation"
+  },
+  "Invalid private Python path": {
+    "en": "Invalid private Python path",
+    "fr": "Chemin Python privé invalide"
+  },
+  "Unexpected private Python archive root": {
+    "en": "Unexpected private Python archive root",
+    "fr": "Racine inattendue dans l’archive Python privée"
+  },
+  "Unsafe private Python archive path": {
+    "en": "Unsafe private Python archive path",
+    "fr": "Chemin invalide dans l’archive Python privée"
+  },
+  "Unexpected private Python filesystem entry": {
+    "en": "Unexpected private Python filesystem entry",
+    "fr": "Type de fichier inattendu dans Python privé"
+  },
+  "Expanded Python runtime exceeds its budget": {
+    "en": "Expanded Python runtime exceeds its budget",
+    "fr": "L’environnement Python extrait dépasse la taille autorisée"
+  },
+  "Python runtime or its license is missing": {
+    "en": "Python runtime or its license is missing",
+    "fr": "L’environnement Python ou sa licence est manquant"
+  },
+  "Runtime directories must be absolute": {
+    "en": "Runtime directories must be absolute",
+    "fr": "Les dossiers de l’environnement doivent utiliser des chemins absolus"
+  },
+  "Runtime transaction directory already exists": {
+    "en": "Runtime transaction directory already exists",
+    "fr": "Le dossier de préparation existe déjà"
+  },
+  "Windows system directory unavailable": {
+    "en": "Windows system directory unavailable",
+    "fr": "Dossier système Windows indisponible"
   }
 }

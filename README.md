@@ -12,8 +12,8 @@
     </td>
     <td width="300" align="right" valign="top">
       <p><sub>Application license</sub><br><a href="LICENSE"><strong>AGPL-3.0-or-later</strong></a></p>
-      <p><sub>Version</sub><br><a href="Docs/Release-0.2.2-alpha.4.md"><strong>0.2.2-alpha.4</strong></a><br><strong>ALPHA</strong></p>
-      <p><a href="https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.4"><strong>Download</strong></a><br><sub>Windows x64 · Quest arm64</sub></p>
+      <p><sub>Version</sub><br><a href="Docs/Release-0.2.2-alpha.5.md"><strong>0.2.2-alpha.5</strong></a><br><strong>ALPHA</strong></p>
+      <p><a href="https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.5"><strong>Download</strong></a><br><sub>Windows x64 · Quest arm64</sub></p>
     </td>
   </tr>
 </table>
@@ -25,10 +25,10 @@ CPU/GPU traces, frame statistics and recorded network, storage and memory activi
 on one timeline. The standalone **CyInsightOVR** Quest app adds on-headset GPU
 metrics and optional development-game profiling.
 
-> **ALPHA · 0.2.2-alpha.4**
+> **ALPHA · 0.2.2-alpha.5**
 >
 > An experimental release for testing and feedback; some providers and hardware
-> paths remain incomplete. Read the [version notes and documented limitations](Docs/Release-0.2.2-alpha.4.md).
+> paths remain incomplete. Read the [version notes and documented limitations](Docs/Release-0.2.2-alpha.5.md).
 
 [![CyInsights CPU/GPU timeline with synchronized frames and recorded Quest GPU stages](Docs/Images/cyinsights-timeline.png)](Docs/Images/cyinsights-timeline.png)
 
@@ -82,8 +82,8 @@ Custom Vulkan overlays do not work universally on unmodified commercial games.
 
 ### Windows desktop
 
-1. Choose the [Windows installer (.exe)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Windows-x64-Setup.exe)
-   or the [portable edition (.zip)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Windows-x64-Portable.zip).
+1. Choose the [Windows installer (.exe)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.5/CyInsights-v0.2.2-alpha.5-Windows-x64-Setup.exe)
+   or the [portable edition (.zip)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.5/CyInsights-v0.2.2-alpha.5-Windows-x64-Portable.zip).
 2. Run Setup for a per-user installation with Start menu shortcuts, or extract
    the **whole portable archive** and start `CyInsightsApp.exe`. The portable
    edition keeps its settings, layout, logs and caches in its adjacent `Data/`
@@ -98,9 +98,9 @@ not Unreal. The CSV timing bridge remains available if native preparation cannot
 finish. No Unreal binaries are bundled. See the
 [first-launch and packaging guide](Docs/GitHubRelease.md).
 
-The [Windows editions checksums](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/SHA256SUMS-Windows-Editions.txt)
-cover the installer and portable addition to this alpha. Their exact source
-commit is recorded in their manifests and the published release notes.
+The [Windows editions checksums](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.5/SHA256SUMS.txt)
+cover all release packages. Their exact source commit is recorded in the release
+manifest.
 
 The published desktop build targets **Windows x64**. No Linux/macOS desktop
 package is provided.
@@ -108,13 +108,13 @@ package is provided.
 ### Quest: CyInsightOVR
 
 1. Install **one** Android arm64 APK:
-   [Standard](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Quest-Standard-arm64.apk)
-   or [Vulkan — experimental heatmap and draw counters](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Quest-Vulkan-arm64.apk).
+   [Standard](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.5/CyInsights-v0.2.2-alpha.5-Quest-Standard-arm64.apk)
+   or [Vulkan — experimental heatmap and draw counters](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.5/CyInsights-v0.2.2-alpha.5-Quest-Vulkan-arm64.apk).
 2. Open **CyInsightOVR** from the Quest app library / **Unknown Sources**.
    Its GPU service starts from the app, including after a headset reboot.
 3. Configure metrics and **Display & HUD**. Meta HUD controls and external Vulkan
    layers need a one-time developer authorization; the
-   [complete Quest bundle](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Quest-arm64.zip)
+   [complete Quest bundle](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.5/CyInsights-v0.2.2-alpha.5-Quest-arm64.zip)
    includes the optional installer and instructions.
 
 Ordinary system-counter use does not need Unreal or a running PC helper.
@@ -125,21 +125,23 @@ explains authorization, target reopening and firmware limits.
 
 ### Optional Unreal plugin and AI SDK
 
-- [Unreal plugin sources](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Unreal-Plugins-Source.zip):
+- [Unreal plugin sources](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.5/CyInsights-v0.2.2-alpha.5-Unreal-Plugins-Source.zip):
   copy `Plugins/CyInsights` into your project's `Plugins` directory and compile
   with your licensed engine. Sources target **UE 4.27 and 5.0–5.8**; consult the
   [compatibility matrix](Docs/UnrealCompatibility.md) for actual validation.
   Editor, Debug, DebugGame and Development clients are supported configurations;
   Shipping, Test and Server are excluded. Configure **Project Settings > Plugins > CyInsights**.
-- [Standalone MCP / AI SDK](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-AI-SDK.zip):
-  use Python 3.11 x64 and `./AI/SetupRuntime.ps1` for the supplied offline wheels.
+- [Standalone MCP / AI SDK](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.5/CyInsights-v0.2.2-alpha.5-AI-SDK.zip):
+  its sources and dependencies are already included with the Windows app. Open
+  **AI Inspector > Connection > Install MCP/SDK** to download and prepare private
+  Python automatically, with progress, cancellation and an installation log.
   Enable the bridge in **AI Inspector > Connection** when connecting an external
   client. Native AI Inspector tools work without Python, MCP or CyAiCodex.
   See the [SDK setup](AI/README.md).
 
-Use the [versioned alpha release](https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.4)
-for downloads and checksums; GitHub's **Latest** shortcut can select an older
-non-prerelease.
+Use the [versioned alpha release](https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.5)
+for downloads and checksums. Alpha builds are listed on the
+[complete Releases page](https://github.com/MrMybal/CyInsights/releases).
 
 ## Source, build and required libraries
 

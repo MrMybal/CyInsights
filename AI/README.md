@@ -15,12 +15,24 @@ owns CLI, JSONL, local authenticated HTTP, official **MCP SDK 1.30.0**, private 
 sessions, reports, cancellation and resource scheduling. There is no dependency
 on the CyToolsCore checkout or an AI provider account at runtime.
 
-Versioned local test releases can include an installed private environment.
-The Git repository excludes that environment; create it locally as described below.
-For a fresh installation, run `AI/SetupRuntime.ps1` with **Python 3.11 x64** available;
-the supplied wheels are offline and version pinned. Other Python ABIs/platforms
-need their own dependency builds and validation. This is not portable Python.
-The profiler itself works without the companion installed.
+The Windows installer and Portable ZIP include the complete adapter and offline
+wheels. Open **AI Inspector > Connection > Install MCP/SDK**. The app downloads
+pinned private Python 3.11 x64 from Astral's official Python Standalone Builds,
+verifies its SHA-256, installs the supplied packages offline with required hashes,
+and verifies imports, versions and the complete 39-operation contract. No global
+Python installation or administrator rights are required. Progress, cancellation,
+retry/repair and a copyable installation log are available in the same panel.
+
+Installed builds store the private runtime under LocalAppData/CyInsights/AI/Runtime;
+portable builds use Data/AI/Runtime beside the application. The runtime stays
+private, uses a separate setup lock across app instances and is activated only
+after validation. A failed/cancelled repair preserves the previous installation.
+Downloads are cached by SHA-256 for retry. Runtime files and caches are excluded
+from releases. Python and its dependency licenses remain in the downloaded prefix.
+
+For command-line-only use, `AI/SetupRuntime.ps1` remains a manual fallback with
+an existing Python 3.11 x64. A working older private companion is also detected
+and checked by the native UI. Alpha application updates remain manual.
 
 In the application open **AI Inspector > Connection**, enable the local bridge,
 and **Copy MCP configuration**. Paste that configuration into your AI client's

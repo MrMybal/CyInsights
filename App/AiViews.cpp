@@ -2,6 +2,7 @@
 #include "Application.hpp"
 #include "AiAnalysis.hpp"
 #include "AiResources.hpp"
+#include "AiRuntimeView.hpp"
 #include "UiMetrics.hpp"
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -15,7 +16,6 @@ namespace cyinsights {
 namespace {
 using J=cygi::Json;
 fs::path HostDirectory(){wchar_t name[32768]{};GetModuleFileNameW(nullptr,name,32768);return fs::path(name).parent_path();}
-fs::path AiRoot(){auto root=HostDirectory()/"AI";return fs::exists(root/"app/CyTool.json")?root:HostDirectory().parent_path().parent_path()/"AI";}
 J ReadAi(const fs::path& path){std::ifstream in(path);std::string text((std::istreambuf_iterator<char>(in)),{});J value;J::Parse(text,value);return value;}
 void Validate(const J& descriptor,const J& p){
     auto& schema=descriptor["inputSchema"];if(!p.IsObject())throw std::runtime_error("InvalidParameters: parameters must be an object");
@@ -125,6 +125,8 @@ void Application::StartAiIssues(){
     ai_issues_task_=std::async(std::launch::async,[this,store,p]{return AnalyzeAi(store,nullptr,"detect_issues",p,&ai_issues_cancel_);});
 }
 void Application::AiTick(){
+    auto& runtime=AiRuntimeSetup();static bool runtime_checked=false;
+    if(!runtime_checked){runtime_checked=true;runtime.Check();}runtime.Poll();
     if(ai_catalog_.IsNull()){
         ai_catalog_=EmbeddedAiCatalog();auto settings=ReadAi(HostDirectory()/"CyInsights-AI-options.json");ai_french_=settings["french"].AsBool();ai_auto_=settings["autoAnalysis"].AsBool(true);ai_fps_=static_cast<float>(settings["targetFps"].AsNumber(60));
     }
@@ -168,14 +170,19 @@ void Application::AiView(){
             for(auto& finding:ai_findings_){ImGui::PushID(index++);ImGui::TextWrapped("%s",finding["title"].AsString().c_str());ImGui::TextWrapped("%s",finding["detail"].AsString().c_str());if(ImGui::SmallButton(text("Focus / filter","Cadrer / filtrer"))){FocusInterval(finding["start"].AsNumber(),finding["end"].AsNumber(),0,false);if(!finding["function"].AsString().empty())FilterFunction(finding["function"].AsString());}ImGui::PopID();}
             ImGui::EndTabItem();
         }
-        if(ImGui::BeginTabItem(text("Connection","Connexion"))){
+        if(ImGui::BeginTabItem(text("Connection","Connexion"),nullptr,ai_requested_tab_==1?ImGuiTabItemFlags_SetSelected:0)){
+            if(ai_requested_tab_==1)ai_requested_tab_=-1;
+            const bool runtime_ready=DrawAiRuntimeSetup(ai_french_);
+            ImGui::SeparatorText(text("Application connection","Connexion a l'application"));
             bool enabled=ai_rpc_.Running();if(ImGui::Checkbox(text("Enable local MCP/SDK bridge","Activer le pont local MCP/SDK"),&enabled)){if(enabled)ai_rpc_.Start(ai_message_,document_id_);else{ai_rpc_.Stop();for(auto& work:ai_work_)if(work.request)work.request->cancelled=true;}}
             ImGui::Checkbox(text("Allow AI application control","Autoriser le controle de l'application"),&ai_control_);ImGui::Checkbox(text("Allow AI remote capture","Autoriser les captures reseau"),&ai_capture_);
             ImGui::Text("Document: %llu",static_cast<unsigned long long>(document_id_));
             ImGui::Text("PID: %lu | CyToolsCore 0.10.1 / MCP 1.30.0",GetCurrentProcessId());ImGui::TextWrapped("%s",text("Local Windows-user named pipe. SDK jobs/reports are private per client. The opened application document and timeline are shared. No provider key or remote trace upload is required.","Pipe local reserve a l'utilisateur Windows. Jobs/rapports SDK prives par client ; document et timeline partages. Aucune cle fournisseur ni envoi distant de trace requis."));
-            auto config=J::Object();auto& server=config["mcpServers"]["CyInsights"];server["command"]=(AiRoot()/"runtime/python/Scripts/python.exe").u8string();server["args"]=J::Array();server["args"].Push((AiRoot()/"app/tool.py").u8string());server["args"].Push("mcp");server["env"]["CYINSIGHTS_APP_PID"]=std::to_string(GetCurrentProcessId());server["env"]["CYINSIGHTS_DOCUMENT_ID"]=std::to_string(document_id_);auto display=config.Write(2);
-            if(ImGui::Button(text("Copy MCP configuration","Copier la configuration MCP")))ImGui::SetClipboardText(display.c_str());ImGui::TextWrapped("%s",display.c_str());
-            if(!fs::exists(AiRoot()/"runtime/python/Scripts/python.exe"))ImGui::TextWrapped("%s",AiUiText("The optional Python companion is needed only for external MCP clients. Local tools and methods remain available.",ai_french_).c_str());
+            auto config=J::Object();auto& server=config["mcpServers"]["CyInsights"];server["command"]=AiRuntimeSetup().python.u8string();server["args"]=J::Array();server["args"].Push("-E");server["args"].Push("-s");server["args"].Push((AiSourceDirectory()/"app/tool.py").u8string());server["args"].Push("mcp");server["env"]["CYINSIGHTS_APP_PID"]=std::to_string(GetCurrentProcessId());server["env"]["CYINSIGHTS_DOCUMENT_ID"]=std::to_string(document_id_);auto display=config.Write(2);
+            ImGui::BeginDisabled(!runtime_ready||!ai_rpc_.Running());
+            if(ImGui::Button(text("Copy MCP configuration","Copier la configuration MCP")))ImGui::SetClipboardText(display.c_str());
+            ImGui::EndDisabled();
+            if(runtime_ready)ImGui::TextWrapped("%s",display.c_str());
             ImGui::EndTabItem();
         }
         if(ImGui::BeginTabItem(text("Tools","Outils"),nullptr,ai_requested_tab_==2?ImGuiTabItemFlags_SetSelected:0)){

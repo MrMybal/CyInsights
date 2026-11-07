@@ -27,7 +27,7 @@ std::optional<Release> Select(const cygi::Json& j,const std::string& installed,c
     if(!j.IsObject()||j["draft"].GetType()!=cygi::Json::Type::boolean||j["prerelease"].GetType()!=cygi::Json::Type::boolean||j["draft"].AsBool()||j["prerelease"].AsBool())return {};
     auto tag=j["tag_name"].AsString();auto candidate=Version::Parse(tag);
     if(!candidate||candidate->prerelease||!candidate->NewerThan(*current))return {};
-    Require(product=="Windows-x64.zip"||product=="Quest-Standard-arm64.apk"||product=="Quest-Vulkan-arm64.apk","Unsupported update product");
+    Require(product=="Windows-x64-Update.zip"||product=="Windows-x64.zip"||product=="Quest-Standard-arm64.apk"||product=="Quest-Vulkan-arm64.apk","Unsupported update product");
     std::string name="CyInsights-"+tag+"-"+product;
     auto expected="https://github.com/MrMybal/CyInsights/releases/download/"+tag+"/"+name;
     std::optional<Release> result;
@@ -41,6 +41,10 @@ std::optional<Release> Select(const cygi::Json& j,const std::string& installed,c
         result=Release{tag,tag[0]=='v'?tag.substr(1):tag,url,name,expected,digest.substr(7),size};
     }
     return result;
+}
+std::optional<Release> SelectWindows(const cygi::Json& json,const std::string& installed){
+    auto release=Select(json,installed,"Windows-x64-Update.zip");
+    return release?release:Select(json,installed,"Windows-x64.zip");
 }
 bool SafeRelativePath(const std::string& name){
     if(name.empty()||name.size()>240||name.front()=='/'||name.back()=='/'||name.find('\\')!=std::string::npos)return false;
