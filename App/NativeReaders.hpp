@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
 #pragma once
+#include "../Core/AppPaths.hpp"
 #include <Windows.h>
 #include <filesystem>
 #include <fstream>
@@ -12,9 +13,7 @@ inline std::filesystem::path ApplicationDirectory() {
     return std::filesystem::path(path).parent_path();
 }
 inline std::filesystem::path NativeDataDirectory() {
-    wchar_t path[32768]{};auto n=GetEnvironmentVariableW(L"LOCALAPPDATA",path,32768);
-    if(!n||n>=32768)throw std::runtime_error("Windows local application data directory unavailable");
-    return std::filesystem::path(path)/"CyInsights";
+    return UserDataDirectory();
 }
 inline std::filesystem::path AnalyzerEngine(const std::filesystem::path& analyzer) {
     return analyzer.parent_path().parent_path().parent_path();

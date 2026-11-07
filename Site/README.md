@@ -30,7 +30,7 @@ showcase recognizes older `/#/en/...` and `/#/fr/...` links and redirects them t
 that reader. Application help and offline packaging continue to use the existing
 documentation build; they do not depend on the showcase.
 
-The pinned download tag follows `VERSION.json`; check that its six linked assets
+The pinned download tag follows `VERSION.json`; check that its seven linked assets
 exist before a future publication. No `/releases/latest` link is used for alpha
 downloads, because that route intentionally selects stable releases.
 

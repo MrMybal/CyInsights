@@ -88,9 +88,13 @@ personnalisés ne fonctionnent pas universellement sur les jeux commerciaux non 
 
 ### Application Windows
 
-1. [Téléchargez le ZIP Windows x64](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Windows-x64.zip).
-2. Extrayez **toute l’archive**, puis lancez `CyInsightsApp.exe`. Conservez
-   `Documentation/`, les outils auxiliaires et les notices de licence à côté de l’application.
+1. Choisissez l’[installateur Windows (.exe)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Windows-x64-Setup.exe)
+   ou l’[édition portable (.zip)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Windows-x64-Portable.zip).
+2. Lancez Setup pour une installation utilisateur avec des raccourcis dans le
+   menu Démarrer, ou extrayez **toute l’archive portable** et lancez
+   `CyInsightsApp.exe`. L’édition portable conserve ses réglages, disposition,
+   journaux et caches dans son dossier `Data/` adjacent. Gardez la documentation
+   complète, les outils et les notices de licence.
 3. Utilisez **Open capture**. Pour analyser un `.utrace`, ajoutez votre installation
    Unreal licenciée dans **Session > Native analyzer > Add engine** avec son dossier racine.
 
@@ -101,6 +105,10 @@ UE 5.8 nécessite MSVC 14.44. Elle compile nos adaptateurs, sans recompiler Unre
 Le pont CSV des timings reste disponible si la préparation native ne peut pas
 aboutir. Aucun binaire Unreal n’est livré. Consultez le
 [guide de premier lancement et de packaging](Docs/GitHubRelease.md).
+
+Les [empreintes des éditions Windows](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/SHA256SUMS-Windows-Editions.txt)
+couvrent l’installateur et le portable ajoutés à cette alpha. Le commit source
+exact figure dans leurs manifestes et dans les notes de release publiées.
 
 La version publiée de l’application de bureau cible **Windows x64**. Aucun paquet
 de bureau Linux/macOS n’est fourni.
@@ -196,6 +204,9 @@ l’[intégration modulaire](Docs/CyUIMigration.md).
 - **Vitrine** : `python Tools/build_site.py` ; consultez [Site/README.md](Site/README.md).
 - **Distribution** : consultez le [packaging des releases](Docs/GitHubRelease.md)
   et le [comportement des mises à jour](Docs/Updates.md).
+- **Formats Windows** : produisez l’installateur Setup pour l’utilisateur courant
+  et le ZIP portable avec son propre dossier `Data/` grâce au
+  [guide du packaging Windows](Tools/WindowsInstaller/README.md).
 
 </details>
 
@@ -223,6 +234,7 @@ ni la licence de l’application ni les conditions d’Epic. Consultez le
 | [CPython](https://github.com/python/cpython) | [PSF et conditions des composants](LICENCES/AI/Python-3.11-License.txt) | Interpréteur de compilation externe et runtime Python 3.11 x64 du compagnon optionnel. |
 | [OpenXR](https://github.com/KhronosGroup/OpenXR-SDK) | [Apache-2.0](LICENCES/OpenXR.txt) | Prérequis d’intégration Quest/native ; les en-têtes du moteur/SDK sont fournis séparément. |
 | [Unreal Engine](https://www.unrealengine.com/) | [Conditions Epic et périmètre d’intégration](Docs/Licensing.md#unreal-engine) | Prérequis externe licencié pour le plugin et les lecteurs natifs ; aucun code source, bibliothèque ou binaire Epic n’est livré. |
+| [NSIS 3.12](https://nsis.sourceforge.io/) | [zlib/libpng et notices des composants](LICENCES/NSIS.txt) | Compilateur d’installateur utilisé au packaging ; l’installateur/désinstalleur généré utilise la compression zlib. |
 
 Le compilateur du manuel utilise marked, PrismJS et esbuild pendant la génération,
 avec leurs notices conservées dans la documentation exportée. Les outils de

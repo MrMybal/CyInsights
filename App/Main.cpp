@@ -7,6 +7,7 @@
 #include "UiTheme.hpp"
 #include "UpdateView.hpp"
 #include "ManualView.hpp"
+#include "../Core/AppPaths.hpp"
 #include "ResourceIds.h"
 #include <chrono>
 #include <algorithm>
@@ -141,9 +142,12 @@ LRESULT WINAPI WindowProc(HWND h, UINT msg, WPARAM w, LPARAM l) {
 }
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
     wchar_t executable[32768]{};
-    GetModuleFileNameW(nullptr, executable, 32768);
-    diagnostic = std::filesystem::path(executable).parent_path() /
-                 ("CyInsightsApp-" + std::to_string(GetCurrentProcessId()) + ".log");
+    GetModuleFileNameW(nullptr,executable,32768);
+    try {
+        auto logs=cyinsights::UserDataDirectory()/L"Logs";
+        std::filesystem::create_directories(logs);
+        diagnostic=logs/("CyInsightsApp-"+std::to_string(GetCurrentProcessId())+".log");
+    } catch(...) {}
     Log("Starting");
     SetUnhandledExceptionFilter(Fault);
     std::set_terminate([] {
@@ -201,9 +205,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
                       ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigDpiScaleFonts = true;
     io.ConfigDpiScaleViewports = true;
-    wchar_t path[32768]{};
-    GetModuleFileNameW(nullptr, path, 32768);
-    static auto ini = (std::filesystem::path(path).parent_path() / "CyInsights-layout-v2.ini").u8string();
+    static auto ini = cyinsights::LayoutFile().u8string();
     io.IniFilename = ini.c_str();
     cyinsights::InitializeUi(ImGui_ImplWin32_GetDpiScaleForHwnd(window));
     ImGui_ImplWin32_Init(window);

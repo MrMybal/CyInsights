@@ -29,6 +29,11 @@ Invalid downloads are not installed. Rate limits, missing packages, unavailable
 network and cancellation are reported in the update panel.
 
 Windows downloads and prepares the complete ZIP in local application data.
+The portable edition stores preferences and update transactions in its adjacent
+`Data/` folder instead. Its `cyinsights-portable.txt` marker remains present when
+updating from the compatibility ZIP. The installed edition uses a writable
+per-user application folder; rerunning Setup also refreshes Windows installer
+metadata and the uninstaller's packaged-file list.
 Archive paths, duplicate names, symlinks and extraction bounds are checked before
 extraction through Windows' `tar.exe`. Every extracted file must match the
 package manifest. The bundled native `CyInsightsUpdater.exe` waits for the current
@@ -70,6 +75,8 @@ headset reboot remains a separate requirement.
 Expected stable asset names (example version):
 
 - `CyInsights-v1.2.3-Windows-x64.zip`
+- `CyInsights-v1.2.3-Windows-x64-Portable.zip` (manual portable download)
+- `CyInsights-v1.2.3-Windows-x64-Setup.exe` (manual per-user installer)
 - `CyInsights-v1.2.3-Quest-Standard-arm64.apk`
 - `CyInsights-v1.2.3-Quest-Vulkan-arm64.apk`
 

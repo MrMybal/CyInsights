@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
 #include "ManualView.hpp"
+#include "../Core/AppPaths.hpp"
 #include "../Common/Documentation/HelpContract.hpp"
 #include <windows.h>
 #include <shellapi.h>
@@ -11,7 +12,7 @@
 namespace cyinsights {
 namespace {
 bool pending=false,prefer_stored_locale=true;std::string topic="welcome",language="en",media,anchor,last_url,error;
-std::filesystem::path LanguagePath(){wchar_t root[32768]{};auto n=GetEnvironmentVariableW(L"LOCALAPPDATA",root,32768);return n&&n<32768?std::filesystem::path(root)/L"CyInsights/manual-language.txt":std::filesystem::path();}
+std::filesystem::path LanguagePath(){return UserDataDirectory()/L"manual-language.txt";}
 std::filesystem::path HelpPath(){wchar_t exe[32768]{};auto n=GetModuleFileNameW(nullptr,exe,32768);return n&&n<32768?std::filesystem::path(exe).parent_path()/L"Documentation/Documentation.html":std::filesystem::path();}
 std::string BaseUrl(){auto path=HelpPath();if(!std::filesystem::is_regular_file(path))return {};wchar_t url[65536]{};DWORD size=65536;if(FAILED(UrlCreateFromPathW(path.c_str(),url,&size,0)))return {};return std::filesystem::path(url).u8string();}
 }

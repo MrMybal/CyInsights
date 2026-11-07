@@ -5,12 +5,14 @@ description: Versions stables, continuité de signature et données.
 section: Guides
 order: 20
 parent: reference
-sourceRevision: 6f842f1e8251
+sourceRevision: fab8f5e9936a
 ---
 
 Utiliser Help > Updates sous Windows ou Updates sur Quest. Recherche automatique au plus quotidienne, désactivable. Seules les nouvelles versions stables sont proposées : brouillons, alpha, bêta et candidates exclus. Télécharger les alpha manuellement.
 
 Windows prépare/vérifie le ZIP complet. Dossier accessible en écriture et exécutables libérés par les autres instances sont nécessaires. L'outil sauvegarde les remplacements et tente un retour arrière en cas d'échec. Les captures peuvent être rouvertes après redémarrage ; une mise à jour normale n'efface pas volontairement réglages/enregistrements.
+
+L’édition portable conserve les transactions de mise à jour et les préférences dans son dossier Data/ adjacent. Une mise à jour depuis le ZIP Windows de compatibilité conserve son marqueur portable et les fichiers Data existants. L’édition installée utilise le stockage de l’utilisateur ; relancer Setup actualise aussi les métadonnées Windows de l’installation et la liste des fichiers du désinstalleur.
 
 Quest conserve la variante, vérifie identité/version/arm64, SHA-256 et continuité de signature avant Android. Confirmation/droit d'installation peuvent être requis. Un autre certificat bloque la mise à jour en place. Garder la clé de développement ; désinstaller avec perte de données n'est pas normal. Une couche mise à jour peut exiger de rouvrir le jeu.
 

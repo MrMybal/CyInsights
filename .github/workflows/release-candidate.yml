@@ -40,8 +40,10 @@ jobs:
       - name: Record actual Windows signature state
         shell: powershell
         run: ./Tools/SignWindowsRelease.ps1 -Directory ./bin/Release -VerifyOnly
+      - name: Prepare locked installer compiler
+        run: python Tools/prepare_installer.py
       - name: Package candidate and checksums
-        run: python Tools/package_release.py --binaries bin/Release --output build/release-candidate --version candidate-${{ github.run_number }}
+        run: python Tools/package_release.py --binaries bin/Release --output build/release-candidate --version candidate-${{ github.run_number }} --nsis build/packaging-tools/nsis-3.12/makensis.exe
       - name: Attest candidate provenance when supported
         if: inputs.attest
         uses: actions/attest@v4
@@ -51,11 +53,13 @@ jobs:
             bin/Release/CyCaptureTool.exe
             bin/Release/CyInsightsUpdater.exe
             build/release-candidate/*.zip
+            build/release-candidate/*.exe
       - uses: actions/upload-artifact@v4
         with:
           name: CyInsights-candidate-${{ github.run_number }}
           path: |
             build/release-candidate/*.zip
+            build/release-candidate/*.exe
             build/release-candidate/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 7

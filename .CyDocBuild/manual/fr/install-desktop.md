@@ -1,14 +1,24 @@
 ---
 id: install-desktop
 title: Installer et préparer les lecteurs natifs
-description: Package Windows et ajout explicite du moteur.
+description: Installateur Windows, archive portable et ajout explicite du moteur.
 section: Guides
 order: 1
 parent: desktop
-sourceRevision: e510be27aea3
+sourceRevision: 7145e6b195b8
 ---
 
-Extraire le package Windows complet dans un dossier accessible en écriture et lancer CyInsightsApp.exe. Garder CyInsightsUpdater.exe et CyCaptureTool.exe à côté. Le produit PC cible Windows x64 ; les traces Android sont analysées sur PC. Préférences et index sont distincts des originaux.
+Le produit PC cible Windows x64 ; les traces Android sont analysées sur PC. Les deux formats Windows incluent l’application, les outils auxiliaires, ce manuel hors ligne complet et les notices de licence.
+
+## Choisir une édition {#choose-edition}
+
+Utiliser l’EXE Setup pour une installation par utilisateur, avec raccourcis dans le menu Démarrer et entrée dans les applications Windows. Aucun droit administrateur n’est requis. Le raccourci bureau et l’ajout à « Ouvrir avec » sont optionnels. Les réglages restent dans LocalAppData/CyInsights ; la désinstallation retire les fichiers livrés en conservant les préférences et captures supplémentaires. Fermer CyInsights et les outils de capture avant l’installation ou la désinstallation.
+
+Pour le ZIP portable, extraire toute l’archive dans un dossier accessible en écriture et lancer CyInsightsApp.exe. Garder CyInsightsUpdater.exe, CyCaptureTool.exe, Documentation/ et cyinsights-portable.txt à côté. Aucun installateur, raccourci ou association de fichiers n’est nécessaire.
+
+## Données portables {#portable-data}
+
+En présence de cyinsights-portable.txt, les préférences, la disposition des fenêtres, le cache des lecteurs natifs, les journaux et les transactions de mise à jour utilisent le dossier Data/ adjacent. Déplacer le dossier complet conserve ces fichiers. Cette édition ne lit pas les préférences de l’édition installée. Les chemins et lecteurs Unreal restent liés à l’installation du moteur sur la machine ; le navigateur et le système peuvent conserver leurs propres données temporaires et préférences de lecture. Les captures originales restent distinctes des réglages et caches d’index.
 
 ## Ajouter Unreal {#register-unreal}
 Dans Session, développer Sources / Native analyzer. Browse engine folder choisit la racine du moteur ou son dossier Engine ; cliquer Add engine. L'enregistrement est conservé. Prepare native readers compile les adaptateurs locaux adaptés, pas le moteur entier. En-têtes/bibliothèques du moteur et outils C++ compatibles doivent exister.

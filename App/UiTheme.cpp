@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
 #include "UiTheme.hpp"
+#include "../Core/AppPaths.hpp"
 #include <cyui/modules/Inspector.h>
 #include <Windows.h>
 #include <filesystem>
@@ -23,8 +24,7 @@ struct Appearance {
 std::map<ImGuiContext*,std::unique_ptr<Appearance>> appearances;
 Appearance& State(){auto& state=appearances[ImGui::GetCurrentContext()];if(!state)state=std::make_unique<Appearance>();return *state;}
 std::filesystem::path SettingsPath() {
-    wchar_t root[32768]{};const auto n=GetEnvironmentVariableW(L"LOCALAPPDATA",root,32768);
-    return n&&n<32768?std::filesystem::path(root)/L"CyInsights/appearance.txt":std::filesystem::path();
+    return UserDataDirectory()/L"appearance.txt";
 }
 void Save() {
     try {auto path=SettingsPath();if(path.empty())return;std::filesystem::create_directories(path.parent_path());

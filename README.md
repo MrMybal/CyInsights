@@ -82,9 +82,12 @@ Custom Vulkan overlays do not work universally on unmodified commercial games.
 
 ### Windows desktop
 
-1. [Download the Windows x64 ZIP](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Windows-x64.zip).
-2. Extract the **whole archive**, then start `CyInsightsApp.exe`. Keep
-   `Documentation/`, helper tools and license notices beside the application.
+1. Choose the [Windows installer (.exe)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Windows-x64-Setup.exe)
+   or the [portable edition (.zip)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Windows-x64-Portable.zip).
+2. Run Setup for a per-user installation with Start menu shortcuts, or extract
+   the **whole portable archive** and start `CyInsightsApp.exe`. The portable
+   edition keeps its settings, layout, logs and caches in its adjacent `Data/`
+   folder. Keep the complete documentation, helper tools and license notices.
 3. Use **Open capture**. For `.utrace` analysis, register your licensed Unreal
    installation in **Session > Native analyzer > Add engine** using its root folder.
 
@@ -94,6 +97,10 @@ Visual Studio C++/CMake tools; UE 5.8 needs MSVC 14.44. It builds our adapters,
 not Unreal. The CSV timing bridge remains available if native preparation cannot
 finish. No Unreal binaries are bundled. See the
 [first-launch and packaging guide](Docs/GitHubRelease.md).
+
+The [Windows editions checksums](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/SHA256SUMS-Windows-Editions.txt)
+cover the installer and portable addition to this alpha. Their exact source
+commit is recorded in their manifests and the published release notes.
 
 The published desktop build targets **Windows x64**. No Linux/macOS desktop
 package is provided.
@@ -186,6 +193,8 @@ code-editor dependencies are excluded. See the [modular integration](Docs/CyUIMi
 - **Website:** `python Tools/build_site.py`; see [Site/README.md](Site/README.md).
 - **Distribution:** see [release packaging](Docs/GitHubRelease.md) and
   [update behavior](Docs/Updates.md).
+- **Windows distribution formats:** build the per-user Setup EXE and a Portable
+  ZIP with its own `Data/` folder using the [Windows packaging guide](Tools/WindowsInstaller/README.md).
 
 </details>
 
@@ -212,6 +221,7 @@ license or Epic's terms. See the [licensing scope](Docs/Licensing.md).
 | [CPython](https://github.com/python/cpython) | [PSF and component terms](LICENCES/AI/Python-3.11-License.txt) | External build interpreter and optional Python 3.11 x64 companion runtime. |
 | [OpenXR](https://github.com/KhronosGroup/OpenXR-SDK) | [Apache-2.0](LICENCES/OpenXR.txt) | Quest/native integration prerequisite; engine/SDK headers are supplied separately. |
 | [Unreal Engine](https://www.unrealengine.com/) | [Epic terms and integration scope](Docs/Licensing.md#unreal-engine) | External licensed plugin/native-reader prerequisite; no Epic source, libraries or binaries are bundled. |
+| [NSIS 3.12](https://nsis.sourceforge.io/) | [zlib/libpng and component notices](LICENCES/NSIS.txt) | Build-only installer compiler; generated installer/uninstaller use zlib compression. |
 
 The manual's compiler uses marked, PrismJS and esbuild at build time, with their
 notices retained in the exported documentation. Build tools and platform SDKs

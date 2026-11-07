@@ -9,6 +9,20 @@
 An experimental prerelease for testing and feedback. The plugin's descriptor
 version is independent of the application/package version.
 
+## Windows installer and portable edition
+
+The [Setup EXE](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Windows-x64-Setup.exe)
+installs CyInsights for the current user and adds Start menu shortcuts and an
+uninstaller. The [Portable ZIP](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Windows-x64-Portable.zip)
+keeps settings, layout, caches, logs and update files in its adjacent `Data/`
+folder. Both include the complete English/French offline manual.
+
+These Windows editions are an additional build of this alpha. Their exact source
+commit and hashes are recorded in `windows-editions-manifest.json` on the release;
+use [SHA256SUMS-Windows-Editions.txt](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/SHA256SUMS-Windows-Editions.txt)
+for these files. The original release assets retain their original checksums.
+The installer and application are unsigned. Alpha updates remain manual.
+
 ## Integrated English and French documentation
 
 The Windows application and CyInsightOVR now include the current CyDoc reader.
@@ -41,7 +55,7 @@ overlay for unmodified commercial games.
 
 ## Downloads
 
-- Windows x64 application ZIP.
+- Windows x64 Setup EXE and Portable ZIP; the original application ZIP is also retained.
 - Standalone Quest Standard and Vulkan APKs; install one variant.
 - Quest bundle with both APKs and optional developer-authorization installer.
 - Unreal plugin sources and standalone MCP/AI SDK bundle.

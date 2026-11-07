@@ -62,7 +62,7 @@ class SiteTests(unittest.TestCase):
                 self.assertIn('height', attrs)
         self.assertNotIn('{{', self.html)
         self.assertGreaterEqual(sum('data-lightbox' in attrs for _, attrs in self.doc.nodes), 10)
-        self.assertEqual(sum('data-download' in attrs for _, attrs in self.doc.nodes), 6)
+        self.assertEqual(sum('data-download' in attrs for _, attrs in self.doc.nodes), 7)
 
     def test_hashed_assets_and_payload(self):
         record = json.loads((OUT / 'site-manifest.json').read_text())

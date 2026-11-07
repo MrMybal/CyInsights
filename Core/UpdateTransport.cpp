@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Cyberalien. AGPL-3.0-or-later.
 #include "ReleaseUpdate.hpp"
+#include "AppPaths.hpp"
 #include <Windows.h>
 #include <winhttp.h>
 #include <objbase.h>
@@ -57,9 +58,7 @@ void Download(const Release& release,const fs::path& destination,std::atomic_boo
     }catch(...){std::error_code ignored;fs::remove(partial,ignored);throw;}
 }
 fs::path NewWorkDirectory(){
-    wchar_t local[32768]{};auto count=GetEnvironmentVariableW(L"LOCALAPPDATA",local,DWORD(std::size(local)));
-    if(!count||count>=std::size(local)||!fs::path(local).is_absolute())throw std::runtime_error("Local application data is unavailable");
     GUID guid{};Check(SUCCEEDED(CoCreateGuid(&guid)),"Cannot create update transaction");wchar_t id[40]{};StringFromGUID2(guid,id,int(std::size(id)));
-    auto path=fs::path(local)/L"CyInsights"/L"Updates"/id;if(!fs::create_directories(path))throw std::runtime_error("Update transaction already exists");return path;
+    auto path=UserDataDirectory()/L"Updates"/id;if(!fs::create_directories(path))throw std::runtime_error("Update transaction already exists");return path;
 }
 }

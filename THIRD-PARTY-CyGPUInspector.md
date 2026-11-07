@@ -16,6 +16,7 @@ dependency inventory of this application.
 | CyToolsCore 0.10.1 | Optional AI companion | MIT; `LICENCES/CyToolsCore-MIT.txt` |
 | Official MCP SDK 1.30.0 and Python dependencies | Optional AI companion | Package license texts in `LICENCES/AI/`; exact 38 wheel hashes in `AI/dependency-lock.json` |
 | Local Python interpreter | External installation used for venv | Python license in `LICENCES/AI/Python-3.11-License.txt`; no interpreter bundled in Git |
+| NSIS 3.12 | Build-only installer compiler; generated Windows setup/uninstaller | zlib/libpng and component notices in `LICENCES/NSIS.txt`; zlib compression is selected, compiler is not bundled |
 | Windows SDK/system DLLs and system fonts | Build/runtime prerequisites | Supplied by the developer/OS; not vendored |
 | Unreal Engine/OpenXR supplied by UE | Optional native export/adapter and plugin prerequisites | Epic/SDK licenses; no engine headers/import libs/DLLs included |
 

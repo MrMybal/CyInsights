@@ -11,6 +11,7 @@ import subprocess
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 from check_publication import content_issues
+from WindowsInstaller.package import build_installer
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -63,6 +64,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--version', required=True)
     parser.add_argument('--require-signed', action='store_true', help='Reject unsigned, untrusted or untimestamped product binaries')
+    parser.add_argument('--nsis',type=Path,help='Build the Setup EXE with the pinned NSIS compiler')
     args = parser.parse_args()
     if not args.version or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-' for c in args.version):
         raise SystemExit('Invalid version label')
@@ -89,6 +91,7 @@ def main():
         app[name] = data
     app['windows-signatures.json'] = json.dumps(signatures, indent=2).encode()
     app['LICENCES/CyDoc-MIT.txt']=(ROOT/'LICENCES/CyDoc-MIT.txt').read_bytes()
+    app['LICENCES/NSIS.txt']=(ROOT/'LICENCES/NSIS.txt').read_bytes()
     # Ship the complete checked CyDoc tree; no build tools or Node runtime.
     help_root=binaries/'Documentation'
     help_manifest=json.loads((help_root/'DocData/export-sha256.json').read_text(encoding='utf-8'))
@@ -108,6 +111,8 @@ def main():
     app['README.txt'] = (
         'CyInsights '+args.version+' / Windows x64\n'
         'Extract the complete archive and run CyInsightsApp.exe.\n'
+        'The Portable ZIP includes cyinsights-portable.txt: settings, readers, logs and updates use Data/.\n'
+        'The Windows installer uses a per-user location and creates Start menu shortcuts.\n'
         'Keep CyInsightsUpdater.exe alongside the application. Help > Updates checks stable GitHub releases.\n'
         'Keep the complete Documentation folder. Open Documentation/Documentation.html for the English/French manual.\n'
         'Register your Unreal engine root folder in Session; no automatic installation scan is performed.\n'
@@ -125,11 +130,18 @@ def main():
     ).encode()
     app['release-manifest.json'] = json.dumps({
         'version': args.version, 'source_commit': git('rev-parse', 'HEAD').decode().strip(),
+        'source_dirty': bool(git('status','--porcelain')), 'distribution': 'windows-update-payload',
         'signed': signatures['signed'], 'signature_report': 'windows-signatures.json',
         'antivirus_verdict': 'not_established_by_signature_or_build_provenance',
         'native_readers': 'automatic local preparation at launch with licensed Unreal and VS C++ tools',
         'files': {name: hashlib.sha256(data).hexdigest() for name, data in sorted(app.items())},
     }, indent=2).encode()
+    portable=dict(app)
+    portable['cyinsights-portable.txt']=b'CyInsights portable mode. Keep this file beside the EXE. Application settings and caches use Data/.\n'
+    portable_manifest=json.loads(app['release-manifest.json'])
+    portable_manifest['distribution']='windows-portable'
+    portable_manifest['files']={name:hashlib.sha256(data).hexdigest() for name,data in sorted(portable.items()) if name!='release-manifest.json'}
+    portable['release-manifest.json']=json.dumps(portable_manifest,indent=2).encode()
     plugins = plugin_sources()
     for name in help_manifest['files']:
         plugins['Documentation/'+name]=(help_root/name).read_bytes()
@@ -138,7 +150,7 @@ def main():
         plugins[name] = (ROOT/name).read_bytes()
     plugins['README.txt'] = b'Unreal plugin sources. Copy Plugins/CyInsights into your project Plugins directory and build with your licensed engine. See Docs/UnrealCompatibility.md and Docs/Licensing.md. No compiled Unreal binaries are included.\n'
     archives = []
-    for label, entries in (('Windows-x64', app), ('Unreal-Plugins-Source', plugins)):
+    for label, entries in (('Windows-x64', app), ('Windows-x64-Portable', portable), ('Unreal-Plugins-Source', plugins)):
         archive = output/('CyInsights-'+args.version+'-'+label+'.zip')
         if archive.exists():
             raise SystemExit('Refusing to replace an existing release archive')
@@ -151,6 +163,9 @@ def main():
             if z.testzip() is not None or set(z.namelist()) != set(entries):
                 raise SystemExit('Release archive verification failed')
         archives.append(archive)
+    if args.nsis:
+        if args.require_signed:raise SystemExit('Installer signing requires a separately configured trusted certificate before --require-signed publication')
+        archives.append(build_installer(app,output,args.version,product_version,args.nsis))
     checksums = output/'SHA256SUMS.txt'
     checksums.write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in archives), encoding='utf-8')
     print(json.dumps({'archives': [dict(name=p.name, bytes=p.stat().st_size) for p in archives]}))

@@ -2,6 +2,7 @@
 #include "UpdateView.hpp"
 #include "ManualView.hpp"
 #include "ReleaseUpdate.hpp"
+#include "../Core/AppPaths.hpp"
 #include <Windows.h>
 #include <cyui/Core.h>
 #include <imgui.h>
@@ -18,8 +19,7 @@ struct Controller {
     std::string status="Check GitHub for a newer stable release.";std::optional<Release> release;fs::path work,preferences;
     std::future<Result> task;std::atomic_bool cancel{false};std::atomic<uint64_t> downloaded{0},total{0};
     Controller(){
-        wchar_t local[32768]{};auto count=GetEnvironmentVariableW(L"LOCALAPPDATA",local,DWORD(std::size(local)));
-        if(count&&count<std::size(local)){preferences=fs::path(local)/L"CyInsights"/L"updates.json";try{if(fs::file_size(preferences)>16384)return;std::ifstream in(preferences);std::string text((std::istreambuf_iterator<char>(in)),{});cygi::Json j;if(cygi::Json::Parse(text,j)){automatic=j["automatic"].AsBool(true);last_check=int64_t(j["last_check"].AsUInt());}}catch(...) {}}
+        try{preferences=UserDataDirectory()/L"updates.json";if(fs::file_size(preferences)>16384)return;std::ifstream in(preferences);std::string text((std::istreambuf_iterator<char>(in)),{});cygi::Json j;if(cygi::Json::Parse(text,j)){automatic=j["automatic"].AsBool(true);last_check=int64_t(j["last_check"].AsUInt());}}catch(...) {}
     }
     ~Controller(){cancel=true;if(task.valid())task.wait();}
     bool Busy()const{return task.valid();}

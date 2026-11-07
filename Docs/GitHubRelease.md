@@ -1,5 +1,28 @@
 # Paquet Windows et sources des plugins
 
+## Installation Windows et édition portable
+
+Deux formats Windows sont produits depuis les mêmes exécutables fraîchement
+compilés : `CyInsights-<tag>-Windows-x64-Setup.exe` et
+`CyInsights-<tag>-Windows-x64-Portable.zip`. Le premier installe l’application
+pour l’utilisateur courant, sans élévation, avec raccourcis dans le menu Démarrer
+et désinstallation dans les paramètres Windows. Le raccourci bureau et l’ajout
+à « Ouvrir avec » sont optionnels. Les préférences existantes dans
+`%LOCALAPPDATA%/CyInsights` sont conservées à la désinstallation.
+
+Le ZIP portable s’extrait entièrement dans un dossier accessible en écriture.
+Conserver `cyinsights-portable.txt` près de l’EXE : les préférences, la disposition
+des fenêtres, les lecteurs natifs, journaux et transactions de mise à jour
+utilisent alors `Data/` dans ce même dossier. La configuration de l’édition
+installée reste indépendante. Les chemins des moteurs Unreal restent propres
+à la machine, et le navigateur/système peut conserver ses propres fichiers temporaires.
+
+`Windows-x64.zip` reste le payload compatible avec les anciens clients de mise
+à jour. Il ne supprime ni le marqueur portable ni le dossier Data. Pour fabriquer
+les deux nouveaux formats, consulter le [guide du packaging Windows](../Tools/WindowsInstaller/README.md).
+
+## Contenu du paquet
+
 Le ZIP Windows contient `CyInsightsApp.exe`, `CyCaptureTool.exe`,
 `CyInsightsUpdater.exe`, les notices,
 la documentation, les sources des lecteurs natifs et le compagnon IA avec ses

@@ -9,6 +9,21 @@
 Une préversion expérimentale destinée aux essais et aux retours. La version du
 descripteur du plugin est indépendante de celle de l’application et du paquet.
 
+## Installateur Windows et édition portable
+
+L’[installateur Setup EXE](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Windows-x64-Setup.exe)
+installe CyInsights pour l’utilisateur courant et ajoute les raccourcis du menu
+Démarrer et un désinstalleur. Le [ZIP portable](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/CyInsights-v0.2.2-alpha.4-Windows-x64-Portable.zip)
+conserve les réglages, disposition, caches, journaux et fichiers de mise à jour
+dans son dossier `Data/` adjacent. Les deux incluent le manuel anglais/français
+hors ligne complet.
+
+Ces éditions Windows sont un build ajouté à cette alpha. Leur commit source
+exact et leurs empreintes figurent dans `windows-editions-manifest.json` sur la
+release ; utilisez [SHA256SUMS-Windows-Editions.txt](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.4/SHA256SUMS-Windows-Editions.txt)
+pour ces fichiers. Les fichiers initiaux gardent leurs empreintes d’origine.
+L’installateur et l’application ne sont pas signés. Les mises à jour alpha restent manuelles.
+
 ## Documentation anglaise et française intégrée
 
 L’application Windows et CyInsightOVR incluent désormais le lecteur CyDoc actuel.
@@ -45,7 +60,7 @@ jeux commerciaux non modifiés.
 
 ## Téléchargements
 
-- Archive ZIP de l’application Windows x64.
+- Installateur Setup EXE et ZIP portable Windows x64 ; le ZIP initial reste disponible.
 - APK Quest autonomes Standard et Vulkan ; installez une seule variante.
 - Paquet Quest avec les deux APK et l’installateur optionnel d’autorisation développeur.
 - Sources du plugin Unreal et paquet MCP/SDK IA autonome.

@@ -1,4 +1,4 @@
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
+find_package(Python3 3.11 REQUIRED COMPONENTS Interpreter)
 get_filename_component(CY_HELP_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 # Generation validates the complete manual. Run each application build so newly
 # added Markdown, translations and contract changes cannot leave stale help.

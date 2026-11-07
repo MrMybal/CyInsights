@@ -53,7 +53,9 @@ int main(int argc,char** argv){try{
     Write(root/"prepared/unlisted.txt","extra");Reject([&]{ValidatePrepared(root/"prepared","v9.0.0");},"unlisted extracted file rejected");fs::remove(root/"prepared/unlisted.txt");
     Reject([&]{ValidatePrepared(root/"prepared","v8.0.0");},"wrong manifest version rejected");
     auto target=root/"application";Write(target/"CyInsightsApp.exe","old app");Write(target/"CyCaptureTool.exe","old CLI");Write(target/"settings.ini","preserve me");
+    Write(target/"cyinsights-portable.txt","portable");Write(target/"Data/appearance.txt","my theme");
     Apply(root/"prepared",target,root/"backup","v9.0.0");Check(Read(target/"CyInsightsApp.exe")=="new app"&&Read(root/"backup/CyInsightsApp.exe")=="old app","files replaced with backup");Check(Read(target/"settings.ini")=="preserve me","settings preserved");
+    Check(Read(target/"cyinsights-portable.txt")=="portable"&&Read(target/"Data/appearance.txt")=="my theme","portable mode and data survive compatibility updates");
     auto locked=root/"locked";Write(locked/"CyInsightsApp.exe","original app");Write(locked/"CyCaptureTool.exe","original CLI");
     HANDLE hold=CreateFileW((locked/"CyInsightsApp.exe").c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,0,nullptr);Check(hold!=INVALID_HANDLE_VALUE,"test lock created");
     Reject([&]{Apply(root/"prepared",locked,root/"rollback","v9.0.0");},"locked application prevents installation");CloseHandle(hold);

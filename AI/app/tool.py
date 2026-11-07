@@ -32,7 +32,9 @@ if __name__ == '__main__':
     sys.stdout.reconfigure(encoding='utf-8');sys.stderr.reconfigure(encoding='utf-8')
     argv=sys.argv[1:]
     if '--data-dir' not in argv:
-        data=Path(os.environ.get('LOCALAPPDATA',str(Path.home())))/'CyInsights'/'AI'/('runtime-'+str(os.getpid()))
+        app_root=Path(__file__).resolve().parents[2]
+        base=app_root/'Data' if (app_root/'cyinsights-portable.txt').is_file() else Path(os.environ.get('LOCALAPPDATA',str(Path.home())))/'CyInsights'
+        data=base/'AI'/('runtime-'+str(os.getpid()))
         argv=['--data-dir',str(data),*argv]
     # Standalone MCP is launched by the current Windows user. Native UI gates
     # remain authoritative. Shared HTTP clients use explicitly issued tokens.
