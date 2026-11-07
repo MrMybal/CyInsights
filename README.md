@@ -1,5 +1,7 @@
 # CyInsights
 
+**[Website](https://mrmybal.github.io/CyInsights/)** · [Site en français](https://mrmybal.github.io/CyInsights/?lang=fr)
+
 **[Documentation](https://mrmybal.github.io/CyInsights/#/en/welcome)** · [Documentation en français](https://mrmybal.github.io/CyInsights/#/fr/welcome)
 
 ## Download the current alpha
