@@ -14,7 +14,7 @@ les panneaux natifs associés et les boutons qui préparent leurs outils.
 que le MCP, sans lancer de pont et sans autorisation MCP à activer.
 
 CyAiCodex, Python, le compagnon MCP et le checkout du projet ne sont pas nécessaires
-à cette utilisation native. Python reste facultatif pour les clients MCP externes.
+à cette utilisation native. CyMCPSDK natif fournit le chat, le CLI et MCP sans Python.
 Les lecteurs `.utrace` utilisent toujours l’installation Unreal enregistrée par
 l’utilisateur ; embarquer les méthodes ne remplace pas ces lecteurs.
 

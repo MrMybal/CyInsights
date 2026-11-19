@@ -1,108 +1,200 @@
-# IA, MCP et SDK dans CyInsights
+# Native assistant, CLI and MCP
 
-Révision locale du 17 octobre 2026 : **39 opérations** communes au SDK,
-au MCP et à l’onglet Tools natif. Les nouveaux outils couvrent compteurs et
-statistiques par frame, activités réseau/stockage/chargement/mémoire,
-comparaison A/B, scopes individuels, relations appelants/appelés, dépendances
-natives de tâches et détails du collecteur GPU optionnel.
+CyInsights embeds **CyMCPSDK 0.7.0**, revision
+`791d4d7d7680213b282ec8529d248a10f8494d77`, compiled from the local source
+snapshot in `ThirdParty/CyMCPSDK`. No Python runtime or CyToolsCore installation
+is required. The Unreal recording plugin and Quest APK remain separate; this
+integration concerns the Windows desktop profiler.
 
-Lire la [méthode d’analyse](AiAnalysisMethod.md), la [couverture actuelle](CapabilityCoverage.md)
-et le [contrat exécutable](../AI/app/CyTool.json). `get_analysis_guide` fournit la méthode
-aux IA ; **AI Inspector > AI method** permet de la lire/copier dans l’application.
-`get_capabilities` annonce les providers chargés et les limites natives.
-Les nouvelles requêtes suivent par défaut la plage sélectionnée/visible ;
-les int64 et identités gardent leur précision, les absences restent `null`.
+## Integrated assistant
 
-Le détail ci-dessous documente également l’intégration initiale ; ses anciens
-comptages de tests et d’opérations ne décrivent pas la révision actuelle.
+Open **AI Inspector > Assistant > Connection and options**. Detect installed
+providers and local services, select a provider and an explicit model ID, then
+connect. Supported host-tool paths include Codex and the API/local-service
+profiles OpenAI, Anthropic, OpenRouter, Ollama, LM Studio, llama.cpp and
+OpenAI-compatible Chat Completions. Other SDK profiles can report that their
+native transport needs its own MCP configuration; presence in discovery does
+not imply host-tool support. Existing service installations and authentication
+are reused. No weights, Node, Python or inference engine are downloaded.
 
-La release `bin/Release-20261009.6` intègre **CyToolsCore 0.10.1**, son ordonnanceur de jobs et le SDK MCP officiel **1.30.0**. La fenêtre **AI Inspector**, les calculs et la timeline restent en C++/Dear ImGui. Un compagnon Python expose les outils ; il ne dépend pas du checkout de CyToolsCore à l'exécution.
+The official **CyMCP::ChatUI** panel renders streamed Markdown, tool activity,
+provider errors, cancellation and attachments. Use an environment variable or
+a memory-only API key. Only non-secret provider/model/endpoint preferences are
+saved. Attachments and conversation content are private user data. Choose a
+stable conversation ID and enable Restore to resume saved history without
+resending a turn. Model capabilities determine supported attachments and history
+editing. Link opening requires a click; there is no automatic remote preview.
+CLI agents retain native context and read-only sandbox defaults; the application
+does not approve their terminal/filesystem actions automatically.
 
-## Utilisation
+## Shared operations and permissions
 
-1. Lancer `CyInsightsApp.exe` et ouvrir **AI Inspector** dans la barre supérieure ou le menu View.
-2. **Findings** analyse automatiquement la plage sélectionnée, ou la fenêtre visible sans sélection. Après un glissement, l'analyse attend le relâchement. Régler le budget FPS et cliquer **Show in Timing** pour examiner une frame suspecte.
-3. Dans **Connection**, activer **Enable local bridge**, puis **Copy MCP configuration**. Coller le JSON dans les paramètres MCP du client IA choisi. Le PID identifie cette instance : recopier la configuration après un redémarrage.
-4. Activer **Allow AI application control** pour ouvrir une trace, changer la sélection ou publier une observation. Activer séparément **Allow AI remote capture** pour démarrer/arrêter une capture réseau.
+The 39 existing business operations retain their names and native handlers:
+state/capabilities/method/metadata; trace opening; interval/filter/view controls;
+thread/function discovery, hotspots, distributions, frames, scopes and relations;
+counters/frame statistics; tasks/dependencies; activities; A/B comparison;
+GPU commands/Vulkan details; findings; remote capture and cancellation of loads.
+Their typed contracts are in `AI/app/operations.json`. Nine native utilities add
+job start/status/result/list/cancel/delete/import and resource read/grep.
 
-Les deux autorisations sont désactivées au démarrage normal. `--ai-enable`, `--ai-control` et `--ai-capture` sont des options explicites de lancement ; `--ai-view` affiche la fenêtre. Aucune configuration de client IA existante n'est modifiée automatiquement.
+The same registry serves the assistant, console and MCP. Trace generations are instance-specific decimal identities: restoring a conversation never authorizes a finding from a previous process/document. Rediscover get_state after opening or restoring. Native Tools and the
+guided method also invoke it. App actions are marshalled to the UI thread;
+queries use the existing immutable indexes on workers. No large trace copy is
+made for a job. UI-owned data, calculations and selection remain in CyInsights.
 
-Avec plusieurs captures, copier la connexion depuis le document concerné :
-`CYINSIGHTS_DOCUMENT_ID` identifie son endpoint indépendamment de l'onglet
-visible. Les permissions sont propres à ce document. Voir
-[Plusieurs captures](MultipleCaptures.md). `--ai-control-all` est une option
-explicite de lancement pour autoriser le contrôle de tous les documents passés
-en arguments ; les documents ouverts ultérieurement restent désactivés.
+**Allow AI application control** and **Allow AI remote capture** are separate,
+per-document gates and default off. Enabling a bridge does not grant either.
+Explicit manual Tools actions are trusted user actions. External clients and
+the assistant never receive that manual identity from their arguments. Capture
+start/stop uses its existing ownership/state checks. Cancelling a query is
+cooperative; an accepted UI change is not undone and recording is not stopped.
+Use `capture_stop` explicitly. Missing recorded channels remain unavailable.
+Shader recompilation, project/engine modification, raw shell execution, native
+log parsing and incoming-trace decoding are not exposed as fabricated tools.
 
-**Tools** présente les opérations et leurs contrats JSON, permet de les lancer localement et de copier le résultat. Save/Load parameters conserve les paramètres versionnés ; charger ne lance pas l'opération. **Options** propose anglais/français, l'analyse automatique, le budget FPS et les notices. Le modèle conversationnel s'exécute dans le client MCP choisi ; aucun fournisseur ou modèle n'est embarqué.
+## Showing evidence in the interface
 
-## Opérations de l’intégration initiale
+With **Allow AI application control** enabled, the assistant can select and focus
+a time interval (`set_range`), highlight an exact function (`filter_function`),
+open its distribution (`show_histogram`), show an analysis panel (`focus_view`),
+pin a recorded counter curve (`pin_counter`) and publish a trace-bound finding
+(`publish_finding`). For example: "Find the slowest frames, show me the interval
+and display the relevant counters." Read-only analysis remains available when
+control is disabled. Remote recording requires its separate capture permission.
 
-Les entrées exactes, valeurs par défaut et bornes proviennent de [CyTool.json](../AI/app/CyTool.json). Les paramètres inconnus sont refusés.
+Access is through the declared business operations, not arbitrary mouse/keyboard
+control. The assistant cannot manipulate every button, browse arbitrary files
+or automatically inspect every screenshot, texture or tile heatmap. Opening a
+supported trace by an explicit path and adding a chosen attachment are distinct,
+supported actions. Missing capture channels cannot be reconstructed by the model.
+Use `get_capabilities` and the operation schemas for the current scope.
 
-| Opération | Usage | Autorisation native externe |
-|---|---|---|
-| `get_state` | Trace courante, disponibilité, génération, sélection et état de capture | Lecture |
-| `open_trace` | Ouvrir un chemin absolu `.utrace` ou `.cycapture` existant | Application |
-| `set_range` | Sélectionner `[start, end)` ; cadrer avec `focus` | Application |
-| `filter_function` | Filtrer le nom exact sur tous les threads ; chaîne vide pour effacer | Application |
-| `list_threads` | Catalogue paginé des pistes, recherche | Lecture |
-| `list_functions` | Catalogue paginé des identités de timers, recherche | Lecture |
-| `hotspots` | Coûts inclusifs/exclusifs agrégés dans un intervalle | Lecture |
-| `histogram` | Distribution par fonction ou par frame/thread, avec/sans attentes reconnues | Lecture |
-| `detect_issues` | Frames dépassant le budget, couverture et causes probables | Lecture |
-| `load_tasks` | Demander le chargement du provider natif de tâches | Application |
-| `query_tasks` | Phases des tâches enregistrées ou scopes CPU candidats explicitement demandés | Lecture |
-| `show_histogram` | Ouvrir la distribution d'une fonction dans l'interface | Application |
-| `publish_finding` | Ajouter une hypothèse IA liée à une génération et à un intervalle | Annotation |
-| `capture_probe` | Vérifier l'endpoint du plugin à une IPv4/port | Capture réseau |
-| `capture_start` | Démarrer réception/capture ; durée 0 = arrêt explicite, maximum 3600 s | Capture réseau |
-| `capture_status` | État, octets reçus et archive disponible | Lecture |
-| `capture_stop` | Arrêter uniquement l'enregistrement détenu par cette application | Capture réseau |
-| `capture_gpu` | Demander un snapshot GPU optionnel au recorder Windows connecté ; aucun transfert du payload GPU par le récepteur natif | Capture réseau |
+## Console
 
-Les permissions SDK `appControl`, `annotations` et `remoteCapture` s'ajoutent aux contrôles natifs correspondants. Les annotations ont leur permission SDK propre ; le contrôle Application natif autorise leur publication.
+`CyInsightsCli.exe` ships beside the application. It emits JSON on stdout and
+sanitized diagnostics on stderr. `--help` describes its syntax. Existing
+`CyInsightsApp.exe` options and `CyCaptureTool pack/inspect/extract` are preserved;
+`--ai-runtime-install` now opens the native connection page (no runtime download).
 
-Un appel MCP utilise `op_<operation>` avec `{"parameters":{...}}`. Il retourne un job. Interroger `cy_get_job` jusqu'à `Completed`, `Failed` ou `Cancelled` ; lire `outputs.data`. `outputs.reportFile` est le rapport JSON privé de ce job. Exporter les rapports nécessaires avant `cy_finish_task`.
+```powershell
+.\CyInsightsCli.exe list
+.\CyInsightsCli.exe describe histogram
+.\CyInsightsCli.exe invoke get_state --pid 1234 --document 0
+.\CyInsightsCli.exe invoke histogram --pid 1234 --json '{"function":"Work","limit":20}'
+.\CyInsightsCli.exe invoke filter_function --pid 1234 --json '{"function":"Work"}'
+.\CyInsightsCli.exe invoke histogram --trace timing.csv --json '{"function":"Work"}'
+.\CyInsightsCli.exe providers
+```
 
-Une ouverture ou une commande de capture retourne **accepted** ; cela ne signifie pas que l'indexation ou la réception est terminée. Interroger `get_state` ou `capture_status`. Annuler un job analytique interrompt le calcul natif. Annuler un job après une action UI acceptée ne l'annule pas rétroactivement et n'arrête pas une capture : appeler `capture_stop`.
+Use `--params-file parameters.json` instead of `--json` for complex requests.
+The PID and document ID are shown in **AI Inspector > Connection**. Each document
+has its own bridge, even in detached windows. Headless `--trace` accepts an
+exported timing CSV and builds/reuses the real native disk index. It supports
+state, native timing analyses and scope/frame queries; GUI/capture/provider-load
+actions need a connected instance. Native `.utrace`/`.cycapture` decoding uses
+an open instance and its licensed Unreal reader. Headless analysis is read-only.
+Exit codes: 0 success, 2 input/schema, 3 unavailable instance, 4 denied,
+5 operation failure, 130 cancelled. Ctrl+C cancels the current request.
 
-Séquence conseillée : `get_state` → `detect_issues` → `set_range` → `hotspots` → `histogram` → `publish_finding`. Pour le réseau : `capture_probe` → `capture_start` → `capture_status` → `capture_stop`, attendre l'archive, puis `open_trace`.
+## External MCP
 
-## Résultats compacts et interprétation
+Enable the bridge in the target document and copy its generated client JSON:
 
-- Les réponses renvoient par défaut 20 lignes, au maximum 128. Les décomptes et agrégats portent sur toute la population demandée. Les bins d'histogramme sont optionnels ; les valeurs lentes sont bornées par `limit`.
-- Les temps sont en secondes. Identités natives 64 bits et décomptes sont des chaînes JSON pour conserver leur précision. Une mesure absente est `null` ou explicitement indisponible, jamais zéro inventé.
-- Les scopes d'histogramme sont sélectionnés par début dans `[start, end)` et gardent leur durée complète. Les coûts de hotspots sont découpés aux limites de la plage. Des scopes inclusifs imbriqués se recouvrent : leur somme n'est pas un pourcentage d'utilisation du thread.
-- Les quantiles des scopes sont estimés et leurs bornes sont fournies ; ceux des valeurs par frame sont exacts pour la population calculée. Les durées non terminées sont indisponibles.
-- Les coûts actifs/sans attentes sont déduits des scopes et des attentes reconnues. Une cause probable de dépassement n'est pas une preuve causale. Une identité de frame native se distingue d'un candidat dérivé de Tick ; les coûts Render/GPU sont associés par recouvrement temporel.
-- Sans TaskTrace, `query_tasks` ne produit des candidats CPU que si `candidates=true`. Leur ID natif et délai de queue restent `null`. Les pistes candidates sont remappées vers les identités natives de thread.
-- Les pages de tâches contiennent au maximum 128 entrées. Avec `limit=20`, seule une partie de la page est retournée ; demander `limit=128` pour parcourir une page complète.
-- Chaque résultat analytique porte une génération de trace. `publish_finding` refuse une génération périmée. Les observations externes sont marquées `external_ai_hypothesis` et affichées comme texte.
+```json
+{"mcpServers":{"CyInsights":{"command":"CyInsightsCli.exe","args":["mcp","--pid","1234","--document","0"]}}}
+```
 
-Sur la trace de validation, une réponse d'histogramme sans bins et avec trois valeurs lentes occupe **1085 octets JSON**, une réponse avec quatre frames suspectes **2925 octets**. Ce sont des tailles mesurées, pas un nombre de tokens garanti. Le fichier contient 14 192 325 événements ; aucun export intégral de ces événements n'est transmis au modèle par les outils.
+Use the actual absolute command path shown by the app. This is the SDK's native
+stdio MCP server, connected through the existing owner-only Windows named pipe.
+Remote named-pipe clients are rejected. The default compact catalogue exposes
+`cy_tools_search`, `cy_tools_describe`, `cy_tools_call`, `cy_resources_read` and
+`cy_resources_grep`. Discover any of the 48 operations through those tools.
+Append `--full` to expose every operation directly. Operation calls return their
+native structured result, rather than the old Python job envelope.
 
-## Installation et isolation
+A second SDK server listens only on `127.0.0.1`, using a random bearer token.
+An owner-only `connection-PID.json` in the document AI directory contains its
+URL and token. `CyInsightsCli invoke ... --connection FILE` uses it. The token
+identifies the current local endpoint, not a multi-user remote service. Do not
+publish it or bind the server remotely. The app removes it on normal shutdown;
+a stale file never enables replay. Re-copy connection settings after restart.
+SDK HTTP clients can subscribe to the bounded change journal; stdio clients use
+TTL and explicit refresh. No custom MCP framing or authentication parser is used.
 
-La release de test contient un environnement privé déjà installé, fondé sur le Python **3.11 x64** de cette machine. Pour recréer l'environnement : `AI/SetupRuntime.ps1`, avec Python 3.11 x64 installé. Les 38 wheels et leurs versions/empreintes sont conservés dans `AI/wheels` et [dependency-lock.json](../AI/dependency-lock.json) ; l'installation peut se faire hors ligne. Ce n'est pas une distribution Python portable. Le profiler peut fonctionner sans ce compagnon.
+## Results, jobs and old data
 
-Le transport natif est un named pipe limité au compte Windows de l'application et refuse les clients distants. Quatre workers transportent les demandes ; le thread UI traite les actions et des workers calculent les analyses sur des snapshots immuables. L'ordonnanceur, les sessions, les tokens, les jobs, les rapports et les budgets de ressources appartiennent à CyToolsCore.
+Synchronous calls remain available. Use `job_start` with `operation` and
+`arguments` for background work, then `job_status` and `job_result`. Jobs own
+cooperative cancellation tokens. `job_list` supports offset/limit; `job_delete`
+explicitly removes a finished result. Work interrupted by app exit is marked
+interrupted on recovery and is never restarted automatically.
 
-Les rapports appartiennent aux espaces privés des jobs. En revanche, la trace ouverte, la sélection et le récepteur réseau sont des états partagés de cette instance de l'application. Une source de trace est une **référence persistante en lecture seule** : elle n'est volontairement pas importée, copiée ou purgée comme fichier temporaire SDK, afin de préserver les captures de plusieurs Go et l'analyse native ultérieure. Ce choix ne transforme pas une trace en fichier privé par utilisateur SDK. L'adaptateur n'envoie pas de trace à un fournisseur IA ; le client externe choisit ce qu'il transmet.
+Durable JSON results survive restarts and SDK resource expiration. Storage is
+bounded to 1 GiB, with at most 32 live jobs and 64 MiB per result. Quota exhaustion
+fails explicitly; existing results are not evicted. Large results are returned
+as private resource references and fully recoverable bounded chunks during the
+configured SDK retention. Read their manifest and follow firstUri/nextUri until
+eof, or retrieve a fresh reference from the durable job. Expired references never
+re-execute actions. Data directories are user-private: LocalAppData/CyInsights
+or Data/ beside a portable executable, under AI/Native/document-ID.
 
-Le compagnon stdio crée un client SDK local avec les permissions nécessaires ; les contrôles de la fenêtre restent déterminants. Un service HTTP partagé nécessite des tokens explicites selon CyToolsCore. La configuration copiée par l'interface utilise le MCP stdio local.
+Old Python environments, SQLite databases and reports are left intact. The old
+CyTools job/session wire protocol is replaced, not silently emulated. Import an
+existing JSON result with `job_import {"path":"ABSOLUTE_REPORT.json"}` after
+enabling app control. It accepts a raw result or an `outputs.data` envelope,
+retains the original file and saves a new native durable result. No old database
+is rewritten and interrupted old jobs are not replayed. The old runtime can be
+removed manually after exporting wanted reports; it is no longer shipped or run.
 
-## Portée actuelle et validation
+## Independent optimizations
 
-L'aide réactive fonctionne sur la trace chargée et l'intervalle visible/sélectionné. **Le décodage de la trace entrante pendant l'enregistrement n'est pas implémenté.** Les outils savent lancer, recevoir, arrêter et assembler la capture ; l'analyse native suit l'arrêt. Les données GPU manquantes ne sont pas fabriquées. Les compteurs, comparaison A/B, détails de commandes GPU, providers Logs/Memory/Network et liens d'objets Unreal ne disposent pas tous d'une opération IA : voir [CapabilityCoverage.md](CapabilityCoverage.md).
+Assistant settings control compact discovery, temporary disk spooling,
+notifications, metadata-only performance logging, cache TTL, retention, chunk
+size, disk quota and API context bytes separately. Save and restart to apply the
+transport/storage settings; reconnect to change conversation settings.
 
-La révision passe 483 vérifications natives sur 13 suites et cinq tests Python du compagnon. Les tests MCP officiels couvrent lecture seule, ouverture réelle, histogramme/recherche/diagnostic, sélection/filtre, rejet de génération, annulation, tâches candidates, isolation de rapports et commandes réseau. La source `.utrace` reste inchangée. La capture MCP réseau de cette révision utilise un endpoint de test local et un payload synthétique ; aucune nouvelle capture matérielle Quest n'a été validée.
+Defaults: compact discovery on, 32 KiB chunks, 300 s SDK retention, 256 MiB disk
+spool, 30 s cache TTL, notifications on, performance logging off, 128 KiB API
+context projection. Durable job storage has independent retention (explicit
+deletion). Metrics contain only operation/stage/status/duration/byte counts/cache
+metadata, never prompts, results, credentials or trace identifiers. The full
+conversation remains saved when context projection omits old turns. System
+instructions and active user/tool exchanges remain together. No implicit summary
+model is invoked. Ripgrep is not enabled: trace data has typed filtered/paginated
+queries and exposed text uses the SDK's native resource grep.
 
-CyToolsCore provient du dépôt [MrMybal/CyToolsCore](https://github.com/MrMybal/CyToolsCore), commit `a8d200f2d0baaade1633e0683663b4506c595f74`, wheel officielle 0.10.1 MIT. Les notices intégrales Core/MCP/dépendances accompagnent les licences existantes dans `LICENCES`. Le moteur et ses DLLs ne sont pas redistribués. Les preuves et empreintes de la release sont dans `release-manifest.json` et `build/release-20261009.6-audit`.
+## Optional remote tools
 
+The Assistant accepts an explicit HTTP MCP endpoint, a token environment-variable
+name and an exact tool allowlist. It never enables all discovered tools implicitly.
+Remote tools are qualified with `remote.` and added only to this assistant after
+reconnection; they do not grant control in another application automatically.
+SDK client errors/tool failures are propagated to the assistant. HTTPS is required
+outside loopback. Remove remote tools revokes their calls immediately, including in a retained conversation; reconnect to refresh the displayed tool definitions. Set allowResources to true only when you also want the qualified remote resource helpers. Read remote handles with remote.resources_read, not the application resource store.
+Remote schemas must fit the SDK's checked schema profile; unsupported contracts
+fail visibly instead of losing validation. No remote server is contacted by default.
 
-`query_vulkan_passes` reads captured subpass draw arguments in the selected
-range (`start`, `end`, optional capture-local `passId`, bounded `limit`). It
-uses the immutable read-only detail cache in a worker, never copies a trace
-into an SDK job, and returns null individual GPU costs/Unreal names. Requires
-new `CyInsightsVulkan.Contents` events. See [subpass contents](QuestSubpassContents.md).
+## Source build and validation
+
+CMake 3.24+, MSVC C++20, the existing build-time Python/Node documentation tools.
+Core, Platform, Http, MCP, AI and ChatUI are built; Local, examples, ChatApp and
+SDK test/demo executables are off. CyUI DocumentViews/Code are added to the
+existing explicit module set; Audio, Gallery, CEF and CodeEditor remain off.
+One host ImGui target is shared. CyUI revision is
+`6ef01cfcdb197f3a89d64618ce5ef8818c704728`. SDK sources are unmodified.
+The host retains its UTF-8 std::string path ABI; SDK sources compile with native
+char8_t. The JSON library uses its documented C++17 feature-profile override in
+both to keep matching inline definitions. This is a Windows integration; Linux
+and macOS desktop backends were not introduced by this change.
+
+```powershell
+python Tools/prepare_dependencies.py
+# Configure/build with the project's existing MSVC + Ninja procedure.
+cmake --build build/WindowsDistribution --target CyInsightsApp CyInsightsCli CyComponentTests
+ctest --test-dir build/WindowsDistribution --output-on-failure
+python Tests/NativeAiE2E.py --binaries bin/WindowsDistribution --tests build/WindowsDistribution/CyNativeAiTests.exe --output build/NativeAiE2E
+```
+
+The end-to-end fixture tests streaming/tool protocol plumbing against the real
+application, cancellation, history restoration, CLI and external MCP. It does
+not claim a paid/provider inference test. No GitHub workflow is needed.

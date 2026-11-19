@@ -20,7 +20,7 @@ SECRETS = re.compile(rb'(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40
                      rb'xox[baprs]-[A-Za-z0-9-]{20,}|sk-(?:proj-)?[A-Za-z0-9_-]{32,}|'
                      rb'-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY-----)')
 LOCAL_PATHS = re.compile(rb'(?i)(?:[a-z]:[\\/](?:Users|Documents and Settings)[\\/][^\\/\s"<>]+|'
-                         rb'/(?:home|Users)/[^/\s"<>]+/|'
+                         rb'/(?:home|Users)/(?![:{])[^/\s"<>]+/|'
                          rb'[a-z]:[\\/](?:_Plugins|_Projects?|UnrealEngine)(?:[\\/]|["\s]))')
 
 
@@ -101,7 +101,6 @@ def main():
             errors.append('dependency hash mismatch: ' + name)
         if (Path(lock['source']) / name).as_posix() not in tracked:
             errors.append('dependency source omitted: ' + name)
-    ai_lock = json.loads((ROOT / 'AI/dependency-lock.json').read_text(encoding='utf-8'))
     cyui_root = ROOT / 'ThirdParty/CyUI'
     cyui_lock = json.loads((cyui_root / 'source-sha256.json').read_text(encoding='utf-8'))
     publication_files = set(files) | tracked
@@ -119,10 +118,14 @@ def main():
             errors.append('CyUI dependency hash mismatch: ' + name)
         if ('ThirdParty/CyUI/' + name) not in publication_files:
             errors.append('CyUI dependency source omitted: ' + name)
-    for wheel in ai_lock['wheels']:
-        name = 'AI/wheels/' + wheel['file']
-        if name not in tracked or hashlib.sha256((ROOT / name).read_bytes()).hexdigest() != wheel['sha256']:
-            errors.append('AI wheel missing or changed: ' + name)
+    sdk_root=ROOT/'ThirdParty/CyMCPSDK'
+    sdk=json.loads((sdk_root/'source-sha256.json').read_text(encoding='utf-8'))
+    for name,expected in sdk.items():
+        path=sdk_root/name
+        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest()!=expected:
+            errors.append('CyMCPSDK dependency hash mismatch: '+name)
+        if ('ThirdParty/CyMCPSDK/'+name) not in publication_files:
+            errors.append('CyMCPSDK dependency omitted: '+name)
     for scope in ('Plugins/CyInsights/Source',
                   'Tools/NativeTasks', 'Tools/NativeActivities', 'ThirdParty/CyGPUInspector/CyGPUInspectorCore',
                   'ThirdParty/CyGPUInspector/CyGPUInspectorRS'):
@@ -137,7 +140,7 @@ def main():
     if errors:
         raise SystemExit('\n'.join(errors))
     print(json.dumps({'files': len(files), 'bytes': total, 'source_dependencies': len(lock['sha256']),
-                      'offline_wheels': len(ai_lock['wheels']), 'commits_checked': commits_checked,
+                      'native_sdk_files': len(sdk), 'commits_checked': commits_checked,
                       'publication_audit': 'passed'}))
 
 if __name__ == '__main__':

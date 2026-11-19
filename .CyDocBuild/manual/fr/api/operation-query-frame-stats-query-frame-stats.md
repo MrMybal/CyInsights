@@ -7,14 +7,14 @@ parent: api-counters
 order: 100
 kind: api
 symbol: query_frame_stats
-sourceRevision: 4a047243c834
+sourceRevision: 108e36e44471
 ---
 
 Lire les valeurs d’un compteur observées dans chaque frame. Les absences valent null ; les résultats GPU ou statistiques retardés gardent leur attribution enregistrée.
 
 ## Contrat d’appel {#call-contract}
 
-Module : `tool` du SDK IA autonome (`AI/app`). Soumettre l’opération avec le runtime CyToolsCore. Le résultat de tâche contient `outputs.data` et un fichier `outputs.reportFile` propre à la tâche ; une action acceptée peut encore être en cours.
+Appelez CyInsightsCli invoke OPERATION --pid PID --json JSON, le registre de l’assistant ou MCP natif. Le resultat contient les donnees de l’application. Utilisez job_start/job_result pour les resultats durables ; une action acceptee peut encore etre en cours.
 
 Permissions : Lecture seule ; aucune permission supplémentaire pour cette opération.
 
@@ -68,75 +68,61 @@ Permissions : Lecture seule ; aucune permission supplémentaire pour cette opér
 ```json
 {
   "type": "object",
+  "additionalProperties": true,
   "properties": {
-    "data": {
-      "type": "object",
-      "additionalProperties": true,
-      "properties": {
-        "generation": {
-          "type": "string",
-          "description": "Génération de trace propre au document ; les annotations périmées sont refusées."
-        },
-        "range": {
-          "type": "object",
-          "properties": {
-            "start": {
-              "type": "number"
-            },
-            "end": {
-              "type": "number"
-            },
-            "unit": {
-              "type": "string",
-              "enum": [
-                "seconds"
-              ]
-            }
-          }
-        },
-        "rows": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": true
-          },
-          "description": "Nombre de lignes de réponse borné. Les agrégats et matched portent sur toute la population demandée."
-        },
-        "matched": {
-          "type": "string",
-          "description": "Nombre uint64 décimal exact, pas une valeur flottante."
-        },
-        "offset": {
-          "type": "string",
-          "description": "Décalage de réponse décimal exact."
-        },
-        "hasMore": {
-          "type": "boolean"
-        },
-        "provenance": {
-          "type": "string",
-          "description": "Source mesurée, analyse dérivée ou heuristique ; une donnée absente ne vaut jamais zéro."
-        }
-      },
-      "description": "Chaque ligne précise unité et type. Les int64 sont des chaînes décimales exactes, les doubles des nombres JSON et les absences null. La moyenne est une approximation flottante. Les frames sélectionnées gardent l’identité d’observation ou d’exécution de la source."
-    },
-    "reportFile": {
+    "generation": {
       "type": "string",
-      "x-cy-kind": "File"
+      "description": "Génération de trace propre au document ; les annotations périmées sont refusées."
+    },
+    "range": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "number"
+        },
+        "end": {
+          "type": "number"
+        },
+        "unit": {
+          "type": "string",
+          "enum": [
+            "seconds"
+          ]
+        }
+      }
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "description": "Nombre de lignes de réponse borné. Les agrégats et matched portent sur toute la population demandée."
+    },
+    "matched": {
+      "type": "string",
+      "description": "Nombre uint64 décimal exact, pas une valeur flottante."
+    },
+    "offset": {
+      "type": "string",
+      "description": "Décalage de réponse décimal exact."
+    },
+    "hasMore": {
+      "type": "boolean"
+    },
+    "provenance": {
+      "type": "string",
+      "description": "Source mesurée, analyse dérivée ou heuristique ; une donnée absente ne vaut jamais zéro."
     }
   },
-  "required": [
-    "data",
-    "reportFile"
-  ],
-  "additionalProperties": false
+  "description": "Chaque ligne précise unité et type. Les int64 sont des chaînes décimales exactes, les doubles des nombres JSON et les absences null. La moyenne est une approximation flottante. Les frames sélectionnées gardent l’identité d’observation ou d’exécution de la source."
 }
 ```
 
 ## Signature {#signature}
 
-```python
-runtime.submit(actor, session_id, "query_frame_stats", parameters)
+```cpp
+CyInsightsCli invoke query_frame_stats --pid PID --params-file parameters.json
 ```
 
 ## Paramètres {#parameters}
@@ -152,7 +138,7 @@ runtime.submit(actor, session_id, "query_frame_stats", parameters)
 
 ## Retour {#returns}
 
-`dict` — Descripteur de tâche contenant jobId. runtime.wait(actor, job_id) renvoie l’état et les sorties ; la fin du chargement ou de la capture dans l’application est indiquée par get_state ou capture_status.
+`JSON` — Resultat natif structure. Les actions acceptees peuvent encore charger ; consulter get_state/capture_status. job_result fournit les sorties conservees des taches explicites.
 
 ## Références {#references}
 

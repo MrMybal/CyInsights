@@ -1,4 +1,4 @@
-Current CyInsights inventory (2026-10-10):
+Current CyInsights inventory (2026-11-19):
 CyInsightOVR addition (2026-10-28): native Android application and shared desktop
 tile view (AGPL-3.0-or-later), owned capture schema (MIT).
 Official Dear ImGui OpenGL3 backend v1.92.5, MIT:
@@ -8,9 +8,9 @@ The APK retains these notices in assets/LICENCES. The installed device profiler
 is invoked through an explicit authorized developer bootstrap; no Meta binary
 or Unreal component is included in the APK.
 CyUI 1.2.0: modular Dear ImGui UI library, pinned source revision
-ff023e646c6a3038b3dfbfd53f6d2b4a2f5955e3 (2026-11-02).
+6ef01cfcdb197f3a89d64618ce5ef8818c704728 (native CyMCPSDK integration snapshot).
 Upstream: https://github.com/MrMybal/CyUI (currently private).
-Upstream MIT license: https://github.com/MrMybal/CyUI/blob/ff023e646c6a3038b3dfbfd53f6d2b4a2f5955e3/LICENSE
+Upstream MIT license: https://github.com/MrMybal/CyUI/blob/6ef01cfcdb197f3a89d64618ce5ef8818c704728/LICENSE
 Source: ThirdParty/CyUI; full MIT grant included locally: CyUI-MIT.txt.
 The upstream link requires repository access while CyUI is private. The included
 license and source snapshot do not require access to that repository.
@@ -87,18 +87,21 @@ No CyToolsCore wheel, CyUEMCPSDK source, Python companion, provider CLI or model
 weights are bundled. The SDK MIT licenses do not relicense this product.
 Repository links supplement, and never replace, the full license texts.
 
-CyInsights integration update, Release-20261009.6 (2026-10-09):
-The preceding bundle description concerns the upstream CyGPUInspector package.
-CyInsights now includes the official CyToolsCore 0.10.1 Python wheel (MIT),
-from https://github.com/MrMybal/CyToolsCore,
-source commit a8d200f2d0baaade1633e0683663b4506c595f74.
-Complete Core text: CyToolsCore-MIT.txt.
-Official MCP Python SDK 1.30.0: https://github.com/modelcontextprotocol/python-sdk
-Exact 38-package wheel versions and hashes: ../AI/dependency-lock.json.
-Dependency license texts and notices extracted from their pinned wheels: AI/.
-The private venv uses installed Python 3.11 x64; its license: AI/Python-3.11-License.txt.
-No model weights, AI provider CLI or Epic engine binaries are redistributed.
-The SDK and third-party licenses do not relicense the existing derived sources.
+CyInsights native AI integration update (2026-11-19):
+CyMCPSDK 0.7.0 (MIT), source commit
+791d4d7d7680213b282ec8529d248a10f8494d77.
+Upstream: https://github.com/MrMybal/CyMCPSDK
+Source snapshot and exact hashes: ../ThirdParty/CyMCPSDK/.
+Full grant: CyMCPSDK-MIT.txt. Native dependency notices:
+CyMCPSDK-ThirdParty.md and CyMCPSDK/{nlohmann,httplib,picosha2}/.
+The selected Core, Platform, Http, MCP, AI and ChatUI modules are compiled
+into CyInsights and its native CLI. CyUI DocumentViews and Code use MD4C,
+Lexilla/Scintilla and the embedded JetBrains Mono font; their grants are in CyUI/.
+CyToolsCore, its wheels and the Python MCP adapter are no longer dependencies
+or distributed payloads. Existing user environments/reports are not removed.
+Python remains an external build/documentation tool; Python-Build.txt.
+No model weights, provider CLI, inference runtime or Epic binaries are bundled.
+The SDK licenses do not relicense the application or its derived analysis sources.
 
 CyInsightOVR runtime capability inquiry (2026-10-28):
 - Khronos OpenXR 1.1.65 headers and official Android arm64 loader.

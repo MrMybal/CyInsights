@@ -131,7 +131,7 @@ bool sidebarItem(const char* iconText, const char* label, const bool active, con
     const auto height = ImGui::GetFrameHeight() + dp(8.0f);
     const auto origin = ImGui::GetCursorScreenPos();
     ImGui::PushID(label);
-    const auto clicked = ImGui::InvisibleButton("##item", ImVec2(width, height));
+    const auto clicked = ImGui::InvisibleButton("##item", ImVec2(width, height), ImGuiButtonFlags_EnableNav);
     const auto hovered = ImGui::IsItemHovered();
     ImGui::PopID();
     auto* list = ImGui::GetWindowDrawList();
@@ -268,14 +268,19 @@ int modalButtons(const char* confirm, const char* cancel, const bool danger)
     const auto confirmWidth = std::max(dp(84.0f), buttonWidth(confirm));
     const auto cancelWidth = cancel != nullptr ? std::max(dp(84.0f), buttonWidth(cancel)) : 0.0f;
     alignRight(confirmWidth + (cancel != nullptr ? cancelWidth + style.ItemSpacing.x : 0.0f));
+    // Shortcut routes are resolved for the focused scope before the frame.
+    // Closing a child popup cannot deliver its key to its parent later in this frame.
+    const bool topModal = ImGui::GetTopMostPopupModal() == ImGui::GetCurrentWindow()->RootWindow;
+    const bool cancelKey = cancel && topModal && ImGui::Shortcut(ImGuiKey_Escape);
+    const bool confirmKey = topModal && !ImGui::IsAnyItemActive() && ImGui::Shortcut(ImGuiKey_Enter);
     auto result = 0;
     if (cancel != nullptr) {
-        if (button(cancel, Variant::secondary, ImVec2(cancelWidth, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+        if (button(cancel, Variant::secondary, ImVec2(cancelWidth, 0.0f)) || cancelKey)
             result = 2;
         ImGui::SameLine();
     }
     if (button(confirm, danger ? Variant::danger : Variant::primary, ImVec2(confirmWidth, 0.0f))
-        || (ImGui::IsKeyPressed(ImGuiKey_Enter, false) && !ImGui::IsAnyItemActive()))
+        || confirmKey)
         result = 1;
     if (result != 0) {
         ImGui::CloseCurrentPopup();

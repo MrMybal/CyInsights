@@ -1,76 +1,8 @@
-# CyInsights AI companion
+# CyInsights native AI integration
 
-**[Documentation](https://mrmybal.github.io/CyInsights/#/en/ai)** · [Documentation en français](https://mrmybal.github.io/CyInsights/#/fr/ai)
+CyMCPSDK 0.7.0 is compiled into the desktop application. No Python companion or runtime installation is needed.
 
-Current local adapter: **39 native operations**, contract version **0.2.0**.
-Use `get_capabilities` and `get_analysis_guide` before analysis. The versioned
-method, catalogue and translations are embedded in the native executable.
-AI Inspector > AI method provides guided steps and native tool actions.
-All local tools work without Python, MCP or CyAiCodex. Python is needed only
-for the optional external MCP companion. `app/analysis-method.json` is the build source.
-See [AI method](../Docs/AiAnalysisMethod.md) and [coverage](../Docs/CapabilityCoverage.md).
+Read the [assistant, CLI, MCP and migration guide](../Docs/AiIntegration.md).
+The 39 application contracts, analysis method and translations in `app/` are embedded resources; durable jobs and resource utilities are registered by the native host.
 
-The UI and analysis engine remain native C++/Dear ImGui. CyToolsCore **0.10.1 MIT**
-owns CLI, JSONL, local authenticated HTTP, official **MCP SDK 1.30.0**, private jobs,
-sessions, reports, cancellation and resource scheduling. There is no dependency
-on the CyToolsCore checkout or an AI provider account at runtime.
-
-The Windows installer and Portable ZIP include the complete adapter and offline
-wheels. Open **AI Inspector > Connection > Install MCP/SDK**. The app downloads
-pinned private Python 3.11 x64 from Astral's official Python Standalone Builds,
-verifies its SHA-256, installs the supplied packages offline with required hashes,
-and verifies imports, versions and the complete 39-operation contract. No global
-Python installation or administrator rights are required. Progress, cancellation,
-retry/repair and a copyable installation log are available in the same panel.
-
-Installed builds store the private runtime under LocalAppData/CyInsights/AI/Runtime;
-portable builds use Data/AI/Runtime beside the application. The runtime stays
-private, uses a separate setup lock across app instances and is activated only
-after validation. A failed/cancelled repair preserves the previous installation.
-Downloads are cached by SHA-256 for retry. Runtime files and caches are excluded
-from releases. Python and its dependency licenses remain in the downloaded prefix.
-
-For command-line-only use, `AI/SetupRuntime.ps1` remains a manual fallback with
-an existing Python 3.11 x64. A working older private companion is also detected
-and checked by the native UI. Alpha application updates remain manual.
-
-In the application open **AI Inspector > Connection**, enable the local bridge,
-and **Copy MCP configuration**. Paste that configuration into your AI client's
-MCP settings. The PID selects this application instance; copy it again after
-restarting the application. Control and capture permissions are off by default;
-enable the two separate controls for the actions you want the AI to perform.
-
-The named pipe permits only the application's Windows user and rejects remote
-pipe clients. Jobs/reports are isolated by CyTools identities. The visible trace,
-timeline and remote capture receiver are shared application state. Standalone
-stdio clients are created with SDK permissions for the local Windows user; native
-UI gates still enforce application/capture access. A shared HTTP service requires
-explicit client tokens, as defined by CyToolsCore. Do not expose it remotely.
-
-SDK calls use `op_<operation>` with `{"parameters":{...}}`. Poll `cy_get_job`
-until Completed, Failed or Cancelled. Results are in `outputs.data`, with a private
-JSON report at `outputs.reportFile`; export before `cy_finish_task` if retaining it.
-Opening a document or starting capture returns **accepted**, not completion.
-Poll `get_state` / `capture_status`. SDK cancellation stops a native analytical
-request; it does not undo a UI action or stop recording. Use `capture_stop` explicitly.
-
-Typical sequence: get_state → detect_issues → set_range → hotspots → histogram →
-publish_finding. Start/stop a development game or Quest trace with capture_probe,
-capture_start, capture_status and capture_stop, then open the returned archive.
-All commands and schemas are discoverable in the manifest and the native Tools tab.
-
-Trace files are persistent read-only application documents, referenced by absolute
-path. They are intentionally not copied or purged as temporary job artifacts:
-this avoids duplicating multi-GB captures and preserves subsequent native task
-decoding. Generated reports remain task-owned. No trace is uploaded by this adapter.
-
-The native Findings panel follows the selected/visible interval and distinguishes
-measured durations, derived coverage and probable causes. An external MCP AI can
-publish hypotheses and focus the corresponding interval/function. It does not
-embed a chat model. Native incoming trace decoding **during recording** is not
-implemented: streaming, stopping and packaging work; analyze after stop. No real
-Quest hardware capture was added to the tests in this revision.
-
-See [AI integration](../Docs/AiIntegration.md) and `../release-manifest.json`
-in the delivered application directory for evidence and limitations. Licences are
-included in the product's root LICENCES, alongside unchanged existing notices.
+Open **AI Inspector > Assistant** for provider setup, or **Connection** for external MCP configuration. Models and credentials remain user supplied.

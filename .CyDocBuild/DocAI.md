@@ -9,10 +9,13 @@ reader's navigation or search.
 
 The desktop's AI Inspector > Connection enables a bridge for the current
 process/document. Read-only analysis, application control, annotations and remote
-recording have independent gates. Configure the standalone `AI/app/tool.py`
-adapter using that connection. Never print credentials or invent readiness.
-`create_runtime(data_dir, **options)` is the adapter's public factory; the SDK
-owns clients, sessions, jobs, scheduling and cancellation.
+recording have independent gates. Use the generated CyInsightsCli native stdio
+configuration, or the SDK loopback endpoint with its owner-only bearer token.
+Never print credentials or invent readiness. The assistant, CLI and MCP share
+one native registry. Calls return structured results. Explicit job_start/status/
+result/list/cancel/delete operations provide durable host jobs; job_import copies
+an old JSON report without rewriting old databases. Native UI gates remain
+mandatory. No Python companion is needed.
 
 ## Evidence and compact requests
 

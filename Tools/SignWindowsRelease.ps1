@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Cyberalien. SPDX-License-Identifier: AGPL-3.0-or-later.
+﻿# Copyright (C) 2026 Cyberalien. SPDX-License-Identifier: AGPL-3.0-or-later.
 # Signs only explicitly selected CyInsights binaries with an existing certificate.
 [CmdletBinding()]
 param(
@@ -12,7 +12,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $releaseRoot = (Resolve-Path -LiteralPath $Directory).Path
 if (-not (Test-Path -LiteralPath $releaseRoot -PathType Container)) { throw 'Release directory required' }
-$knownNames = @('CyInsightsApp.exe','CyCaptureTool.exe','CyInsightsUpdater.exe','CyNativeTiming.exe','CyNativeTasks.exe',
+$knownNames = @('CyInsightsApp.exe','CyInsightsCli.exe','CyCaptureTool.exe','CyInsightsUpdater.exe','CyNativeTiming.exe','CyNativeTasks.exe',
     'CyNativeActivities.exe','CyInsightsGpu.addon64')
 $targets = @(Get-ChildItem -LiteralPath $releaseRoot -File -Recurse | Where-Object { $knownNames -contains $_.Name })
 if (-not ($targets | Where-Object { $_.Name -eq 'CyInsightsApp.exe' })) { throw 'CyInsightsApp.exe is missing; no binary will be signed or restored' }

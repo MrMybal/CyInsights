@@ -4,22 +4,22 @@ title: SDK et API publique
 description: Connecter un client externe et utiliser les contrats des opérations disponibles.
 section: Référence / API développeur
 order: 50
-sourceRevision: 0360810dc94d
+sourceRevision: 5df6c949853b
 ---
 
-Pour la connexion et l’interface des outils natifs, lisez [AI Inspector et les clients externes](doc:ai). Les références ci-dessous décrivent les opérations publiques de l’adaptateur Python, leurs paramètres, leurs résultats et leurs permissions. Elles ne donnent pas accès aux implémentations. Une capacité déclarée peut nécessiter une source enregistrée ou un fournisseur disponible.
+Les 39 contrats metier ci-dessous appartiennent au registre CyMCPSDK natif. Les memes handlers servent l’assistant integre, le terminal et MCP externe. La disponibilite des sources et les autorisations independantes de controle/capture du document restent applicables. Lire [AI Inspector](doc:ai).
 
-## Point d’entrée Python {#python-entry}
-```python
-from pathlib import Path
-from tool import create_runtime
+## Point d’entree CLI natif {#python-entry}
 
-with create_runtime(Path("data/jobs")) as runtime:
-    client = runtime.create_client("reader")
-    actor = runtime.authenticate(client["token"])
-    session = runtime.create_session(actor, temporary=True)
-    job = runtime.submit(actor, session["sessionId"], "get_state", {})
-    result = runtime.wait(actor, job["jobId"])
+```powershell
+CyInsightsCli list
+CyInsightsCli describe histogram
+CyInsightsCli invoke get_state --pid 1234
+CyInsightsCli invoke histogram --trace timing.csv --json '{"function":"Work"}'
 ```
 
-Utilisez le SDK IA distribué séparément et ses dépendances installées. `tool` est le module adaptateur dans `AI/app` ; il ne vient pas de la bibliothèque CyDoc. Connectez-le au pont activé du document avant d’appeler une opération. Voir l’[état](doc:operation-get-state-get-state) et les [capacités](doc:operation-get-capabilities-get-capabilities).
+Utilisez le PID et le document affiches dans **AI Inspector > Connection** pour l’instance ouverte. Aucune installation Python n’est necessaire. `mcp --pid PID` lance le serveur MCP stdio natif ; ajoutez `--full` pour la decouverte complete. Les resultats types sont renvoyes directement.
+
+## Taches durables et ressources {#durable-jobs}
+
+Neuf utilitaires completent les contrats metier : `job_start`, `job_status`, `job_result`, `job_list`, `job_cancel`, `job_delete`, `job_import`, `read_resource`, `grep_resources`. Consultez describe pour le schema JSON exact. Les resultats durables survivent aux redemarrages ; aucune action interrompue n’est rejouee. Les anciens rapports JSON peuvent etre importes explicitement avec le controle active. Les anciens environnements Python et bases restent intacts.

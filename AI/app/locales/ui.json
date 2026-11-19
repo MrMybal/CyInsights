@@ -670,5 +670,101 @@
   "Windows system directory unavailable": {
     "en": "Windows system directory unavailable",
     "fr": "Dossier système Windows indisponible"
+  },
+  "Connection and options": {
+    "en": "Connection and options",
+    "fr": "Connexion et options"
+  },
+  "Detect providers and local services": {
+    "en": "Detect providers and local services",
+    "fr": "Detecter fournisseurs et services locaux"
+  },
+  "Provider ID": {
+    "en": "Provider ID",
+    "fr": "ID fournisseur"
+  },
+  "Model ID": {
+    "en": "Model ID",
+    "fr": "ID modele"
+  },
+  "API / local service URL": {
+    "en": "API / local service URL",
+    "fr": "URL API / service local"
+  },
+  "API key environment variable": {
+    "en": "API key environment variable",
+    "fr": "Variable d'environnement de la cle API"
+  },
+  "API key (memory only)": {
+    "en": "API key (memory only)",
+    "fr": "Cle API (en memoire)"
+  },
+  "Conversation ID": {
+    "en": "Conversation ID",
+    "fr": "ID conversation"
+  },
+  "Restore saved conversation if present": {
+    "en": "Restore saved conversation if present",
+    "fr": "Restaurer la conversation existante"
+  },
+  "Connect assistant": {
+    "en": "Connect assistant",
+    "fr": "Connecter l'assistant"
+  },
+  "Disconnect": {
+    "en": "Disconnect",
+    "fr": "Deconnecter"
+  },
+  "Independent optimizations": {
+    "en": "Independent optimizations",
+    "fr": "Optimisations independantes"
+  },
+  "Compact tool discovery": {
+    "en": "Compact tool discovery",
+    "fr": "Decouverte compacte des outils"
+  },
+  "Temporary disk spool": {
+    "en": "Temporary disk spool",
+    "fr": "Stockage temporaire sur disque"
+  },
+  "Change notifications": {
+    "en": "Change notifications",
+    "fr": "Notifications de changement"
+  },
+  "Metadata-only performance log": {
+    "en": "Metadata-only performance log",
+    "fr": "Journal de performance sans contenu"
+  },
+  "Save options (restart application)": {
+    "en": "Save options (restart application)",
+    "fr": "Sauver les options (redemarrer l'application)"
+  },
+  "Full history remains saved. Context projection affects API providers only. Native CLI agents retain their own context. No automatic summarization. Resource grep searches only exposed text; it never scans your workspace.": {
+    "en": "Full history remains saved. Context projection affects API providers only. Native CLI agents retain their own context. No automatic summarization. Resource grep searches only exposed text; it never scans your workspace.",
+    "fr": "L'historique complet reste enregistre. La fenetre de contexte concerne les API ; les agents CLI gerent leur contexte. Aucun resume automatique. Le grep cherche uniquement dans les textes exposes."
+  },
+  "Optional remote MCP tools": {
+    "en": "Optional remote MCP tools",
+    "fr": "Outils MCP distants optionnels"
+  },
+  "Explicit HTTP endpoint and tool allowlist. Secrets are read from tokenEnv, never saved. Remote tools are exposed only to this assistant after reconnecting.": {
+    "en": "Explicit HTTP endpoint and tool allowlist. Secrets are read from tokenEnv, never saved. Remote tools are exposed only to this assistant after reconnecting.",
+    "fr": "URL HTTP et liste explicite d'outils autorises. Le secret vient de tokenEnv et n'est jamais sauvegarde. Outils disponibles dans cet assistant apres reconnexion."
+  },
+  "Load allowed tools": {
+    "en": "Load allowed tools",
+    "fr": "Charger les outils autorises"
+  },
+  "Remove remote tools": {
+    "en": "Remove remote tools",
+    "fr": "Retirer les outils distants"
+  },
+  "Detected model": {
+    "en": "Detected model",
+    "fr": "Modele detecte"
+  },
+  "Choose explicitly": {
+    "en": "Choose explicitly",
+    "fr": "Choisir explicitement"
   }
 }

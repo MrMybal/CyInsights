@@ -2,6 +2,7 @@
 #include "cyui/modules/Canvas.h"
 #include <functional>
 #include <string>
+#include <optional>
 
 namespace cyui {
 struct TimelineLane {
@@ -32,6 +33,11 @@ struct TimelineState {
     bool focused = false, panning = false;
     std::uint64_t revision = 0;
     double anchor = 0; // where a range-selection drag started
+    bool markerMoving = false, laneMoving = false;
+    ItemId markerId = 0, laneId = 0, contextId = 0;
+    bool contextMarker = false;
+    std::vector<TimelineMarker> markerBefore, markerPreview;
+    std::string markerLabel, error;
 };
 struct TimelineOptions {
     double playhead = 0, snap = 0, minDuration = 1e-6;
@@ -40,6 +46,7 @@ struct TimelineOptions {
     std::function<double(double)> snapTime;
     std::function<std::string(double)> formatTime;
     std::function<void(const TimelineClip &, const Rect &)> drawClip;
+    std::function<ItemId()> allocateId;
 };
 // Lane and clip IDs may be any value, 0 included.
 struct TimelineResult {
@@ -47,8 +54,21 @@ struct TimelineResult {
     bool seek = false, rangeChanged = false;
     double time = 0;
     std::vector<ItemId> remove;
+    Edit<std::vector<TimelineMarker>> markers;
+    Edit<std::vector<TimelineLane>> lanes;
 };
+struct TimelineOperation {
+    std::vector<TimelineClip> clips;
+    std::string error;
+    bool changed = false;
+};
+CYUI_API TimelineOperation splitTimelineClips(ArrayView<TimelineClip>, ArrayView<ItemId>, double time,
+                                              const std::function<ItemId()> &, double minDuration = 1e-6);
+CYUI_API TimelineOperation duplicateTimelineClips(ArrayView<TimelineClip>, ArrayView<ItemId>, double offset,
+                                                  const std::function<ItemId()> &);
+CYUI_API std::vector<TimelineLane> reorderTimelineLane(ArrayView<TimelineLane>, ItemId lane,
+                                                       std::optional<ItemId> before = std::nullopt);
 CYUI_API TimelineResult timeline(const char *id, TimelineState &, const std::vector<TimelineLane> &,
-                        const std::vector<TimelineClip> &, ArrayView<TimelineMarker>, ImVec2 size,
-                        const TimelineOptions & = {});
+                                 const std::vector<TimelineClip> &, ArrayView<TimelineMarker>, ImVec2 size,
+                                 const TimelineOptions & = {});
 } // namespace cyui

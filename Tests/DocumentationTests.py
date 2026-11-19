@@ -56,15 +56,15 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn('get_analysis_guide',(HELP/'DocAI.md').read_text(encoding='utf-8'))
 
     def test_operation_contract_and_french(self):
-        ops=json.loads((ROOT/'AI/app/CyTool.json').read_text(encoding='utf-8'))['operations']
+        ops=json.loads((ROOT/'AI/app/operations.json').read_text(encoding='utf-8'))['operations']
         translations=json.loads((DOC/'api-fr.json').read_text(encoding='utf-8'))['operations']
         self.assertEqual(set(translations),{op['id'] for op in ops})
         for op in ops:
             ident='operation-'+op['id'].replace('_','-')+'-'+op['id'].replace('_','-')
             for locale in ['en','fr']:
                 page=self.pages[ident,locale]
-                self.assertIn('runtime.submit',page['text'])
-                self.assertIn('outputs.reportFile',page['text'])
+                self.assertIn('CyInsightsCli',page['text'])
+                self.assertNotIn('outputs.reportFile',page['text'])
                 self.assertIn('operation-input',{h['id'] for h in page['headings']})
             self.assertIn(translations[op['id']],self.pages[ident,'fr']['text'])
         self.assertEqual(len([p for p in self.data['pages'] if p['id'].startswith('operation-')]),2*len(ops))

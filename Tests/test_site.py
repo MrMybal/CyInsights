@@ -80,6 +80,15 @@ class SiteTests(unittest.TestCase):
         self.assertEqual(actual, expected)
         self.assertFalse(any(name.endswith(('.log', '.utrace', '.cycapture', '.pfx', '.keystore')) for name in actual))
 
+    def test_downloads_keep_component_release_versions(self):
+        current = 'v' + json.loads((ROOT / 'VERSION.json').read_text(encoding='utf-8'))['version']
+        overrides = json.loads((ROOT / 'Site/downloads.json').read_text(encoding='utf-8'))['assetTags']
+        for _, attrs in self.doc.nodes:
+            if 'data-download' in attrs:
+                asset = attrs['data-download']
+                tag = overrides.get(asset, current)
+                self.assertEqual(attrs['href'], 'https://github.com/MrMybal/CyInsights/releases/download/' + tag + '/CyInsights-' + tag + '-' + asset)
+
     def test_cydoc_byte_identity_and_routes(self):
         manifest = json.loads((ROOT / 'Documentation/DocData/manifest.json').read_text())
         page_ids = {page['id'] for page in manifest['pages']}

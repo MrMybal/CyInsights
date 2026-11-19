@@ -90,7 +90,8 @@ CanvasScope::CanvasScope(const char *id, CanvasState &s, ImVec2 size, const Canv
     frame_.mouse = s.view.world(io.MousePos, frame_.bounds.min);
     auto *d = ImGui::GetWindowDrawList();
     d->PushClipRect(frame_.bounds.min, frame_.bounds.max, true);
-    d->AddRectFilled(frame_.bounds.min, frame_.bounds.max, palette().bg0);
+    if (o.drawBackground)
+        d->AddRectFilled(frame_.bounds.min, frame_.bounds.max, palette().bg0);
     if (o.grid)
         drawCanvasGrid(frame_.bounds, s.view, o.gridStep);
 }

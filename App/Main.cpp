@@ -7,7 +7,7 @@
 #include "UiTheme.hpp"
 #include "UpdateView.hpp"
 #include "ManualView.hpp"
-#include "AiRuntimeView.hpp"
+
 #include "../Core/AppPaths.hpp"
 #include "ResourceIds.h"
 #include <chrono>
@@ -220,12 +220,14 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
         auto& startup_app=workspace.Primary();
         bool multi_trace_smoke=false,ai_control_all=false;int multi_trace_step=0,multi_trace_wait=0;
         bool document_lifecycle_smoke=false;int document_lifecycle_step=0,document_lifecycle_wait=0;
+        bool ai_chat_smoke=false,ai_chat_partial_saved=false;
         bool standalone_ai_smoke=false,standalone_ai_complete=false;size_t standalone_ai_step=0;
         std::future<cygi::Json> standalone_ai_future;auto standalone_ai_results=cygi::Json::Array();
         const std::array<const char*,7> standalone_ai_operations{{"get_state","get_analysis_guide","get_capabilities","histogram","query_frames","query_scopes","list_counters"}};
         int count = 0;
         auto args = CommandLineToArgvW(GetCommandLineW(), &count);
         std::filesystem::path snapshot;
+        std::filesystem::path test_exit_file;
         float forced_ui_dpi=0;
         std::filesystem::path loading_snapshot;
         std::filesystem::path ui_profile;std::vector<double> draw_profile,drag_profile,command_profile;
@@ -249,6 +251,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             std::wstring argument = args[i];
             if (argument == L"--snapshot" && i + 1 < count)
                 snapshot = args[++i];
+            else if(argument==L"--test-exit-file"&&i+1<count)test_exit_file=args[++i];
             else if(argument==L"--updates-view")cyinsights::ShowUpdates();
             else if(argument==L"--manual-view")cyinsights::ShowManual();
             else if(argument==L"--manual-topic"&&i+1<count)cyinsights::ShowManual(std::filesystem::path(args[++i]).u8string());
@@ -288,9 +291,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             else if(argument==L"--ai-control")startup_app.EnableAi(true);
             else if(argument==L"--ai-capture")startup_app.EnableAi(true,true);
             else if(argument==L"--ai-view")startup_app.FocusAi();
+            else if(argument==L"--ai-assistant-view")startup_app.FocusAiAssistant();
+            else if(argument==L"--ai-chat-smoke"&&i+1<count){startup_app.StartAiChatSmoke(std::filesystem::path(args[++i]).u8string());ai_chat_smoke=true;}
             else if(argument==L"--ai-method-view")startup_app.FocusAiMethod();
             else if(argument==L"--ai-connection-view"){startup_app.FocusAiConnection();ai_runtime_view=true;}
-            else if(argument==L"--ai-runtime-install"){startup_app.FocusAiConnection();ai_runtime_view=true;cyinsights::AiRuntimeSetup().Install();}
+            else if(argument==L"--ai-runtime-install"){startup_app.FocusAiConnection();ai_runtime_view=true;}
             else if(argument==L"--standalone-ai-smoke"){standalone_ai_smoke=true;startup_app.FocusAiMethod();}
             else if(argument==L"--session-view")startup_app.FocusSession();
             else if(argument==L"--capture-options-view")startup_app.FocusCaptureOptions();
@@ -313,6 +318,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
         auto begin = std::chrono::steady_clock::now();
         bool done = false;
         while (!done) {
+            if(!test_exit_file.empty()){std::error_code error;if(std::filesystem::is_regular_file(test_exit_file,error))break;}
             auto& app=workspace.Primary();
             MSG msg;
             while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
@@ -503,7 +509,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
             if(cyinsights::UpdateExitRequested())done=true;
             if(standalone_ai_smoke&&!standalone_ai_complete&&!workspace.Busy()&&frames>20){
                 auto host=std::filesystem::path(executable).parent_path();
-                if(std::filesystem::exists(host/"AI/app/CyTool.json")||std::filesystem::exists(host.parent_path().parent_path()/"AI/app/CyTool.json"))return 21;
+                if(std::filesystem::exists(host/"AI/app/operations.json")||std::filesystem::exists(host.parent_path().parent_path()/"AI/app/operations.json"))return 21;
                 if(standalone_ai_future.valid()&&standalone_ai_future.wait_for(std::chrono::seconds(0))==std::future_status::ready){
                     auto local_result=standalone_ai_future.get();if(local_result["error"].IsObject()){auto diagnostic_path=snapshot;diagnostic_path+=L".standalone-ai-error.json";local_result["operation"]=standalone_ai_operations[standalone_ai_step];std::ofstream(diagnostic_path)<<local_result.Write(2);return 22;}
                     if(standalone_ai_step==0&&(!local_result["ready"].AsBool()||local_result["permissions"]["appControl"].AsBool()))return 23;
@@ -569,10 +575,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
                 }
                 command_profile.push_back(static_cast<double>(commands));
             }
-            if(!loading_snapshot.empty()&&frames>5&&(app.AnalysisBusy()||ai_runtime_view&&cyinsights::AiRuntimeSetup().Busy())) {
+            if(!loading_snapshot.empty()&&frames>5&&app.AnalysisBusy()) {
                 SaveSnapshot(loading_snapshot);loading_snapshot.clear();
             }
-            if (!snapshot.empty() && ++frames > 20 && !workspace.Busy()&&(!ai_runtime_view||!cyinsights::AiRuntimeSetup().Busy())&&(!standalone_ai_smoke||standalone_ai_complete)&&(!multi_trace_smoke||multi_trace_step==4)&&(!document_lifecycle_smoke||document_lifecycle_step==4&&++document_lifecycle_wait>8)&&(!vulkan_details_view||vulkan_details_settle>3)&&(!navigation_smoke||navigation_step==11)&&(!diagnostic_smoke||diagnostic_settle>5)&&(!interaction_smoke||interaction_step==16)&&(!activity_range_smoke||activity_step==4)&&(!frame_stats_range_smoke||frame_stats_step==4)) {
+            if(ai_chat_smoke&&!snapshot.empty()&&!ai_chat_partial_saved&&app.AiChatSmokeReport().value("partialRendered",false)){auto partial=snapshot;partial+=L".partial.png";SaveSnapshot(partial);ai_chat_partial_saved=true;}
+            if (!snapshot.empty() && ++frames > 20 && !workspace.Busy()&&(!ai_chat_smoke||app.AiChatSmokeReport().value("done",false))&&(!standalone_ai_smoke||standalone_ai_complete)&&(!multi_trace_smoke||multi_trace_step==4)&&(!document_lifecycle_smoke||document_lifecycle_step==4&&++document_lifecycle_wait>8)&&(!vulkan_details_view||vulkan_details_settle>3)&&(!navigation_smoke||navigation_step==11)&&(!diagnostic_smoke||diagnostic_settle>5)&&(!interaction_smoke||interaction_step==16)&&(!activity_range_smoke||activity_step==4)&&(!frame_stats_range_smoke||frame_stats_step==4)) {
+                if(ai_chat_smoke){auto proof=snapshot;proof+=L".chat.json";std::ofstream(proof)<<app.AiChatSmokeReport().dump(2);if(!app.AiChatSmokeReport().value("passed",false))return 26;}
                 if (!SaveSnapshot(snapshot))
                     return 2;
                 auto report=snapshot;report+=L".json";app.WriteAnalysisReport(report);auto documents=snapshot;documents+=L".documents.json";workspace.WriteReport(documents);

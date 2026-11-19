@@ -23,10 +23,11 @@ les deux nouveaux formats, consulter le [guide du packaging Windows](../Tools/Wi
 
 ## Contenu du paquet
 
-Le ZIP Windows contient `CyInsightsApp.exe`, `CyCaptureTool.exe`,
-`CyInsightsUpdater.exe`, les notices,
-la documentation, les sources des lecteurs natifs et le compagnon IA avec ses
-wheels verrouillées. Extraire tout le ZIP avant de lancer l'application. Les
+Le ZIP Windows contient `CyInsightsApp.exe`, `CyInsightsCli.exe`, `CyCaptureTool.exe`,
+`CyInsightsUpdater.exe`, les notices, la documentation, les sources des lecteurs
+natifs et les contrats du registre CyMCPSDK. L’assistant, la CLI et MCP sont natifs ;
+aucun environnement Python ni wheel n’est installé à l’exécution.
+Extraire tout le ZIP avant de lancer l'application. Les
 paramètres et captures existants ne sont pas inclus dans ce paquet.
 
 Un Unreal Insights installé séparément est nécessaire pour analyser un `.utrace`.
@@ -65,13 +66,7 @@ adaptateurs ; il ne recompile pas Unreal et ne copie pas ses DLL. Les sources
 sont fournies dans la release ; les exécutables liés aux outils Unreal se
 construisent localement selon [le périmètre des licences](Licensing.md).
 
-Le compagnon IA est facultatif et déjà fourni avec l’application Windows.
-Dans **AI Inspector > Connection > Install MCP/SDK**, l’application télécharge
-Python privé avec une version et une empreinte SHA-256 figées, installe les
-wheels fournies hors ligne et vérifie les 39 opérations. Progression, annulation,
-réparation et journal sont intégrés. Aucun Python global ni droit administrateur
-n’est nécessaire. `AI/SetupRuntime.ps1` reste un recours manuel pour la CLI.
-Les environnements téléchargés, caches et journaux restent en dehors des paquets.
+Le chat CyMCPSDK, le CLI et MCP sont natifs et inclus. **AI Inspector > Assistant** configure le fournisseur ; **Connection** fournit les parametres MCP. Aucun runtime Python ou wheel n’est necessaire. L’archive AI-SDK fournit le meme CLI autonome ; les contrats et notices sont inclus. Voir [integration](AiIntegration.md).
 
 Le second ZIP contient les plugins Unreal en sources. Copier `Plugins/CyInsights`
 dans le dossier `Plugins` du projet puis le compiler avec l'engine licencié.
@@ -90,7 +85,7 @@ python Tools/package_release.py --binaries bin/Release `
   --output build/GitHubRelease --version $Version
 ```
 
-Le script sélectionne les sources suivies par Git et les trois exécutables de
+Le script sélectionne les sources suivies par Git et les quatre exécutables de
 l'application, vérifie les archives et produit `SHA256SUMS.txt`. Il n'inclut ni
 les PDB, traces, paramètres locaux, runtimes virtuels, ni les adaptateurs Unreal
 compilés. Les binaires gardent un nom de PDB relatif à la place du chemin du poste

@@ -6,6 +6,8 @@
 #include "cyui/Locale.h"
 
 #include <imgui_internal.h>
+#include "cyui/detail/ContextHook.h"
+#include "fonts/JetBrainsMonoRegular.inc"
 
 #include <algorithm>
 #include <cctype>
@@ -95,7 +97,7 @@ struct ThemeState {
     bool styled = false;
     float styledDpi = 0.0f;
     Density styledDensity = Density::compact;
-    bool hooked = false;  // released with its context
+    ImVector<ImGuiContextHook> retiredHooks;
 };
 void applyLocale(ThemeState& state);
 
@@ -124,27 +126,10 @@ void releaseTheme(ImGuiContext* closing, ImGuiContextHook*)
     ++gThemes.generation;
 }
 
-// Adds a shutdown hook, unless ImGui may be walking the hook list right now
-// (CyUI first used from another hook) and adding would reallocate it: then
-// the caller tries again later.
-bool hookShutdown(ImGuiContext* context, const ImGuiContextHookCallback callback)
-{
-    auto& hooks = context->Hooks;
-    if (hooks.Size == 0)
-        hooks.reserve(8);
-    else if (hooks.Size == hooks.Capacity)
-        return false;
-    ImGuiContextHook hook;
-    hook.Type = ImGuiContextHookType_Shutdown;
-    hook.Callback = callback;
-    ImGui::AddContextHook(context, &hook);
-    return true;
-}
-
 ThemeState& themeState()
 {
     auto* context = ImGui::GetCurrentContext();
-    if (context == nullptr)
+    if (!detail::hasContextAtlas(context))
         return gDefaults;
     if (context == tCachedContext && tCachedGeneration == gThemes.generation.load())
         return *tCached;
@@ -159,11 +144,9 @@ ThemeState& themeState()
         state.metrics = gDefaults.metrics;
         state.squareWindows = gDefaults.squareWindows;
         state.dpi = gDefaults.dpi;
+        detail::addShutdownHook(context, releaseTheme, state.retiredHooks);
     }
-    if (!state.hooked)
-        state.hooked = hookShutdown(context, releaseTheme);
-    // Not hooked yet: no caching, so the next call tries again.
-    tCachedContext = state.hooked ? context : nullptr;
+    tCachedContext = context;
     tCached = &state;
     tCachedGeneration = gThemes.generation.load();
     if (inserted)
@@ -177,8 +160,9 @@ ThemeState& themeState()
 template <class F>
 void change(F&& apply)
 {
-    if (ImGui::GetCurrentContext() != nullptr) {
-        apply(themeState());
+    if (auto* context = ImGui::GetCurrentContext()) {
+        if (detail::hasContextAtlas(context))
+            apply(themeState());
         return;
     }
     std::vector<ImGuiContext*> contexts;
@@ -456,7 +440,7 @@ struct FontSet {
 // sharing the atlas. Empty when unknown or the atlas was cleared since.
 FontSet fontSet()
 {
-    if (ImGui::GetCurrentContext() == nullptr)
+    if (!detail::hasContextAtlas(ImGui::GetCurrentContext()))
         return {};
     auto* atlas = ImGui::GetIO().Fonts;
     const auto owns = [atlas](const ThemeState& state) {
@@ -644,6 +628,14 @@ const std::vector<PaletteField>& paletteFields()
         { "text", "Text", 2, &Palette::text },
         { "textDim", "Secondary text", 2, &Palette::textDim },
         { "textFaint", "Faint text", 2, &Palette::textFaint },
+        { "codeText", "Code text", 2, &Palette::codeText },
+        { "codeKeyword", "Code keywords", 2, &Palette::codeKeyword },
+        { "codeType", "Code types", 2, &Palette::codeType },
+        { "codeNumber", "Code numbers", 2, &Palette::codeNumber },
+        { "codeString", "Code strings", 2, &Palette::codeString },
+        { "codeComment", "Code comments", 2, &Palette::codeComment },
+        { "codePreprocessor", "Code directives and macros", 2, &Palette::codePreprocessor },
+        { "codeFunction", "Code functions", 2, &Palette::codeFunction },
         { "accent", "Accent", 3, &Palette::accent },
         { "accentHover", "Accent hovered", 3, &Palette::accentHover },
         { "accentDim", "Accent dimmed", 3, &Palette::accentDim },
@@ -866,16 +858,26 @@ void loadFonts(const FontConfig& config)
     const auto size = config.size > 0.0f ? config.size : state.metrics.fontSize;
     const auto* folder = config.fallbackFolder;
     state.fonts[0] = addFont({ windowsFont("segoeui.ttf"), inFolder(folder, "Inter-Regular.ttf"),
-                               inFolder(folder, "Roboto-Regular.ttf"), inFolder(folder, "Roboto-Medium.ttf") },
+                               inFolder(folder, "Roboto-Regular.ttf"), inFolder(folder, "Roboto-Medium.ttf"),
+                               "/System/Library/Fonts/Supplemental/Arial.ttf",
+                               "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                               "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf" },
                              size);
     mergeIcons(state, size, config.icons);
     state.fonts[1] = addFont({ windowsFont("seguisb.ttf"), inFolder(folder, "Inter-SemiBold.ttf"),
-                               inFolder(folder, "Roboto-Bold.ttf"), inFolder(folder, "Roboto-Medium.ttf") },
+                               inFolder(folder, "Roboto-Bold.ttf"), inFolder(folder, "Roboto-Medium.ttf"),
+                               "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+                               "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                               "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf" },
                              size);
     mergeIcons(state, size, config.icons);
-    state.fonts[2] = addFont({ windowsFont("consola.ttf"), inFolder(folder, "JetBrainsMono-Regular.ttf"),
-                               inFolder(folder, "Cousine-Regular.ttf") },
-                             size - 1.0f);
+    ImFontConfig codeFont;
+    codeFont.FontDataOwnedByAtlas = false; // Immutable static bytes outlive every context.
+    codeFont.OversampleH = codeFont.OversampleV = 2;
+    std::snprintf(codeFont.Name, sizeof(codeFont.Name), "JetBrains Mono Regular");
+    state.fonts[2] = io.Fonts->AddFontFromMemoryTTF(
+        const_cast<unsigned char *>(jetBrainsMonoRegular), int(sizeof(jetBrainsMonoRegular)),
+        std::max(1.f, size - 1.f), &codeFont);
     io.FontDefault = state.fonts[0];
 }
 

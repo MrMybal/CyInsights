@@ -2,7 +2,7 @@
 #include <winver.h>
 IDI_CYINSIGHTS ICON "cyinsights-logo-v1.ico"
 IDR_CYINSIGHTS_LOGO RCDATA "cyinsights-logo-ui-v1.png"
-IDR_CYINSIGHTS_AI_CATALOG RCDATA "CyTool.json"
+IDR_CYINSIGHTS_AI_CATALOG RCDATA "operations.json"
 IDR_CYINSIGHTS_AI_METHOD RCDATA "analysis-method.json"
 IDR_CYINSIGHTS_AI_LOCALES RCDATA "ui.json"
 

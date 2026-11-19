@@ -1,7 +1,7 @@
 # Couverture de l’intégration IA
 
-Révision locale du 17 octobre 2026 : **39 opérations** dans
-[CyTool.json](../AI/app/CyTool.json), SDK CyToolsCore 0.10.1 / MCP officiel 1.30.0.
+Révision native du 19 novembre 2026 : **39 opérations** dans
+[operations.json](../AI/app/operations.json), CyMCPSDK natif 0.7.0. Neuf utilitaires ajoutent les taches durables et les ressources. Voir [integration actuelle](AiIntegration.md).
 Les mêmes handlers alimentent MCP, CLI/JSONL/HTTP et AI Inspector > Tools.
 Le catalogue et la méthode sont embarqués dans l’exécutable : les analyses et
 le parcours guidé natifs fonctionnent sans CyAiCodex, sans Python et sans MCP.

@@ -1,0 +1,9 @@
+{
+  "version": "1.15",
+  "upstream": "https://github.com/zeux/pugixml",
+  "files": {
+    "pugiconfig.hpp": "981cd9ad3313878817d7b548c9929cc09d3bc42be2c0c1dcb0d77290fc98b92d",
+    "pugixml.cpp": "9a3e247479d0af6bceb6fcdd1ba54b7e6c738af198d4b8b25166e9728dae7ac7",
+    "pugixml.hpp": "2555f950fd080e02ff16f36698ddf8d4a46d3a484b9337b4cbfc6300043be734"
+  }
+}

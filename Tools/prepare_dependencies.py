@@ -31,9 +31,15 @@ def main():
         file=cydoc_root/name
         if not file.is_file() or hashlib.sha256(file.read_bytes()).hexdigest()!=expected:
             errors.append('CyDoc/'+name)
+    sdk_root=ROOT/'ThirdParty/CyMCPSDK'
+    sdk=json.loads((sdk_root/'source-sha256.json').read_text(encoding='utf-8'))
+    for name,expected in sdk.items():
+        file=sdk_root/name
+        if not file.is_file() or hashlib.sha256(file.read_bytes()).hexdigest()!=expected:
+            errors.append('CyMCPSDK/'+name)
     if errors:
         raise SystemExit('Dependency snapshot differs from its hash manifest:\n' + '\n'.join(errors))
-    print(f"Verified {len(lock['sha256'])} core dependency files and {len(cyui)} pinned CyUI files. No external checkout or binary copy required.")
+    print(f"Verified {len(lock['sha256'])} core dependency files and {len(cyui)} pinned CyUI files and {len(sdk)} CyMCPSDK source files. No external checkout or binary copy required.")
 
 if __name__ == '__main__':
     main()

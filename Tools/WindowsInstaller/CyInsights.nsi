@@ -111,6 +111,7 @@ Section "$(MainSection)" Main
   proceed:
   Call .onVerifyInstDir
   !insertmacro CheckUnlocked "CyInsightsApp.exe" app
+  !insertmacro CheckUnlocked "CyInsightsCli.exe" nativecli
   !insertmacro CheckUnlocked "CyCaptureTool.exe" capture
   !insertmacro CheckUnlocked "CyInsightsUpdater.exe" updater
   !include "${PAYLOAD}\files.nsh"
@@ -160,6 +161,7 @@ FunctionEnd
 
 Section "Uninstall"
   !insertmacro CheckUnlocked "CyInsightsApp.exe" unapp
+  !insertmacro CheckUnlocked "CyInsightsCli.exe" unnativecli
   !insertmacro CheckUnlocked "CyCaptureTool.exe" uncapture
   !insertmacro CheckUnlocked "CyInsightsUpdater.exe" unupdater
   ; Generated explicit file list. Never recursively remove user data/captures.

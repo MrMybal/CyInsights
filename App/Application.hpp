@@ -15,6 +15,7 @@
 #include "TaskTrace.hpp"
 #include "ActivityTrace.hpp"
 #include "AiRpc.hpp"
+#include "AiNative.hpp"
 #include "OvrCapture.hpp"
 #include "QuestTileReplay.hpp"
 #include <imgui.h>
@@ -81,6 +82,11 @@ class Application {
     void FocusAi(){show_ai_=true;focus_ai_=true;session_view_=false;}
     void FocusAiMethod(){FocusAi();ai_requested_tab_=3;}
     void FocusAiConnection(){FocusAi();ai_requested_tab_=1;}
+    void FocusAiAssistant(){FocusAi();ai_requested_tab_=4;}
+    // Local protocol/render smoke, analogous to the existing timing UI smokes.
+    // Only accepts a loopback fixture and never selects a paid provider.
+    void StartAiChatSmoke(const std::string& endpoint);
+    NativeJson AiChatSmokeReport() const;
     std::future<cygi::Json> RunLocalAiTool(const std::string& operation,const cygi::Json& parameters);
     cygi::Json StandaloneAiState() const;
     void WriteAnalysisReport(const fs::path& output) const;
@@ -128,6 +134,12 @@ class Application {
     cygi::Json AiState() const;
     void StartAiIssues();
     AiRpc ai_rpc_;
+    std::unique_ptr<NativeAi> ai_native_;
+    struct AiChatView;std::shared_ptr<AiChatView> ai_chat_;
+    void EnsureNativeAi();
+    void DrawNativeChat();
+    void ShutdownNativeChat();
+    double ai_state_poll_=0;std::string ai_state_snapshot_;
     struct AiWork {std::shared_ptr<AiRequest> request;std::future<cygi::Json> result;uint64_t generation=0;};
     std::vector<AiWork> ai_work_;
     std::future<cygi::Json> ai_issues_task_;

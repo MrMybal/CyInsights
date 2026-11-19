@@ -2,7 +2,7 @@
 #include "Application.hpp"
 #include "AiAnalysis.hpp"
 #include "AiResources.hpp"
-#include "AiRuntimeView.hpp"
+#include "AppPaths.hpp"
 #include "UiMetrics.hpp"
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -39,7 +39,7 @@ void Validate(const J& descriptor,const J& p){
 J RemoteJson(const RemoteSnapshot& remote){auto j=J::Object();j["state"]=RemoteStateName(remote.state);j["message"]=remote.message;j["phase"]=remote.phase;j["startupElapsed"]=remote.startup_elapsed;j["finishing"]=remote.finishing;j["diagnosticLog"]=remote.diagnostic_log.empty()?J():J(remote.diagnostic_log.u8string());j["sessionId"]=remote.session_id;j["bytes"]=std::to_string(remote.bytes);j["elapsed"]=remote.elapsed;j["archive"]=remote.archive.empty()?J():J(remote.archive.u8string());j["partialTrace"]=remote.partial_trace.empty()?J():J(remote.partial_trace.u8string());j["nativeLiveAnalysis"]=false;j["captureDefaults"]=remote.capture_defaults;j["captureCapabilities"]=remote.capture_capabilities;j["gpuMessage"]=remote.gpu_message;j["metaGpuMessage"]=remote.meta_message;j["questTileMessage"]=remote.tile_message;j["questCompanion"]=remote.companion;j["captureOptions"]=remote.manifest["capture_options"];return j;}
 J Failure(const std::exception& error){std::string text=error.what();auto split=text.find(':');return AiError(split==std::string::npos?(text=="Cancelled"?"Cancelled":"NativeError"):text.substr(0,split),split==std::string::npos?text:text.substr(split+1));}
 }
-void Application::EnableAi(bool control,bool capture){ai_control_=control;ai_capture_=capture;ai_rpc_.Start(ai_message_,document_id_);}
+void Application::EnableAi(bool control,bool capture){ai_control_=control;ai_capture_=capture;EnsureNativeAi();ai_rpc_.Start(ai_message_,document_id_);try{ai_native_->Start(document_id_);}catch(const std::exception& e){ai_message_=e.what();}}
 cygi::Json Application::AiState() const {
     auto j=J::Object();j["protocol"]="cyinsights-native/1";j["generation"]=std::to_string(ai_generation_);j["pid"]=std::to_string(GetCurrentProcessId());j["documentId"]=std::to_string(document_id_);
     j["trace"]=trace_.empty()?J():J(trace_.u8string());j["ready"]=native_.store&&!native_.Busy()&&load_error_.empty();j["busy"]=AnalysisBusy();j["message"]=message_;j["error"]=load_error_.empty()?J():J(load_error_);
@@ -125,12 +125,11 @@ void Application::StartAiIssues(){
     ai_issues_task_=std::async(std::launch::async,[this,store,p]{return AnalyzeAi(store,nullptr,"detect_issues",p,&ai_issues_cancel_);});
 }
 void Application::AiTick(){
-    auto& runtime=AiRuntimeSetup();static bool runtime_checked=false;
-    if(!runtime_checked){runtime_checked=true;runtime.Check();}runtime.Poll();
+    if(ai_native_&&ImGui::GetTime()-ai_state_poll_>.25){ai_state_poll_=ImGui::GetTime();auto snapshot=AiState().Write(-1);if(snapshot!=ai_state_snapshot_){ai_state_snapshot_=snapshot;ai_native_->UpdateState(NativeJson::parse(snapshot));}ai_native_->DrainPerformance();}
     if(ai_catalog_.IsNull()){
         ai_catalog_=EmbeddedAiCatalog();auto settings=ReadAi(HostDirectory()/"CyInsights-AI-options.json");ai_french_=settings["french"].AsBool();ai_auto_=settings["autoAnalysis"].AsBool(true);ai_fps_=static_cast<float>(settings["targetFps"].AsNumber(60));
     }
-    for(auto& request:ai_rpc_.Take())AiDispatch(request);
+    for(auto& request:ai_rpc_.Take())AiDispatch(request,request->external);
     for(size_t i=0;i<ai_work_.size();){auto& work=ai_work_[i];if(work.result.wait_for(std::chrono::seconds(0))!=std::future_status::ready){++i;continue;}
         try{auto result=work.result.get();if(work.request)work.request->response.set_value(result);else ai_result_=result.Write(2);}catch(const std::exception& e){if(work.request)work.request->response.set_value(Failure(e));else ai_result_=Failure(e).Write(2);}ai_work_.erase(ai_work_.begin()+i);
     }
@@ -141,6 +140,7 @@ void Application::AiTick(){
     }else if(ImGui::IsMouseDown(0))ai_selection_changed_=ImGui::GetTime();
 }
 void Application::AiView(){
+    EnsureNativeAi();
     if(focus_ai_){
         auto* timing=ImGui::FindWindowByName(WindowName("Timing").c_str());auto* ai=ImGui::FindWindowByName(WindowName("AI Inspector").c_str());
         if(timing&&timing->DockId&&(!ai||!ai->DockId||ai->DockId==timing->DockId)){
@@ -172,17 +172,20 @@ void Application::AiView(){
         }
         if(ImGui::BeginTabItem(text("Connection","Connexion"),nullptr,ai_requested_tab_==1?ImGuiTabItemFlags_SetSelected:0)){
             if(ai_requested_tab_==1)ai_requested_tab_=-1;
-            const bool runtime_ready=DrawAiRuntimeSetup(ai_french_);
-            ImGui::SeparatorText(text("Application connection","Connexion a l'application"));
-            bool enabled=ai_rpc_.Running();if(ImGui::Checkbox(text("Enable local MCP/SDK bridge","Activer le pont local MCP/SDK"),&enabled)){if(enabled)ai_rpc_.Start(ai_message_,document_id_);else{ai_rpc_.Stop();for(auto& work:ai_work_)if(work.request)work.request->cancelled=true;}}
-            ImGui::Checkbox(text("Allow AI application control","Autoriser le controle de l'application"),&ai_control_);ImGui::Checkbox(text("Allow AI remote capture","Autoriser les captures reseau"),&ai_capture_);
-            ImGui::Text("Document: %llu",static_cast<unsigned long long>(document_id_));
-            ImGui::Text("PID: %lu | CyToolsCore 0.10.1 / MCP 1.30.0",GetCurrentProcessId());ImGui::TextWrapped("%s",text("Local Windows-user named pipe. SDK jobs/reports are private per client. The opened application document and timeline are shared. No provider key or remote trace upload is required.","Pipe local reserve a l'utilisateur Windows. Jobs/rapports SDK prives par client ; document et timeline partages. Aucune cle fournisseur ni envoi distant de trace requis."));
-            auto config=J::Object();auto& server=config["mcpServers"]["CyInsights"];server["command"]=AiRuntimeSetup().python.u8string();server["args"]=J::Array();server["args"].Push("-E");server["args"].Push("-s");server["args"].Push((AiSourceDirectory()/"app/tool.py").u8string());server["args"].Push("mcp");server["env"]["CYINSIGHTS_APP_PID"]=std::to_string(GetCurrentProcessId());server["env"]["CYINSIGHTS_DOCUMENT_ID"]=std::to_string(document_id_);auto display=config.Write(2);
-            ImGui::BeginDisabled(!runtime_ready||!ai_rpc_.Running());
-            if(ImGui::Button(text("Copy MCP configuration","Copier la configuration MCP")))ImGui::SetClipboardText(display.c_str());
-            ImGui::EndDisabled();
-            if(runtime_ready)ImGui::TextWrapped("%s",display.c_str());
+            bool enabled=ai_rpc_.Running();if(ImGui::Checkbox(text("Enable local MCP/SDK bridge","Activer le pont local MCP/SDK"),&enabled)){
+                if(enabled)EnableAi(ai_control_,ai_capture_);else{ai_native_->Stop();ai_rpc_.Stop();}
+            }
+            ImGui::Checkbox(text("Allow AI application control","Autoriser le controle de l'application"),&ai_control_);
+            ImGui::Checkbox(text("Allow AI remote capture","Autoriser les captures reseau"),&ai_capture_);
+            ImGui::Text("CyMCPSDK %s | PID %lu | Document %llu",cymcp::version,GetCurrentProcessId(),static_cast<unsigned long long>(document_id_));
+            ImGui::TextWrapped("%s",ai_message_.c_str());
+            auto config=NativeJson::object();auto& server=config["mcpServers"]["CyInsights"];
+            server["command"]=(ExecutableDirectory()/L"CyInsightsCli.exe").u8string();server["args"]={"mcp","--pid",std::to_string(GetCurrentProcessId()),"--document",std::to_string(document_id_)};
+            auto display=config.dump(2);if(ImGui::Button(text("Copy MCP configuration","Copier la configuration MCP")))ImGui::SetClipboardText(display.c_str());
+            ImGui::TextWrapped("%s",display.c_str());
+            ImGui::TextWrapped("%s",text("Native stdio server; no Python installation. The local bridge is restricted to this Windows user. CLI and MCP share the same application permissions. Capture stop is explicit; cancelling an AI request does not stop recording.","Serveur stdio natif, sans installation Python. Le pont local est reserve a cet utilisateur Windows. CLI et MCP partagent les permissions de l'application. L'arret d'une capture reste une action explicite."));
+            ImGui::TextWrapped("HTTP: %s",ai_native_->Connection().value("url",std::string("disabled")).c_str());
+            ImGui::TextWrapped("%s",text("HTTP token: owner-only connection.json in the document AI directory. Never copy it into a public configuration.","Jeton HTTP : connection.json prive dans le dossier IA du document. Ne pas le publier."));
             ImGui::EndTabItem();
         }
         if(ImGui::BeginTabItem(text("Tools","Outils"),nullptr,ai_requested_tab_==2?ImGuiTabItemFlags_SetSelected:0)){
@@ -193,7 +196,7 @@ void Application::AiView(){
                 auto& descriptor=catalog[ai_operation_];ImGui::TextWrapped("%s",descriptor["description"].AsString().c_str());
                 if(ImGui::TreeNode("Input contract")){auto schema=descriptor["inputSchema"].Write(2);ImGui::TextWrapped("%s",schema.c_str());ImGui::TreePop();}
                 ImGui::InputTextMultiline("Parameters JSON",ai_parameters_,sizeof(ai_parameters_),ImVec2(-1,95*UiScale()));
-                if(ImGui::Button(text("Run native tool","Executer l'outil natif"))){auto request=std::make_shared<AiRequest>();request->document["operation"]=descriptor["id"];J p;if(!J::Parse(ai_parameters_,p))ai_result_="Invalid JSON";else{request->document["parameters"]=p;auto future=request->response.get_future();AiDispatch(request,false);ai_work_.push_back({nullptr,std::move(future),ai_generation_});}}
+                if(ImGui::Button(text("Run native tool","Executer l'outil natif"))){auto request=std::make_shared<AiRequest>();request->document["operation"]=descriptor["id"];J p;if(!J::Parse(ai_parameters_,p))ai_result_="Invalid JSON";else{request->document["parameters"]=p;auto future=RunLocalAiTool(descriptor["id"].AsString(),p);ai_work_.push_back({nullptr,std::move(future),ai_generation_});}}
                 ImGui::SameLine();if(ImGui::Button(text("Copy result","Copier le resultat")))ImGui::SetClipboardText(ai_result_.c_str());
                 ImGui::SameLine();if(ImGui::Button(text("Save parameters","Sauver les parametres"))){J p;if(J::Parse(ai_parameters_,p)){auto recipe=J::Object();recipe["schemaVersion"]=1.;recipe["operation"]=descriptor["id"];recipe["parameters"]=p;auto file=ChooseFile(L"AI parameters\0*.json\0\0",true);if(!file.empty())std::ofstream(file)<<recipe.Write(2);}}
                 ImGui::SameLine();if(ImGui::Button(text("Load parameters","Charger les parametres"))){auto file=ChooseFile(L"AI parameters\0*.json\0\0");if(!file.empty()){auto recipe=ReadAi(file);for(size_t i=0;i<catalog.size();++i)if(catalog[i]["id"].AsString()==recipe["operation"].AsString()){auto p=recipe["parameters"].Write(-1);if(p.size()<sizeof(ai_parameters_)){std::memcpy(ai_parameters_,p.c_str(),p.size()+1);ai_operation_=static_cast<int>(i);}break;}}}
@@ -205,9 +208,10 @@ void Application::AiView(){
             AiMethodView();
             ImGui::EndTabItem();
         }
+        if(ImGui::BeginTabItem(text("Assistant","Assistant"),nullptr,ai_requested_tab_==4?ImGuiTabItemFlags_SetSelected:0)){if(ai_requested_tab_==4)ai_requested_tab_=-1;DrawNativeChat();ImGui::EndTabItem();}
         if(ImGui::BeginTabItem("Options")){
-            ImGui::Checkbox("Francais",&ai_french_);ImGui::TextUnformatted("CyToolsCore: MIT - https://github.com/MrMybal/CyToolsCore");ImGui::TextUnformatted("CyInsights: AGPL-3.0-or-later | Dear ImGui: MIT | MCP SDK: MIT");
-            ImGui::TextWrapped("No model inference/provider connection is embedded. An external MCP AI can use these tools and publish interval findings.");
+            ImGui::Checkbox("Francais",&ai_french_);ImGui::TextUnformatted("CyMCPSDK 0.7.0: MIT - https://github.com/MrMybal/CyMCPSDK");ImGui::TextUnformatted("CyInsights: AGPL-3.0-or-later | Dear ImGui: MIT | MCP SDK: MIT");
+            ImGui::TextWrapped("Native providers and tool calling are available in Assistant. No model weights are bundled.");
             if(ImGui::Button(text("Save options","Sauver les options"))){auto p=J::Object();p["schemaVersion"]=1.;p["french"]=ai_french_;p["autoAnalysis"]=ai_auto_;p["targetFps"]=static_cast<double>(ai_fps_);std::ofstream(HostDirectory()/"CyInsights-AI-options.json")<<p.Write(2);}
             ImGui::EndTabItem();
         }

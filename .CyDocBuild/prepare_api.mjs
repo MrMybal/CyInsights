@@ -6,7 +6,7 @@ import {dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 const base=dirname(fileURLToPath(import.meta.url)),root=resolve(base,'..');
-const ops=JSON.parse(await readFile(resolve(root,'AI/app/CyTool.json'),'utf8')).operations;
+const ops=JSON.parse(await readFile(resolve(root,'AI/app/operations.json'),'utf8')).operations;
 const fr=JSON.parse(await readFile(resolve(base,'api-fr.json'),'utf8'));
 const revisions=JSON.parse(await readFile(resolve(base,'api-revisions.json'),'utf8'));
 const groups={
@@ -43,13 +43,13 @@ for(const locale of ['en','fr']){
     const parent=Object.keys(groups).find(group=>groups[group].includes(op.id));
     metadata[op.id]={parent,description};
     const permissions=op.permissions?.length?op.permissions.map(p=>'`'+p+'`').join(', '):t('Read-only; no extra operation permission.','Lecture seule ; aucune permission supplémentaire pour cette opération.');
-    const body=description+'\n\n## '+t('Call contract','Contrat d’appel')+' {#call-contract}\n\n'+t('Module: `tool` from the standalone AI SDK (`AI/app`). Submit the operation through the CyToolsCore runtime. The job result contains `outputs.data` and a task-local `outputs.reportFile`; an accepted action can still be running.','Module : `tool` du SDK IA autonome (`AI/app`). Soumettre l’opération avec le runtime CyToolsCore. Le résultat de tâche contient `outputs.data` et un fichier `outputs.reportFile` propre à la tâche ; une action acceptée peut encore être en cours.')+'\n\n'+t('Permissions: ','Permissions : ')+permissions+'\n\n## '+t('Operation input','Entrée de l’opération')+' {#operation-input}\n\n```json\n'+JSON.stringify(input,null,2)+'\n```\n\n## '+t('Operation output','Sortie de l’opération')+' {#operation-output}\n\n```json\n'+JSON.stringify(output,null,2)+'\n```';
+    const body=description+'\n\n## '+t('Call contract','Contrat d’appel')+' {#call-contract}\n\n'+t('Call CyInsightsCli invoke OPERATION --pid PID --json JSON, the shared assistant registry, or native MCP. Results are structured application data. Use job_start/job_result for durable results; accepted actions may still be running.','Appelez CyInsightsCli invoke OPERATION --pid PID --json JSON, le registre de l’assistant ou MCP natif. Le resultat contient les donnees de l’application. Utilisez job_start/job_result pour les resultats durables ; une action acceptee peut encore etre en cours.')+'\n\n'+t('Permissions: ','Permissions : ')+permissions+'\n\n## '+t('Operation input','Entrée de l’opération')+' {#operation-input}\n\n```json\n'+JSON.stringify(input,null,2)+'\n```\n\n## '+t('Operation output','Sortie de l’opération')+' {#operation-output}\n\n```json\n'+JSON.stringify(output,null,2)+'\n```';
     const required=new Set(input.required||[]);
-    return {key:op.id,name:op.id,language:'python',kind:'operation',
-      signature:'runtime.submit(actor, session_id, "'+op.id+'", parameters)',
+    return {key:op.id,name:op.id,language:'cpp',kind:'operation',
+      signature:'CyInsightsCli invoke '+op.id+' --pid PID --params-file parameters.json',
       description:body,
       parameters:Object.entries(input.properties||{}).map(([name,schema])=>({name,type:schema.type||'object',optional:!required.has(name),default:schema.default===undefined?'':JSON.stringify(schema.default),description:schema.description||t('See the input schema for constraints and allowed values.','Voir le schéma d’entrée pour les contraintes et valeurs autorisées.')})),
-      returnType:'dict',returns:t('Job descriptor containing jobId. runtime.wait(actor, job_id) returns the job state and its outputs; application loading/capture completion is reported by get_state or capture_status.','Descripteur de tâche contenant jobId. runtime.wait(actor, job_id) renvoie l’état et les sorties ; la fin du chargement ou de la capture dans l’application est indiquée par get_state ou capture_status.'),
+      returnType:'JSON',returns:t('Structured native result. Accepted actions may still be loading; poll get_state/capture_status. job_result provides retained output for explicit background jobs.','Resultat natif structure. Les actions acceptees peuvent encore charger ; consulter get_state/capture_status. job_result fournit les sorties conservees des taches explicites.'),
       references:groups[parent].filter(id=>id!==op.id).slice(0,3).map(id=>({key:id,name:id}))};
   });
   const inputFile='work/api-'+locale+'.json';

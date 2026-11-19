@@ -7,6 +7,7 @@ TimelineResult timeline(const char *id, TimelineState &s, const std::vector<Time
                         const std::vector<TimelineClip> &clips, ArrayView<TimelineMarker> markers,
                         ImVec2 size, const TimelineOptions &o) {
     TimelineResult result;
+    ScopedID viewScope(id);
     CanvasState canvas;
     CanvasOptions options;
     options.grid = options.navigation = false;
@@ -16,6 +17,14 @@ TimelineResult timeline(const char *id, TimelineState &s, const std::vector<Time
     const auto r = f.bounds;
     auto *d = ImGui::GetWindowDrawList();
     auto &io = ImGui::GetIO();
+    if ((s.markerMoving || s.laneMoving) &&
+        (s.revision != o.revision || o.readOnly || ImGui::IsKeyPressed(ImGuiKey_Escape))) {
+        if (s.markerMoving)
+            result.markers.phase = EditPhase::cancel;
+        s.markerMoving = s.laneMoving = false;
+    }
+    if (s.markerMoving)
+        markers = s.markerPreview;
     if (!s.view.valid())
         s.view = {0, 10};
     const float head = std::min(dp(150), r.size().x * .3f), ruler = ImGui::GetFrameHeight();
@@ -83,6 +92,7 @@ TimelineResult timeline(const char *id, TimelineState &s, const std::vector<Time
     });
     const auto &shown = s.mode > 0 ? s.preview : clips;
     const TimelineClip *hit = nullptr;
+    const TimelineMarker *hitMarker = nullptr;
     int edge = 1;
     const Row *hoveredLane = nullptr;
     for (const auto &row : rows)
@@ -122,11 +132,25 @@ TimelineResult timeline(const char *id, TimelineState &s, const std::vector<Time
             const float px = x(markers[i].time);
             d->AddLine({px, r.min.y}, {px, r.max.y}, palette().warning, dp(1));
             d->AddText({px + dp(3), r.min.y + ruler}, palette().warning, markers[i].label.c_str());
+            if (f.hovered && io.MousePos.y < r.min.y + ruler && std::abs(io.MousePos.x - px) < dp(7))
+                hitMarker = &markers[i];
         }
     d->AddLine({x(o.playhead), r.min.y}, {x(o.playhead), r.max.y}, palette().accent, dp(2));
     if (f.hovered && ImGui::IsMouseClicked(0)) {
         s.focused = true;
-        if (io.MousePos.x >= left && io.MousePos.y < r.min.y + ruler) {
+        if (!o.readOnly && hitMarker) {
+            s.markerMoving = true;
+            s.markerId = hitMarker->id;
+            s.grab = mouse;
+            s.revision = o.revision;
+            s.markerBefore.assign(markers.data, markers.data + markers.count);
+            s.markerPreview = s.markerBefore;
+            result.markers = {EditPhase::begin, s.markerPreview};
+        } else if (!o.readOnly && io.MousePos.x < left && hoveredLane) {
+            s.laneMoving = true;
+            s.laneId = hoveredLane->id;
+            s.revision = o.revision;
+        } else if (io.MousePos.x >= left && io.MousePos.y < r.min.y + ruler) {
             result.seek = true;
             result.time = snap(mouse);
         } else if (hit) {
@@ -154,6 +178,91 @@ TimelineResult timeline(const char *id, TimelineState &s, const std::vector<Time
         }
     } else if (ImGui::IsMouseClicked(0) && !f.hovered)
         s.focused = false;
+    if (s.markerMoving) {
+        s.markerPreview = s.markerBefore;
+        for (auto &m : s.markerPreview)
+            if (m.id == s.markerId)
+                m.time = snap(m.time + mouse - s.grab);
+        if (result.markers.phase != EditPhase::begin)
+            result.markers = {ImGui::IsMouseDown(0) ? EditPhase::update : EditPhase::commit, s.markerPreview};
+        if (!ImGui::IsMouseDown(0))
+            s.markerMoving = false;
+    }
+    if (s.laneMoving && !ImGui::IsMouseDown(0)) {
+        if (hoveredLane && hoveredLane->id != s.laneId)
+            result.lanes = {EditPhase::commit, reorderTimelineLane(lanes, s.laneId, hoveredLane->id)};
+        s.laneMoving = false;
+    }
+    auto applyOperation = [&](TimelineOperation operation) {
+        s.error = operation.error;
+        if (operation.changed)
+            result.clips = {EditPhase::commit, std::move(operation.clips)};
+    };
+    auto duplicate = [&]() {
+        double first = HUGE_VAL, last = -HUGE_VAL;
+        for (const auto &c : clips)
+            if (selected(s.selected, c.id) && !c.locked) {
+                first = std::min(first, c.start);
+                last = std::max(last, c.start + c.duration);
+            }
+        if (first <= last)
+            applyOperation(duplicateTimelineClips(clips, s.selected, std::max(o.minDuration, last - first),
+                                                  o.allocateId));
+    };
+    if (f.hovered && ImGui::IsMouseClicked(1)) {
+        s.contextMarker = hitMarker != nullptr;
+        s.contextId = hitMarker ? hitMarker->id : hit ? hit->id : 0;
+        if (hitMarker)
+            s.markerLabel = hitMarker->label;
+        else if (hit && !selected(s.selected, hit->id))
+            s.selected = {hit->id};
+        s.anchor = snap(mouse);
+        ImGui::OpenPopup("##timelineMenu");
+    }
+    if (ImGui::BeginPopup("##timelineMenu")) {
+        if (s.contextMarker) {
+            if (detail::inputText("##markerLabel", s.markerLabel, ImGuiInputTextFlags_EnterReturnsTrue) &&
+                !o.readOnly) {
+                std::vector<TimelineMarker> values(markers.data, markers.data + markers.count);
+                for (auto &m : values)
+                    if (m.id == s.contextId)
+                        m.label = s.markerLabel;
+                result.markers = {EditPhase::commit, std::move(values)};
+                ImGui::CloseCurrentPopup();
+            }
+            if (ImGui::MenuItem(trLabel("Remove marker").c_str(), nullptr, false, !o.readOnly)) {
+                std::vector<TimelineMarker> values;
+                for (std::size_t i = 0; i < markers.count; ++i)
+                    if (markers[i].id != s.contextId)
+                        values.push_back(markers[i]);
+                result.markers = {EditPhase::commit, std::move(values)};
+            }
+        } else {
+            if (ImGui::MenuItem(trLabel("Split at playhead").c_str(), "S", false,
+                                !o.readOnly && bool(o.allocateId)))
+                applyOperation(
+                    splitTimelineClips(clips, s.selected, o.playhead, o.allocateId, o.minDuration));
+            if (ImGui::MenuItem(trLabel("Duplicate").c_str(), "Ctrl+D", false,
+                                !o.readOnly && bool(o.allocateId)))
+                duplicate();
+            if (ImGui::MenuItem(trLabel("Add marker").c_str(), nullptr, false,
+                                !o.readOnly && bool(o.allocateId))) {
+                auto fresh = o.allocateId();
+                bool used = !fresh;
+                for (std::size_t i = 0; i < markers.count; ++i)
+                    used |= markers[i].id == fresh;
+                if (!used) {
+                    std::vector<TimelineMarker> values;
+                    for (std::size_t i = 0; i < markers.count; ++i)
+                        values.push_back(markers[i]);
+                    values.push_back({fresh, s.anchor, tr("Marker")});
+                    result.markers = {EditPhase::commit, std::move(values)};
+                } else
+                    s.error = "Allocator returned duplicate or zero ID";
+            }
+        }
+        ImGui::EndPopup();
+    }
     if (s.mode > 0) {
         if (ImGui::IsMouseDown(0)) {
             s.preview = s.before;
@@ -195,6 +304,12 @@ TimelineResult timeline(const char *id, TimelineState &s, const std::vector<Time
         for (const auto &c : clips)
             if (!c.locked && selected(s.selected, c.id))
                 result.remove.push_back(c.id);
+    if (s.focused && f.focused && !io.WantTextInput && !o.readOnly && o.allocateId) {
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D))
+            duplicate();
+        if (!io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S))
+            applyOperation(splitTimelineClips(clips, s.selected, o.playhead, o.allocateId, o.minDuration));
+    }
     return result;
 }
 } // namespace cyui

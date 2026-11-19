@@ -50,7 +50,9 @@ def build(output, skip_docs=False):
     version = json.loads((ROOT / 'VERSION.json').read_text(encoding='utf-8'))['version']
     tag = 'v' + version
     release = 'https://github.com/MrMybal/CyInsights/releases/tag/' + tag
-    downloads = 'https://github.com/MrMybal/CyInsights/releases/download/' + tag + '/CyInsights-' + tag + '-'
+    asset_tags = json.loads((SITE / 'downloads.json').read_text(encoding='utf-8'))['assetTags']
+    if any(not re.fullmatch(r'v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?', value) for value in asset_tags.values()):
+        raise ValueError('Invalid download tag')
     assets = output / 'site-assets'
     assets.mkdir()
     images = json.loads((SITE / 'assets/images.json').read_text(encoding='utf-8'))
@@ -76,7 +78,9 @@ def build(output, skip_docs=False):
         if key.startswith('IMAGE:'):
             return image_paths[key[6:]]
         if key.startswith('DOWNLOAD:'):
-            return downloads + key[9:]
+            asset = key[9:]
+            asset_tag = asset_tags.get(asset, tag)
+            return 'https://github.com/MrMybal/CyInsights/releases/download/' + asset_tag + '/CyInsights-' + asset_tag + '-' + asset
         return {'VERSION': version, 'STYLE': 'site-assets/' + css_name,
                 'SCRIPT': 'site-assets/' + js_name, 'RELEASE': release}[key]
 

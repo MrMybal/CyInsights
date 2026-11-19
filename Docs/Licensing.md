@@ -15,7 +15,7 @@ ne révoque pas les autorisations AGPL déjà accordées et ne couvre aucun code
 | Collecteur ReShade `ThirdParty/CyGPUInspector/CyGPUInspectorRS` | MIT | `CyGPUInspectorRS/LICENSE` |
 | Adaptateurs facultatifs `Tools/NativeTasks`, `Tools/NativeActivities`, `Tools/NativeTiming` et build du collecteur `Tools/WindowsCollector` | MIT | `LICENSE` dans chaque dossier |
 | Dear ImGui, API ReShade et dépendances Python | Licences tierces inchangées | `LICENCES/`, voir `THIRD-PARTY-CyGPUInspector.md` |
-| [CyUI 1.2.0](https://github.com/MrMybal/CyUI), modules d'interface `ThirdParty/CyUI` | [MIT, révision intégrée](https://github.com/MrMybal/CyUI/blob/ff023e646c6a3038b3dfbfd53f6d2b4a2f5955e3/LICENSE) | [Licence incluse](../LICENCES/CyUI-MIT.txt), `ThirdParty/CyUI/LICENSE` |
+| [CyUI 1.2.0](https://github.com/MrMybal/CyUI), modules d'interface `ThirdParty/CyUI` | [MIT, révision intégrée](https://github.com/MrMybal/CyUI/blob/6ef01cfcdb197f3a89d64618ce5ef8818c704728/LICENSE) | [Licence incluse](../LICENCES/CyUI-MIT.txt), `ThirdParty/CyUI/LICENSE` |
 
 Le dépôt CyUI est actuellement privé : son lien de licence nécessite un accès
 au dépôt. Le texte MIT complet est aussi inclus dans CyInsights et dans les

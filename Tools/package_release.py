@@ -76,10 +76,10 @@ def main():
     if output != ROOT/'build' and ROOT/'build' not in output.parents:
         raise SystemExit('Release output must stay within the workspace build directory')
     output.mkdir(parents=True, exist_ok=True)
-    tracked = [p for p in git('ls-files', '-z').decode().split('\0') if p]
+    tracked = [p for p in git('ls-files', '--cached', '--others', '--exclude-standard', '-z').decode().split('\0') if p and (ROOT/p).is_file()]
     app = {}
     signatures = windows_signatures(binaries, args.require_signed)
-    for name in ('CyInsightsApp.exe', 'CyCaptureTool.exe', 'CyInsightsUpdater.exe'):
+    for name in ('CyInsightsApp.exe', 'CyInsightsCli.exe', 'CyCaptureTool.exe', 'CyInsightsUpdater.exe'):
         data = (binaries/name).read_bytes()
         matching = [r for r in signatures['files'] if r['path'] == name]
         if len(matching) != 1 or hashlib.sha256(data).hexdigest() != matching[0]['sha256']:
@@ -92,6 +92,7 @@ def main():
     app['windows-signatures.json'] = json.dumps(signatures, indent=2).encode()
     app['LICENCES/CyDoc-MIT.txt']=(ROOT/'LICENCES/CyDoc-MIT.txt').read_bytes()
     app['LICENCES/NSIS.txt']=(ROOT/'LICENCES/NSIS.txt').read_bytes()
+    app['Docs/AiIntegration.md']=(ROOT/'Docs/AiIntegration.md').read_bytes()
     # Ship the complete checked CyDoc tree; no build tools or Node runtime.
     help_root=binaries/'Documentation'
     help_manifest=json.loads((help_root/'DocData/export-sha256.json').read_text(encoding='utf-8'))
@@ -102,7 +103,7 @@ def main():
         app['Documentation/'+name]=path.read_bytes()
     app['Documentation/DocData/export-sha256.json']=(help_root/'DocData/export-sha256.json').read_bytes()
     for name in tracked:
-        # Preserve licensed dependency notices and the offline AI installer;
+        # Preserve native AI contracts and licensed dependency notices;
         # do not copy an existing virtualenv or its machine-specific config.
         if name.startswith(('LICENCES/', 'AI/')) or name in ('LICENSE', 'THIRD-PARTY-CyGPUInspector.md'):
             app[name] = (ROOT/name).read_bytes()
@@ -123,8 +124,8 @@ def main():
         'UE 5.8 needs MSVC 14.44. Unreal is not rebuilt. The CSV bridge remains available\n'
         'if preparation is cancelled or dependencies are missing. Open a .utrace or .cycapture.\n'
         'The native AI Inspector, tools and analysis method are built into the app.\n'
-        'For external MCP/SDK access, open AI Inspector > Connection > Install MCP/SDK.\n'
-        'The app downloads verified private Python and installs its included wheels offline.\n'
+        'For native chat, open AI Inspector > Assistant; external MCP settings are in Connection.\n'
+        'CyMCPSDK and CyInsightsCli are included; no Python runtime installation is needed.\n'
         'Native Unreal adapters are supplied as sources, not prebuilt Engine Tools.\n'
         'See Documentation/Documentation.html and the matching release sources for licensing and native readers.\n'
     ).encode()
@@ -149,8 +150,9 @@ def main():
     for name in ('Docs/UnrealCompatibility.md', 'Docs/Licensing.md', 'LICENSE'):
         plugins[name] = (ROOT/name).read_bytes()
     plugins['README.txt'] = b'Unreal plugin sources. Copy Plugins/CyInsights into your project Plugins directory and build with your licensed engine. See Docs/UnrealCompatibility.md and Docs/Licensing.md. No compiled Unreal binaries are included.\n'
-    sdk={name:data for name,data in app.items() if name.startswith(('AI/','LICENCES/')) or name in ('LICENSE','THIRD-PARTY-CyGPUInspector.md')}
-    sdk['README.txt']=b'Optional CyInsights external MCP/SDK adapter. The same sources and offline wheels are included with the Windows app. Use AI Inspector > Connection > Install MCP/SDK for automatic private runtime setup. No conversational model is included. See AI/README.md.\n'
+    sdk={name:data for name,data in app.items() if name.startswith(('AI/','LICENCES/')) or name in ('LICENSE','THIRD-PARTY-CyGPUInspector.md','CyInsightsCli.exe')}
+    sdk['Docs/AiIntegration.md']=(ROOT/'Docs/AiIntegration.md').read_bytes()
+    sdk['README.txt']=b'Native CyInsightsCli with CyMCPSDK 0.7.0. No Python runtime. Use --help, list, describe, invoke and mcp. Headless timing CSV analysis is supported; real UI/capture actions require the application bridge. See Docs/AiIntegration.md. Model services and credentials are user supplied.\n'
     archives = []
     for label, entries in (('Windows-x64-Update', app), ('Windows-x64-Portable', portable), ('Unreal-Plugins-Source', plugins), ('AI-SDK',sdk)):
         archive = output/('CyInsights-'+args.version+'-'+label+'.zip')

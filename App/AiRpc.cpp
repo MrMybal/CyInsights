@@ -18,17 +18,23 @@ bool AiRpc::Start(std::string& error,uint64_t document){
     std::wstring security=L"D:P(A;;GA;;;"+std::wstring(sid)+L")";LocalFree(sid);
     name_="\\\\.\\pipe\\CyInsights.AI."+std::to_string(GetCurrentProcessId());
     if(document)name_+="."+std::to_string(document);
-    std::wstring name(name_.begin(),name_.end());running_=true;
+    std::wstring name(name_.begin(),name_.end());transport_=cymcp::Cancellation{};running_=true;
     for(int i=0;i<4;++i)workers_.emplace_back([this,name,security]{Serve(name,security);});
     return true;
 }
 void AiRpc::Stop(){
-    running_=false;
+    running_=false;transport_.cancel();
     for(auto& worker:workers_)CancelSynchronousIo(worker.native_handle());
     for(auto& worker:workers_)if(worker.joinable())worker.join();workers_.clear();
     std::lock_guard<std::mutex> lock(mutex_);for(auto& request:queue_)request->cancelled=true;queue_.clear();
 }
 std::vector<std::shared_ptr<AiRequest>> AiRpc::Take(){std::lock_guard<std::mutex> lock(mutex_);auto result=std::move(queue_);queue_.clear();return result;}
+cygi::Json AiRpc::Submit(cygi::Json document,const cymcp::CallContext& context,bool external){
+    context.cancellation.check();auto request=std::make_shared<AiRequest>();request->document=std::move(document);request->external=external;auto future=request->response.get_future();
+    {std::lock_guard<std::mutex> lock(mutex_);queue_.push_back(request);}
+    try{while(future.wait_for(std::chrono::milliseconds(10))!=std::future_status::ready){context.cancellation.check();if(request->cancelled)throw cymcp::Error("Cancelled","Native request cancelled");}context.cancellation.check();return future.get();}
+    catch(...){request->cancelled=true;throw;}
+}
 void AiRpc::Serve(std::wstring name,std::wstring security){
     PSECURITY_DESCRIPTOR descriptor=nullptr;
     if(!ConvertStringSecurityDescriptorToSecurityDescriptorW(security.c_str(),SDDL_REVISION_1,&descriptor,nullptr))return;
@@ -47,6 +53,13 @@ void AiRpc::Serve(std::wstring name,std::wstring security){
             }
             auto result=AiError("InvalidRequest","Expected one JSON request of at most 64 KiB");cygi::Json document;
             if(complete&&line.size()<=65536&&cygi::Json::Parse(line.substr(0,line.find('\n')),document)&&document.IsObject()){
+                if(dispatch){
+                    cymcp::CallContext context;context.cancellation=transport_.child();
+                    auto pending=std::async(std::launch::async,[this,document,context]{return dispatch(document,context);});
+                    while(pending.wait_for(std::chrono::milliseconds(10))!=std::future_status::ready){DWORD available=0;if(!running_||!PeekNamedPipe(pipe,nullptr,0,nullptr,&available,nullptr))context.cancellation.cancel();}
+                    try{result=pending.get();}catch(const cymcp::Error& e){result=AiError(e.code,cymcp::redact_error_message(e.what()));}catch(const std::exception& e){result=AiError("InternalError",cymcp::redact_error_message(e.what()));}
+                }
+                else {
                 auto request=std::make_shared<AiRequest>();request->document=std::move(document);auto future=request->response.get_future();
                 {std::lock_guard<std::mutex> lock(mutex_);queue_.push_back(request);}
                 while(running_&&future.wait_for(std::chrono::milliseconds(10))!=std::future_status::ready){
@@ -54,6 +67,7 @@ void AiRpc::Serve(std::wstring name,std::wstring security){
                 }
                 if(running_&&!request->cancelled&&future.wait_for(std::chrono::seconds(0))==std::future_status::ready){try{result=future.get();}catch(...){result=AiError("InternalError","Native request failed");}}
                 else request->cancelled=true;
+                }
             }
             auto text=result.Write(-1)+"\n";DWORD written=0;size_t offset=0;deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);
             while(running_&&offset<text.size()&&std::chrono::steady_clock::now()<deadline){

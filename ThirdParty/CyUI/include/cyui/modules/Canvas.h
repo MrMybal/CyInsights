@@ -22,6 +22,7 @@ struct CanvasOptions {
     // Take the mouse wheel (frame().wheel) without navigation; navigating canvases always take it.
     // An unclaimed wheel scrolls the window underneath.
     bool claimWheel = false;
+    bool drawBackground = true; // allow a caller to paint its own frame
 };
 struct CanvasFrame {
     Rect bounds;

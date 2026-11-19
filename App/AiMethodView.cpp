@@ -7,9 +7,10 @@
 #include <cstring>
 namespace cyinsights {
 std::future<cygi::Json> Application::RunLocalAiTool(const std::string& operation,const cygi::Json& parameters){
-    if(ai_catalog_.IsNull())ai_catalog_=EmbeddedAiCatalog();
-    auto request=std::make_shared<AiRequest>();request->document["operation"]=operation;request->document["parameters"]=parameters;
-    auto future=request->response.get_future();AiDispatch(request,false);return future;
+    EnsureNativeAi();auto p=NativeJson::parse(parameters.Write(-1));return std::async(std::launch::async,[this,operation,p]{
+        cymcp::CallContext context;context.principal="manual-ui";cygi::Json out;
+        try{cygi::Json::Parse(ai_native_->Invoke(operation,p,context).dump(),out);}catch(const cymcp::Error& e){out=AiError(e.code,e.what());}return out;
+    });
 }
 cygi::Json Application::StandaloneAiState() const{
     auto result=cygi::Json::Object();result["embeddedOperations"]=double(EmbeddedAiCatalog()["operations"].Size());result["methodId"]=EmbeddedAiMethod()["id"];result["methodVersion"]=EmbeddedAiMethod()["version"];result["bridgeRunning"]=ai_rpc_.Running();return result;

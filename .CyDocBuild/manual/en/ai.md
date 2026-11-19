@@ -5,19 +5,40 @@ description: Local tools, external clients, permissions and compact evidence.
 section: Guides
 order: 0
 parent: developer-api
-revision: 050746cc6da1
+revision: 34786a4944ee
 ---
 
 AI Inspector lets you run the application's native analysis tools and review findings. Open **Tools**, choose an operation, inspect its parameters, then run it. Preparing the form does not execute the tool. The native tools do not require an external model, Python or an MCP client.
 
 ## External connection {#external-connection}
-1. Open the recording you want to analyze.
-2. Open **AI Inspector > Connection > Install MCP/SDK** on Windows. The application downloads verified private Python and installs the included dependencies offline. Follow progress in the panel; you can cancel, retry, repair or copy the installation log. No global Python installation is required.
-3. Once the runtime is ready, enable the local MCP/SDK bridge and copy the displayed configuration into your external client. Keep connection tokens private.
-4. Leave application control and remote recording disabled when you only need analysis. These permissions are separate.
-5. If you restart the application or change documents, use the connection shown for that document.
+1. Open **AI Inspector > Connection** and enable the local MCP/SDK bridge.
+2. Copy the generated configuration into your MCP client. The native CyInsightsCli executable is already included; no runtime download or Python setup is needed.
+3. Enable application control or remote capture only for the actions you need. These independent permissions apply equally to the assistant, CLI and MCP.
+4. Re-copy the PID/document connection after restarting or changing documents. Tokens in the private HTTP connection file must not be published.
 
-The Windows installer and Portable ZIP already include the Python adapter and its dependencies. The separate AI SDK archive distributes these tools for advanced use. Installed builds keep their private runtime in application data; portable builds keep it under `Data/AI/Runtime` beside the app. A failed setup does not activate an incomplete runtime. An internet connection is required for the initial Python download; later repairs can reuse its verified cached archive. It does not include a conversational model. The client you choose supplies that model. [Public API references](doc:developer-api) describe the operation contracts.
+## Integrated assistant {#integrated-assistant}
+Open **Assistant > Connection and options**, detect providers/local services, choose an explicit provider and model, then connect. The CyMCPSDK panel shows streamed Markdown, tool activity and errors, supports cancellation and provider-compatible attachments. Use an environment variable or a memory-only key. Saved conversations restore without resending turns. Model weights are not bundled; existing Codex, Ollama, LM Studio, llama.cpp and supported API profiles retain their own authentication and capabilities.
+
+The 39 business operations and nine native job/resource utilities share one typed registry. Compact discovery, disk spool, TTL/cache, subscriptions, metadata-only performance logs and API context bytes are independent settings. Saving transport/storage settings requires restarting; reconnect for conversation changes. Full history remains saved when the API context window is reduced. Native agents manage their own context. No implicit summarizer is called.
+
+Use job_start/job_status/job_result for durable results, job_list with offset/limit and job_cancel for cooperative cancellation. SDK chunk references expire, but saved job results remain available until explicit deletion. Follow a resource manifest's firstUri/nextUri to recover a large result fully. Expiration never replays actions. job_import can copy an existing JSON report after app control is enabled; old environments and databases are preserved.
+
+Optional remote MCP endpoints need an explicit tool allowlist and token environment variable. They are never contacted by default. Outside loopback, HTTPS is required. The [native CLI and API reference](doc:developer-api) describes the public operations.
+
+## Show evidence in the interface {#show-evidence}
+
+Enable **Allow AI application control** to let the assistant use the native
+interface actions: select and focus a time interval (`set_range`), highlight an
+exact function (`filter_function`), open its histogram (`show_histogram`), show
+an analysis panel (`focus_view`), pin a recorded counter (`pin_counter`) or
+publish a finding (`publish_finding`). Try: "Find the slowest frames, show me the
+interval and display the relevant counters."
+
+Read-only analysis remains available without control. Starting or stopping a
+remote recording needs the separate capture permission. The assistant accesses
+the declared operations and recorded sources: it does not control every button,
+browse arbitrary files or automatically inspect all images and tile heatmaps.
+Missing channels remain unavailable. Inspect capabilities before drawing conclusions.
 
 ## Review an investigation {#compact-workflow}
 Select a short suspicious interval before running an analysis tool. In **Method**, follow the proposed steps and check the resulting parameter form. Inspect a finding's frame range, units and source alongside [Frames](doc:frames) or [GPU evidence](doc:gpu-desktop). A probable cause remains a hypothesis.

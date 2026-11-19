@@ -7,14 +7,14 @@ parent: api-counters
 order: 100
 kind: api
 symbol: query_frame_stats
-revision: 4a047243c834
+revision: 108e36e44471
 ---
 
 Values observed inside each frame for one counter. Missing values are null; delayed GPU/stat results keep their recorded frame provenance.
 
 ## Call contract {#call-contract}
 
-Module: `tool` from the standalone AI SDK (`AI/app`). Submit the operation through the CyToolsCore runtime. The job result contains `outputs.data` and a task-local `outputs.reportFile`; an accepted action can still be running.
+Call CyInsightsCli invoke OPERATION --pid PID --json JSON, the shared assistant registry, or native MCP. Results are structured application data. Use job_start/job_result for durable results; accepted actions may still be running.
 
 Permissions: Read-only; no extra operation permission.
 
@@ -68,75 +68,61 @@ Permissions: Read-only; no extra operation permission.
 ```json
 {
   "type": "object",
+  "additionalProperties": true,
   "properties": {
-    "data": {
-      "type": "object",
-      "additionalProperties": true,
-      "properties": {
-        "generation": {
-          "type": "string",
-          "description": "Document-local trace generation; reject stale annotations."
-        },
-        "range": {
-          "type": "object",
-          "properties": {
-            "start": {
-              "type": "number"
-            },
-            "end": {
-              "type": "number"
-            },
-            "unit": {
-              "type": "string",
-              "enum": [
-                "seconds"
-              ]
-            }
-          }
-        },
-        "rows": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": true
-          },
-          "description": "Bounded response rows. Aggregates/matched counts include the entire requested population."
-        },
-        "matched": {
-          "type": "string",
-          "description": "Exact uint64 decimal count, not a floating-point value."
-        },
-        "offset": {
-          "type": "string",
-          "description": "Exact decimal response offset."
-        },
-        "hasMore": {
-          "type": "boolean"
-        },
-        "provenance": {
-          "type": "string",
-          "description": "Measured source, derived analysis or heuristic; never treat missing evidence as zero."
-        }
-      },
-      "description": "Metric units and type are returned per row. Int64 values are exact decimal strings, doubles are JSON numbers, unavailable values are null. Mean is a double approximation. Selected frames retain source observation/execution identity."
-    },
-    "reportFile": {
+    "generation": {
       "type": "string",
-      "x-cy-kind": "File"
+      "description": "Document-local trace generation; reject stale annotations."
+    },
+    "range": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "number"
+        },
+        "end": {
+          "type": "number"
+        },
+        "unit": {
+          "type": "string",
+          "enum": [
+            "seconds"
+          ]
+        }
+      }
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "description": "Bounded response rows. Aggregates/matched counts include the entire requested population."
+    },
+    "matched": {
+      "type": "string",
+      "description": "Exact uint64 decimal count, not a floating-point value."
+    },
+    "offset": {
+      "type": "string",
+      "description": "Exact decimal response offset."
+    },
+    "hasMore": {
+      "type": "boolean"
+    },
+    "provenance": {
+      "type": "string",
+      "description": "Measured source, derived analysis or heuristic; never treat missing evidence as zero."
     }
   },
-  "required": [
-    "data",
-    "reportFile"
-  ],
-  "additionalProperties": false
+  "description": "Metric units and type are returned per row. Int64 values are exact decimal strings, doubles are JSON numbers, unavailable values are null. Mean is a double approximation. Selected frames retain source observation/execution identity."
 }
 ```
 
 ## Signature {#signature}
 
-```python
-runtime.submit(actor, session_id, "query_frame_stats", parameters)
+```cpp
+CyInsightsCli invoke query_frame_stats --pid PID --params-file parameters.json
 ```
 
 ## Parameters {#parameters}
@@ -152,7 +138,7 @@ runtime.submit(actor, session_id, "query_frame_stats", parameters)
 
 ## Returns {#returns}
 
-`dict` — Job descriptor containing jobId. runtime.wait(actor, job_id) returns the job state and its outputs; application loading/capture completion is reported by get_state or capture_status.
+`JSON` — Structured native result. Accepted actions may still be loading; poll get_state/capture_status. job_result provides retained output for explicit background jobs.
 
 ## References {#references}
 

@@ -12,6 +12,7 @@ __pycache__/
 node_modules/
 /Documentation/
 .pytest_cache/
+/NativeAiTestData/
 AI/runtime/
 .codex/
 .agents/

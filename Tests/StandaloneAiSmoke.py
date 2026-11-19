@@ -30,7 +30,7 @@ def main():
     for folder in ('NativeTiming','NativeTasks','NativeActivities'):
         shutil.copytree(source.parent/folder,appdir/folder)
     shutil.copy2(args.engine_profile.resolve()/'CyInsights/engines.json',profile/'CyInsights/engines.json')
-    assert not (appdir/'AI').exists() and not (root.parent/'AI/app/CyTool.json').exists()
+    assert not (appdir/'AI').exists() and not (root.parent/'AI/app/operations.json').exists()
     if args.french:(appdir/'CyInsights-AI-options.json').write_text(json.dumps({'french':True,'autoAnalysis':False,'targetFps':60}),encoding='utf-8')
     before=digest(args.trace);snapshot=root/'standalone.png'
     result=subprocess.run([str(exe),'--standalone-ai-smoke','--snapshot',str(snapshot),str(args.trace.resolve())],cwd=root,env=dict(os.environ,LOCALAPPDATA=str(profile)),timeout=180)

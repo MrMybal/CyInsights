@@ -1,6 +1,8 @@
 # Implementation status
 
-AI adapter update (17 October 2026, local build): 39 shared native/SDK/MCP operations, including counters/frame statistics, activities, comparison, native relations/task links and optional GPU command details. A versioned AI analysis method is available through MCP and the native AI Inspector. See [current coverage](CapabilityCoverage.md) and [analysis method](AiAnalysisMethod.md). Historical release entries below retain their original scope.
+Native AI update (19 November 2026, local build): CyMCPSDK 0.7.0 replaces the Python companion with an integrated assistant, native CLI, MCP, durable jobs and bounded resources. Local streaming/tool protocol fixtures and real-instance tests are included. See [integration](AiIntegration.md).
+
+Historical AI adapter update (17 October 2026): 39 shared native/SDK/MCP operations, including counters/frame statistics, activities, comparison, native relations/task links and optional GPU command details. A versioned AI analysis method is available through MCP and the native AI Inspector. See [current coverage](CapabilityCoverage.md) and [analysis method](AiAnalysisMethod.md). Historical release entries below retain their original scope.
 
 Capture profiles (11 October 2026): new installations default to seven basic frame observations, CPU/GPU scopes and optional Meta polling at 10 Hz. Stats aggregation, process-memory queries, extra native sources, ReShade loading/detailed capture and GPU readbacks are opt-in. Unreal Project Settings and Session controls expose the policy; remote overrides are temporary. Real UE 5.8 captures confirm basic/custom/basic/off returns 7/83/7/0 active metrics. Sixteen CTest suites pass (68 remote/profile checks); Runtime/Editor Win64 5.5/5.8 and Android ARM64 5.8 modules compile. GPU requests are remotely controllable but still require a Windows recorder, and detailed GPU payload transfer is absent. See [CaptureProfiles](CaptureProfiles.md).
 

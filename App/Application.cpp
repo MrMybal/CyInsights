@@ -74,6 +74,9 @@ void Columns(std::initializer_list<const char *> cols) {
 }
 } // namespace
 Application::Application() {
+    // Restored conversations must not match a different process/document merely
+    // because both loaded their first trace. Keep the existing decimal contract.
+    ai_generation_=std::stoull(cymcp::random_token(16).substr(0,15),nullptr,16)+1;
     wchar_t configured[32768]{};
     const auto length = GetEnvironmentVariableW(L"CYINSIGHTS_UNREAL_INSIGHTS", configured, 32768);
     std::error_code error;
@@ -86,6 +89,7 @@ Application::~Application() {
     remote_share_cancel_=true;
     if(remote_share_.valid())remote_share_.wait();
     native_setup_.Cancel();
+    if(ai_native_)ai_native_->Cancel();ShutdownNativeChat();if(ai_native_)ai_native_->Shutdown();
     ai_rpc_.Stop();ai_issues_cancel_=true;for(auto& work:ai_work_)if(work.request)work.request->cancelled=true;
     if(ai_issues_task_.valid())ai_issues_task_.wait();for(auto& work:ai_work_)if(work.result.valid())work.result.wait();
     activity_cancel_=true;activity_reader_.Cancel();if(activity_query_.valid())activity_query_.wait();

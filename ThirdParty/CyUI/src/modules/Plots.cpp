@@ -4,6 +4,82 @@
 #include <cstdio>
 
 namespace cyui {
+ImU32 sampleRamp(const ColorRamp &ramp, double fraction) {
+    const auto &p = palette();
+    const float t = std::isfinite(fraction) ? float(std::clamp(fraction, 0., 1.)) : 0;
+    if (ramp.colors.count && ramp.colors.count <= 64) {
+        const float at = t * float(ramp.colors.count - 1);
+        const auto a = std::size_t(at), b = std::min(a + 1, ramp.colors.count - 1);
+        return mix(ramp.colors[a], ramp.colors[b], at - float(a));
+    }
+    if (ramp.style == RampStyle::monochrome) return mix(p.bg0, p.text, t);
+    if (ramp.style == RampStyle::themed)
+        return t < .5f ? mix(p.bg0, p.info, t * 2) :
+            (t < .8f ? mix(p.info, p.accent, (t - .5f) / .3f) : mix(p.accent, p.warning, (t - .8f) / .2f));
+    const ImU32 intensity[]{p.bg0, p.codeType, p.codeKeyword, p.info, p.success, p.warning, p.error};
+    const ImU32 frequency[]{p.error, p.warning, p.success, p.info, p.codeKeyword, p.codeType};
+    const auto *colors = ramp.style == RampStyle::frequency ? frequency : intensity;
+    const int count = ramp.style == RampStyle::frequency ? 6 : 7;
+    const float at = t * (count - 1);
+    const int a = int(at), b = std::min(a + 1, count - 1);
+    return mix(colors[a], colors[b], at - a);
+}
+void drawColorScale(const Rect &r, const ColorRamp &ramp, Range values, const char *unit, bool vertical, bool logarithmic) {
+    if (!values.valid() || r.size().x <= 0 || r.size().y <= 0) return;
+    auto *d = ImGui::GetWindowDrawList();
+    for (int n = 0; n < 128; ++n) {
+        const float a = n / 128.f, b = (n + 1) / 128.f;
+        const ImVec2 lo = vertical ? ImVec2{r.min.x, r.max.y - r.size().y * b} : ImVec2{r.min.x + r.size().x * a, r.min.y};
+        const ImVec2 hi = vertical ? ImVec2{r.max.x, r.max.y - r.size().y * a} : ImVec2{r.min.x + r.size().x * b, r.max.y};
+        d->AddRectFilled(lo, hi, sampleRamp(ramp, (a + b) / 2));
+    }
+    for (int n = 0; n <= 2; ++n) {
+        const float t = n / 2.f;
+        const double value = logarithmic && values.min > 0 ? std::exp(std::log(values.min) + t * (std::log(values.max) - std::log(values.min))) : values.min + t * values.span();
+        char text[64]; std::snprintf(text, sizeof(text), "%.3g %s", value, unit ? unit : "");
+        const ImVec2 at = vertical ? ImVec2{r.max.x + dp(4), std::clamp(r.max.y - t * r.size().y - ImGui::GetFontSize() / 2,
+            r.min.y, std::max(r.min.y, r.max.y - ImGui::GetFontSize()))} :
+            ImVec2{std::clamp(r.min.x + t * r.size().x, r.min.x, std::max(r.min.x, r.max.x - ImGui::CalcTextSize(text).x)), r.max.y + dp(3)};
+        d->AddText(at, palette().textDim, text);
+    }
+}
+namespace {
+void plotQuad(ImDrawList *d, ImVec2 a, ImVec2 b, ImVec2 c, ImVec2 e, ImU32 ca, ImU32 cb, ImU32 cc, ImU32 ce) {
+    const auto uv = ImGui::GetFontTexUvWhitePixel();
+    d->PrimReserve(6, 4); const auto index = d->_VtxCurrentIdx;
+    for (auto offset : {0u, 1u, 2u, 0u, 2u, 3u}) d->PrimWriteIdx(ImDrawIdx(index + offset));
+    d->PrimWriteVtx(a, uv, ca); d->PrimWriteVtx(b, uv, cb); d->PrimWriteVtx(c, uv, cc); d->PrimWriteVtx(e, uv, ce);
+}
+void fillCurveSegment(ImDrawList *d, ImVec2 a, ImVec2 b, float base, ImU32 first, ImU32 last, bool gradient) {
+    if (!(b.x > a.x) || (a.y == base && b.y == base)) return;
+    const auto lowFirst = gradient ? alpha(first, 0) : first;
+    const auto lowLast = gradient ? alpha(last, 0) : last;
+    if ((a.y < base && b.y > base) || (a.y > base && b.y < base)) {
+        // Split at the crossing: a single quad would be self-intersecting.
+        const double t = (double(base) - a.y) / (double(b.y) - a.y);
+        const ImVec2 crossing{float(double(a.x) + (double(b.x) - a.x) * t), base};
+        const auto middle = mix(first, last, float(t));
+        fillCurveSegment(d, a, crossing, base, first, gradient ? alpha(middle, 0) : middle, gradient);
+        fillCurveSegment(d, crossing, b, base, gradient ? alpha(middle, 0) : middle, last, gradient);
+    } else if (a.y <= base && b.y <= base) {
+        plotQuad(d, a, b, {b.x, base}, {a.x, base}, first, last, lowLast, lowFirst);
+    } else {
+        plotQuad(d, {a.x, base}, {b.x, base}, b, a, lowFirst, lowLast, last, first);
+    }
+}
+}
+void drawCurveFill(ArrayView<ImVec2> points, float baseline, const CurveFillOptions &o) {
+    if (!std::isfinite(baseline)) return;
+    const float opacity = std::isfinite(o.opacity) ? std::clamp(o.opacity, 0.f, 1.f) : 0.f;
+    const auto color = alpha(o.color ? o.color : palette().info, opacity);
+    if (!(color & IM_COL32_A_MASK)) return;
+    auto *d = ImGui::GetWindowDrawList();
+    for (std::size_t i = 1; i < points.count; ++i) {
+        const auto a = points[i - 1], b = points[i];
+        if (std::isfinite(a.x) && std::isfinite(a.y) && std::isfinite(b.x) && std::isfinite(b.y))
+            fillCurveSegment(d, a, b, baseline, color, color, o.gradient);
+    }
+}
 double Axis::fraction(double v) const {
     if (!range.valid() || !std::isfinite(v))
         return std::numeric_limits<double>::quiet_NaN();
@@ -97,6 +173,7 @@ PlotResult plot(const char *id, PlotState &s, ArrayView<PlotSeries> series, ImVe
             result.viewChanged = result.viewChanged || changed;
         }
     }
+    if (o.drawBackground) o.drawBackground(r, s);
     if (o.grid)
         for (int i = 0; i <= 4; ++i) {
             const float x = r.min.x + room.x * i / 4, y = r.min.y + room.y * i / 4;
@@ -107,11 +184,13 @@ PlotResult plot(const char *id, PlotState &s, ArrayView<PlotSeries> series, ImVe
     for (std::size_t n = 0; n < series.count; ++n) {
         const auto &line = series[n];
         const auto color = categorical(line.colorIndex);
+        const float fillOpacity = std::isfinite(line.fillAlpha) ? std::clamp(line.fillAlpha, 0.f, 1.f) : 1.f;
         if (line.points.count > o.maxPoints) {
             result.skippedSeries.push_back(line.id);
             continue;
         } // Caller uses reducePlot or a range-query provider.
         bool previous = false;
+        double previousFraction = 0;
         ImVec2 p{};
         for (std::size_t i = 0; i < line.points.count; ++i) {
             const double x = s.x.fraction(line.points[i].x), y = s.y.fraction(line.points[i].y);
@@ -120,19 +199,40 @@ PlotResult plot(const char *id, PlotState &s, ArrayView<PlotSeries> series, ImVe
                 continue;
             }
             const ImVec2 q{r.min.x + float(x) * room.x, r.max.y - float(y) * room.y};
+            if (!std::isfinite(q.x) || !std::isfinite(q.y)) { previous = false; continue; }
             if (line.style == PlotStyle::points)
                 d->AddCircleFilled(q, dp(2.5f), color);
             else if (line.style == PlotStyle::bars) {
                 const float w = std::max(dp(1), room.x / std::max<std::size_t>(1, line.points.count) * .8f);
-                const float base = s.y.logarithmic ? r.max.y : r.max.y - float(s.y.fraction(0)) * room.y;
-                d->AddRectFilled({q.x - w / 2, std::min(base, q.y)}, {q.x + w / 2, std::max(base, q.y)},
-                                 color);
+                const double baseFraction = s.y.fraction(line.baseline);
+                const float base = std::isfinite(baseFraction) ? r.max.y - float(std::clamp(baseFraction, 0., 1.)) * room.y : r.max.y;
+                float left = q.x - w / 2, right = q.x + w / 2;
+                if (line.bands.count) {
+                    if (line.bands.count != line.points.count || !line.bands[i].valid()) continue;
+                    const double a = s.x.fraction(line.bands[i].min), b = s.x.fraction(line.bands[i].max);
+                    if (!std::isfinite(a) || !std::isfinite(b)) continue;
+                    left = r.min.x + float(a) * room.x; right = r.min.x + float(b) * room.x;
+                }
+                const auto fill = line.colorByX ? sampleRamp(line.ramp, x) : color;
+                const auto top = alpha(fill, fillOpacity);
+                const auto bottom = line.gradient ? alpha(fill, 0) : top;
+                d->AddRectFilledMultiColor({left, std::min(base, q.y)}, {right, std::max(base, q.y)},
+                    q.y <= base ? top : bottom, q.y <= base ? top : bottom, q.y <= base ? bottom : top, q.y <= base ? bottom : top);
             } else if (previous) {
                 if (line.style == PlotStyle::step) {
                     d->AddLine(p, {q.x, p.y}, color, dp(1.5f));
                     d->AddLine({q.x, p.y}, q, color, dp(1.5f));
-                } else
-                    d->AddLine(p, q, color, dp(1.5f));
+                } else {
+                    const auto first = line.colorByX ? sampleRamp(line.ramp, previousFraction) : color;
+                    const auto last = line.colorByX ? sampleRamp(line.ramp, x) : color;
+                    if (line.style == PlotStyle::area) {
+                        const double baseFraction = s.y.fraction(line.baseline);
+                        const float base = std::isfinite(baseFraction) ? r.max.y - float(std::clamp(baseFraction, 0., 1.)) * room.y : r.max.y;
+                        const float opacity = fillOpacity;
+                        fillCurveSegment(d, p, q, base, alpha(first, opacity), alpha(last, opacity), line.gradient);
+                    }
+                    d->AddLine(p, q, last, dp(1.5f));
+                }
             }
             const float distance = std::hypot(q.x - io.MousePos.x, q.y - io.MousePos.y);
             if (f.hovered && distance < closest) {
@@ -141,6 +241,7 @@ PlotResult plot(const char *id, PlotState &s, ArrayView<PlotSeries> series, ImVe
                 result.index = i;
             }
             p = q;
+            previousFraction = x;
             previous = true;
         }
     }

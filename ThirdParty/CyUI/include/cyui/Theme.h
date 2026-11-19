@@ -68,6 +68,15 @@ struct Palette {
     ImU32 warning;
     ImU32 error;
     ImU32 info;
+    // Shared syntax foregrounds, independent of the interface accent.
+    ImU32 codeText = rgb(0xbcbec4);
+    ImU32 codeKeyword = rgb(0x7cbdff);
+    ImU32 codeType = rgb(0xbe8efc);
+    ImU32 codeNumber = rgb(0xb5cea8);
+    ImU32 codeString = rgb(0xd69d5b);
+    ImU32 codeComment = rgb(0x83c16a);
+    ImU32 codePreprocessor = rgb(0x7cbdff);
+    ImU32 codeFunction = rgb(0x4ec9b0);
 };
 
 // A named theme: palette + a density preset key.
@@ -192,9 +201,10 @@ struct FontConfig {
     bool icons = true;
 };
 
-// Loads the interface font (Segoe UI), semibold (Segoe UI Semibold), mono
-// (Consolas), each with the icon glyphs merged; falls back to ImGui's own
-// font. Call before the first frame (the backend builds the atlas). It clears
+// Loads the interface font (Segoe UI), semibold (Segoe UI Semibold), and the
+// embedded JetBrains Mono Regular code font (SIL OFL 1.1). Interface fonts use
+// platform/folder fallbacks; icons merge into interface fonts only.
+// Call before the first frame (the backend builds the atlas). It clears
 // the atlas first. uiFont / boldFont / monoFont return those fonts (for a
 // context that shares the atlas too), or null when loadFonts did not fill
 // this atlas: PushFont(null) and ScopedFont(null) keep the current font.
