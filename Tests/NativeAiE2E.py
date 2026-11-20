@@ -87,65 +87,88 @@ def main():
     result=run('invoke','histogram','--trace',csv,'--json','{"function":"Work"}')
     assert result['summary']['count']=='1'
     run('invoke','filter_function','--json','{"function":12}',code=2)
+    options=a.binaries/'Data/AI/Native/0/options.json'
+    options.parent.mkdir(parents=True,exist_ok=True)
+    original_options=options.read_bytes() if options.exists() else None
     previous_generation=None
-    for control in (False,True):
-        exit_file=a.output/f'exit-{control}.marker'
-        exit_file.unlink(missing_ok=True)
-        process=subprocess.Popen([str(a.binaries/'CyInsightsApp.exe'),'--ai-control' if control else '--ai-enable','--ai-view','--test-exit-file',str(exit_file)])
-        try:
-            deadline=time.monotonic()+30
-            while time.monotonic()<deadline:
-                try:
-                    probe=subprocess.run([str(cli),'invoke','get_state','--pid',str(process.pid)],capture_output=True,timeout=5)
-                except subprocess.TimeoutExpired:
-                    # Cold renderer/font initialization and local antivirus checks
-                    # can delay the first UI tick; retry only this read, never an action.
-                    if process.poll() is not None:raise RuntimeError('CyInsights exited during initialization')
-                    continue
-                if probe.returncode==0:break
-                if process.poll() is not None:raise RuntimeError('CyInsights exited before bridge initialization')
-                time.sleep(.2)
-            else:raise RuntimeError('Bridge failed to start')
-            generation=json.loads(probe.stdout)['generation']
-            assert generation!=previous_generation,'Restart reused an AI trace generation'
-            previous_generation=generation
-            connection=a.binaries/'Data/AI/Native/0'/f'connection-{process.pid}.json'
-            assert run('invoke','get_state','--connection',connection)['pid']==str(process.pid)
-            wrong=json.loads(connection.read_text());wrong['token']='incorrect-local-token-'*4
-            invalid=a.output/'invalid-connection.json';invalid.write_text(json.dumps(wrong))
-            run('invoke','get_state','--connection',invalid,code=4)
-            if not control:
-                run('invoke','filter_function','--pid',process.pid,'--json','{"function":"Denied"}',code=4)
-                assert run('invoke','get_state','--pid',process.pid)['exactFunction']==''
-                check=subprocess.run([str(a.tests.resolve()),'--denied',str(process.pid),str(cli)],capture_output=True,text=True,timeout=30,cwd=a.output)
-                assert check.returncode==0,check.stdout+check.stderr
-            else:
-                server=ThreadingHTTPServer(('127.0.0.1',0),Fixture)
-                thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
-                try:
-                    r=subprocess.run([str(a.tests.resolve()),'--instance',str(process.pid),f'http://127.0.0.1:{server.server_port}/v1',str(cli)],capture_output=True,text=True,timeout=60,cwd=a.output)
-                    (a.output/'real-instance.txt').write_text(r.stdout+r.stderr)
-                    assert r.returncode==0,r.stdout+r.stderr
-                    assert Fixture.attachment_seen,'Portable attachment did not reach the provider'
-                    # Exercise the panel in the real render loop as well as the
-                    # controller/transport test above. It writes the displayed
-                    # partial response and cancellation frames itself.
-                    image=a.output/'assistant-ui.png'
-                    ui=subprocess.run([str(a.binaries/'CyInsightsApp.exe'),'--ai-control','--ai-chat-smoke',f'http://127.0.0.1:{server.server_port}/v1','--ui-size','1440x900','--snapshot',str(image)],capture_output=True,text=True,timeout=45)
-                    assert ui.returncode==0,('Native chat render smoke failed',ui.returncode,ui.stderr)
-                    report=json.loads(Path(str(image)+'.chat.json').read_text())
-                    assert report['passed'] and report['partialRendered'] and report['cancelled'] and report['toolChangedRealState'],report
-                    assert image.is_file() and Path(str(image)+'.partial.png').is_file()
-                finally:server.shutdown();server.server_close()
-        finally:
-            # Only this test-owned process. No existing app instance is closed.
-            exit_file.write_text('Close the owned test instance\n')
+    profiles=[(None,False),('local_controlled',False),('token_only',False),('protected_access',False),('protected_access',True)]
+    profile_results=[]
+    try:
+        for profile,control in profiles:
+            saved={'compact':True,'notifications':True,'cacheSeconds':30}
+            if profile is not None:saved['accessProfile']=profile
+            options.write_text(json.dumps(saved),encoding='utf-8')
+            actual_profile=profile or 'free'
+            label=actual_profile+('-control' if control else '')
+            exit_file=a.output/f'exit-{label}.marker';exit_file.unlink(missing_ok=True)
+            process=subprocess.Popen([str(a.binaries/'CyInsightsApp.exe'),'--ai-control' if control else '--ai-enable','--ai-view','--test-exit-file',str(exit_file)])
             try:
-                process.wait(timeout=20)
-                assert process.returncode==0,('Application did not close cleanly',process.returncode)
+                deadline=time.monotonic()+30
+                while time.monotonic()<deadline:
+                    try:probe=subprocess.run([str(cli),'invoke','get_state','--pid',str(process.pid)],capture_output=True,timeout=5)
+                    except subprocess.TimeoutExpired:
+                        if process.poll() is not None:raise RuntimeError('CyInsights exited during initialization')
+                        continue
+                    if probe.returncode==0:break
+                    if process.poll() is not None:raise RuntimeError('CyInsights exited before bridge initialization')
+                    time.sleep(.2)
+                else:raise RuntimeError('Bridge failed to start')
+                state=json.loads(probe.stdout);generation=state['generation']
+                assert generation!=previous_generation,'Restart reused an AI trace generation'
+                previous_generation=generation
+                assert state['accessProfile']==actual_profile,state
+                assert json.loads(options.read_text(encoding='utf-8'))['accessProfile']==actual_profile
+                connection=a.binaries/'Data/AI/Native/0'/f'connection-{process.pid}.json'
+                endpoint=json.loads(connection.read_text(encoding='utf-8'));url=endpoint['url']
+                required=actual_profile in ('token_only','protected_access')
+                allowed=actual_profile in ('free','token_only') or control
+                assert endpoint['requiresToken']==required and state['permissions']['appControl']==allowed
+                assert state['permissions']['remoteCapture']==(actual_profile in ('free','token_only'))
+                assert run('invoke','get_state','--connection',connection)['pid']==str(process.pid)
+                if required:
+                    run('invoke','get_state','--url',url,code=4)
+                    wrong=dict(endpoint);wrong['token']='incorrect-local-token-'*4
+                    invalid=a.output/f'invalid-{label}.json';invalid.write_text(json.dumps(wrong),encoding='utf-8')
+                    run('invoke','get_state','--connection',invalid,code=4)
+                else:
+                    assert 'token' not in endpoint
+                    assert run('invoke','get_state','--url',url)['pid']==str(process.pid)
+                    run('invoke','filter_function','--url',url,'--json','{"function":"AddressOnlyCli"}',code=0 if allowed else 4)
+                run('invoke','filter_function','--pid',process.pid,'--json','{"function":"CliProfileTest"}',code=0 if allowed else 4)
+                check=subprocess.run([str(a.tests.resolve()),'--http-instance',str(process.pid),str(connection)],capture_output=True,text=True,timeout=30,cwd=a.output)
+                assert check.returncode==0,check.stdout+check.stderr
+                (a.output/f'http-{label}.txt').write_text(check.stdout,encoding='utf-8')
+                if not allowed:
+                    check=subprocess.run([str(a.tests.resolve()),'--denied',str(process.pid),str(cli)],capture_output=True,text=True,timeout=30,cwd=a.output)
+                    assert check.returncode==0,check.stdout+check.stderr
+                if actual_profile=='free':
+                    server=ThreadingHTTPServer(('127.0.0.1',0),Fixture)
+                    thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+                    try:
+                        r=subprocess.run([str(a.tests.resolve()),'--instance',str(process.pid),f'http://127.0.0.1:{server.server_port}/v1',str(cli)],capture_output=True,text=True,timeout=60,cwd=a.output)
+                        (a.output/'real-instance.txt').write_text(r.stdout+r.stderr,encoding='utf-8')
+                        assert r.returncode==0,r.stdout+r.stderr
+                        assert Fixture.attachment_seen,'Portable attachment did not reach the provider'
+                        image=a.output/'assistant-ui.png'
+                        ui=subprocess.run([str(a.binaries/'CyInsightsApp.exe'),'--ai-enable','--ai-chat-smoke',f'http://127.0.0.1:{server.server_port}/v1','--ui-size','1440x900','--snapshot',str(image)],capture_output=True,text=True,timeout=45)
+                        assert ui.returncode==0,('Native chat render smoke failed',ui.returncode,ui.stderr)
+                        report=json.loads(Path(str(image)+'.chat.json').read_text())
+                        assert report['passed'] and report['partialRendered'] and report['cancelled'] and report['toolChangedRealState'],report
+                        assert image.is_file() and Path(str(image)+'.partial.png').is_file()
+                    finally:server.shutdown();server.server_close()
+                profile_results.append({'profile':actual_profile,'tokenRequired':required,'mutationAllowed':allowed})
             finally:
-                if process.poll() is None:process.kill()
-    (a.output/'result.json').write_text(json.dumps({'status':'passed','sdk':'0.7.0','cli':'headless and real-instance','chat':'streaming HTTP protocol fixture, real app mutation, cancel and restore','mcp':'native SDK stdio client/server on real instance','permission':'CLI mutation denied in read-only instance'},indent=2))
+                exit_file.write_text('Close the owned test instance\n')
+                try:
+                    process.wait(timeout=20)
+                    assert process.returncode==0,('Application did not close cleanly',process.returncode)
+                finally:
+                    if process.poll() is None:process.kill()
+    finally:
+        if original_options is None:options.unlink(missing_ok=True)
+        else:options.write_bytes(original_options)
+    (a.output/'profiles.json').write_text(json.dumps(profile_results,indent=2),encoding='utf-8')
+    (a.output/'result.json').write_text(json.dumps({'status':'passed','sdk':'0.7.1','cli':'headless and real-instance','chat':'streaming HTTP protocol fixture, real app mutation, cancel and restore','mcp':'native SDK stdio client/server on real instance','permission':'Free/default and all explicit profiles, HTTP token enforcement and shared mutation gates'},indent=2))
     print('Native CLI, chat and MCP end-to-end checks passed')
 
 if __name__=='__main__':main()

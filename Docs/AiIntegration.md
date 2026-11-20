@@ -1,7 +1,7 @@
 # Native assistant, CLI and MCP
 
-CyInsights embeds **CyMCPSDK 0.7.0**, revision
-`791d4d7d7680213b282ec8529d248a10f8494d77`, compiled from the local source
+CyInsights embeds **CyMCPSDK 0.7.1**, revision
+`34d4bcae126bc83d1a2925b5047dac36e3d09d92`, compiled from the local source
 snapshot in `ThirdParty/CyMCPSDK`. No Python runtime or CyToolsCore installation
 is required. The Unreal recording plugin and Quest APK remain separate; this
 integration concerns the Windows desktop profiler.
@@ -42,8 +42,32 @@ guided method also invoke it. App actions are marshalled to the UI thread;
 queries use the existing immutable indexes on workers. No large trace copy is
 made for a job. UI-owned data, calculations and selection remain in CyInsights.
 
-**Allow AI application control** and **Allow AI remote capture** are separate,
-per-document gates and default off. Enabling a bridge does not grant either.
+**Free is the default access profile.** Enable the local bridge, copy its HTTP
+URL and connect using that address alone. It uses
+`local_access_settings(LocalAccessProfile::free)`, `Policy::allow_all()` and the
+SDK's `UnauthenticatedLoopback` server bound to `127.0.0.1`. All exposed business
+operations are allowed without another confirmation; schemas, trace availability,
+recording ownership and other technical preconditions still apply.
+
+Choose a profile in **AI Inspector > Connection > MCP access profile**:
+
+| Profile | HTTP token | Operation control |
+| --- | --- | --- |
+| Free | Not required | All exposed operations |
+| Local controlled | Not required | Application/capture gates |
+| Token only | Required | All exposed operations |
+| Protected | Required | Application/capture gates |
+
+Existing options without `accessProfile` migrate to `free` while keeping other
+settings. Explicit `free`, `local_controlled`, `token_only` and `protected_access`
+choices survive restarts. Invalid or unreadable explicit settings fall back to
+Protected without rewriting the original file. Selecting a profile saves it and
+restarts a running HTTP endpoint; copy its new address afterwards. Enabling the
+bridge remains an explicit action.
+
+In Local controlled and Protected, **Allow AI application control** and
+**Allow AI remote capture** remain independent, per-document gates, initially off.
+The same operation rules apply to chat, CLI, named-pipe and HTTP/MCP calls.
 Explicit manual Tools actions are trusted user actions. External clients and
 the assistant never receive that manual identity from their arguments. Capture
 start/stop uses its existing ownership/state checks. Cancelling a query is
@@ -54,13 +78,15 @@ log parsing and incoming-trace decoding are not exposed as fabricated tools.
 
 ## Showing evidence in the interface
 
-With **Allow AI application control** enabled, the assistant can select and focus
+With Free/Token only, or **Allow AI application control** enabled in a controlled
+profile, the assistant can select and focus
 a time interval (`set_range`), highlight an exact function (`filter_function`),
 open its distribution (`show_histogram`), show an analysis panel (`focus_view`),
 pin a recorded counter curve (`pin_counter`) and publish a trace-bound finding
 (`publish_finding`). For example: "Find the slowest frames, show me the interval
 and display the relevant counters." Read-only analysis remains available when
-control is disabled. Remote recording requires its separate capture permission.
+control is disabled in a controlled profile. In those profiles remote recording
+requires its separate capture permission.
 
 Access is through the declared business operations, not arbitrary mouse/keyboard
 control. The assistant cannot manipulate every button, browse arbitrary files
@@ -79,6 +105,7 @@ sanitized diagnostics on stderr. `--help` describes its syntax. Existing
 ```powershell
 .\CyInsightsCli.exe list
 .\CyInsightsCli.exe describe histogram
+.\CyInsightsCli.exe invoke get_state --url http://127.0.0.1:8765/mcp
 .\CyInsightsCli.exe invoke get_state --pid 1234 --document 0
 .\CyInsightsCli.exe invoke histogram --pid 1234 --json '{"function":"Work","limit":20}'
 .\CyInsightsCli.exe invoke filter_function --pid 1234 --json '{"function":"Work"}'
@@ -112,12 +139,20 @@ Remote named-pipe clients are rejected. The default compact catalogue exposes
 Append `--full` to expose every operation directly. Operation calls return their
 native structured result, rather than the old Python job envelope.
 
-A second SDK server listens only on `127.0.0.1`, using a random bearer token.
-An owner-only `connection-PID.json` in the document AI directory contains its
-URL and token. `CyInsightsCli invoke ... --connection FILE` uses it. The token
-identifies the current local endpoint, not a multi-user remote service. Do not
-publish it or bind the server remotely. The app removes it on normal shutdown;
-a stale file never enables replay. Re-copy connection settings after restart.
+The HTTP MCP server listens only on `127.0.0.1`. In Free and Local controlled,
+connect to the displayed URL without a token, for example
+`cymcp::McpClient("http://127.0.0.1:8765/mcp")`. CLI clients can use `--url URL`,
+and stdio clients can use `mcp --url URL`. Discovery stays compact by default;
+all 48 operations remain accessible through the gateway.
+
+Token only and Protected require a random bearer token. An owner-only
+`connection-PID.json` in the document AI directory contains its URL and token;
+`CyInsightsCli invoke ... --connection FILE` uses both. Address-only profiles
+write the same connection file without a token field. Do not publish token-bearing
+files. On normal shutdown the connection file is removed. Re-copy settings after
+restarting or changing profiles. The named-pipe transport retains Windows-user
+access control; the HTTP profile determines whether HTTP callers need a token.
+
 SDK HTTP clients can subscribe to the bounded change journal; stdio clients use
 TTL and explicit refresh. No custom MCP framing or authentication parser is used.
 

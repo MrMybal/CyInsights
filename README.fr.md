@@ -12,8 +12,8 @@
     </td>
     <td width="300" align="right" valign="top">
       <p><sub>Licence de l’application</sub><br><a href="LICENSE"><strong>AGPL-3.0-or-later</strong></a></p>
-      <p><sub>Version</sub><br><a href="Docs/Release-0.2.2-alpha.6.fr.md"><strong>0.2.2-alpha.6</strong></a><br><strong>ALPHA</strong></p>
-      <p><a href="https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.6"><strong>Télécharger</strong></a><br><sub>Windows x64 · Quest arm64</sub></p>
+      <p><sub>Version</sub><br><a href="Docs/Release-0.2.2-alpha.7.fr.md"><strong>0.2.2-alpha.7</strong></a><br><strong>ALPHA</strong></p>
+      <p><a href="https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.7"><strong>Télécharger</strong></a><br><sub>Windows x64 · Quest arm64</sub></p>
     </td>
   </tr>
 </table>
@@ -26,11 +26,11 @@ réseau, stockage et mémoire enregistrées sur une même timeline. L’applicat
 autonome **CyInsightOVR** ajoute des métriques GPU dans le Quest et un profilage
 optionnel des jeux de développement.
 
-> **ALPHA · 0.2.2-alpha.6**
+> **ALPHA · 0.2.2-alpha.7**
 >
 > Une version expérimentale destinée aux essais et aux retours ; certains lecteurs
 > et parcours matériels restent incomplets. Consultez les
-> [notes de version et limites documentées](Docs/Release-0.2.2-alpha.6.fr.md).
+> [notes de version et limites documentées](Docs/Release-0.2.2-alpha.7.fr.md).
 
 [![Timeline CPU/GPU de CyInsights avec frames synchronisées et étapes GPU Quest enregistrées](Docs/Images/cyinsights-timeline.png)](Docs/Images/cyinsights-timeline.png)
 
@@ -75,7 +75,7 @@ personnalisés ne fonctionnent pas universellement sur les jeux commerciaux non 
   sont analysées après l’arrêt de l’enregistrement.
 - **Analyse locale et intégration IA** : outils natifs d’AI Inspector et méthode
   d’analyse guidée, assistant intégré, CLI et MCP avec 48 opérations partagées
-  (39 opérations métier et neuf utilitaires de tâches et ressources). Les droits de contrôle et d’enregistrement sont distincts et désactivés initialement.
+  (39 opérations métier et neuf utilitaires de tâches et ressources). Free est le profil local par défaut ; les profils contrôlés ou avec jeton restent disponibles.
 - **Manuel illustré hors ligne** : anglais et français, recherche, captures,
   schémas et références des API publiques. Utilisez **Help > User manual** / **F1**
   sur Windows ou **Help** dans CyInsightOVR. Le même lecteur CyDoc est disponible en ligne.
@@ -88,8 +88,8 @@ personnalisés ne fonctionnent pas universellement sur les jeux commerciaux non 
 
 ### Application Windows
 
-1. Choisissez l’[installateur Windows (.exe)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.6/CyInsights-v0.2.2-alpha.6-Windows-x64-Setup.exe)
-   ou l’[édition portable (.zip)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.6/CyInsights-v0.2.2-alpha.6-Windows-x64-Portable.zip).
+1. Choisissez l’[installateur Windows (.exe)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.7/CyInsights-v0.2.2-alpha.7-Windows-x64-Setup.exe)
+   ou l’[édition portable (.zip)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.7/CyInsights-v0.2.2-alpha.7-Windows-x64-Portable.zip).
 2. Lancez Setup pour une installation utilisateur avec des raccourcis dans le
    menu Démarrer, ou extrayez **toute l’archive portable** et lancez
    `CyInsightsApp.exe`. L’édition portable conserve ses réglages, disposition,
@@ -106,7 +106,7 @@ Le pont CSV des timings reste disponible si la préparation native ne peut pas
 aboutir. Aucun binaire Unreal n’est livré. Consultez le
 [guide de premier lancement et de packaging](Docs/GitHubRelease.md).
 
-Les [empreintes des éditions Windows](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.6/SHA256SUMS.txt)
+Les [empreintes des éditions Windows](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.7/SHA256SUMS.txt)
 couvrent tous les paquets de la release. Le manifeste de release indique le
 commit source exact.
 
@@ -134,16 +134,16 @@ explique l’autorisation, la réouverture de la cible et les limites du firmwar
 
 ### Plugin Unreal et SDK IA optionnels
 
-- [Sources du plugin Unreal](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.6/CyInsights-v0.2.2-alpha.6-Unreal-Plugins-Source.zip) :
+- [Sources du plugin Unreal](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.7/CyInsights-v0.2.2-alpha.7-Unreal-Plugins-Source.zip) :
   copiez `Plugins/CyInsights` dans le dossier `Plugins` de votre projet et compilez
   avec votre moteur licencié. Les sources ciblent **UE 4.27 et 5.0–5.8** ; consultez
   la [matrice de compatibilité](Docs/UnrealCompatibility.md) pour les validations
   réellement effectuées. Les configurations autorisées sont Editor et les clients
   Debug, DebugGame et Development ; Shipping, Test et Server sont exclus.
   Configurez **Project Settings > Plugins > CyInsights**.
-- **Assistant, CLI et MCP natifs** : CyMCPSDK 0.7.0 est compilé dans l’application. Ouvrez **AI Inspector > Assistant** pour les fournisseurs et modèles locaux ou **Connection** pour MCP externe. CyInsightsCli est fourni ; aucune installation Python. Les 39 opérations métier et neuf utilitaires de tâches et ressources partagent les droits natifs. Voir le [guide d’intégration native](Docs/AiIntegration.md).
+- **Assistant, CLI et MCP natifs** : CyMCPSDK 0.7.1 est compilé dans l’application. Ouvrez **AI Inspector > Assistant** pour les fournisseurs et modèles locaux ou **Connection** pour MCP externe. CyInsightsCli est fourni ; aucune installation Python. Les 39 opérations métier et neuf utilitaires de tâches et ressources partagent les droits natifs. Voir le [guide d’intégration native](Docs/AiIntegration.md).
 
-Utilisez la [release alpha versionnée](https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.6)
+Utilisez la [release alpha versionnée](https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.7)
 pour les téléchargements et empreintes. Les alphas figurent sur la
 [liste complète des releases](https://github.com/MrMybal/CyInsights/releases).
 
@@ -154,17 +154,18 @@ choisissez un modèle et connectez-vous. Votre authentification existante est
 utilisée ; aucun poids de modèle n’est fourni. Les réponses arrivent progressivement,
 avec annulation, conversations sauvegardées et pièces jointes compatibles.
 
-Activez **Allow AI application control** pour que l’assistant sélectionne et cadre
-un intervalle, mette une fonction en évidence, ouvre son histogramme, affiche des
-panneaux ou épingle les courbes de compteurs enregistrés. Par exemple :
-*« Trouve les frames les plus lentes, montre-moi l’intervalle et affiche les
-compteurs utiles. »* L’analyse en lecture seule fonctionne sans ce droit ;
-l’enregistrement distant possède son autorisation distincte. L’accès passe par
-les opérations déclarées, sans contrôle arbitraire du bureau ou des fichiers,
-ni inspection automatique de chaque image.
+Le profil local **Free**, choisi par défaut, permet à l’assistant de sélectionner
+et cadrer un intervalle, mettre une fonction en évidence, ouvrir son histogramme,
+afficher des panneaux et épingler des compteurs sans confirmation supplémentaire.
+Local contrôlé, Jeton seul et Protégé restent disponibles dans **Connection**.
+Les profils contrôlés gardent les droits de contrôle et de capture distincts.
+La validation et la disponibilité des données restent applicables ; l’accès utilise
+les opérations déclarées, sans contrôle arbitraire du bureau ou des fichiers.
 
 Pour une IA externe, activez le pont dans **Connection**, puis copiez la
-configuration MCP native. La CLI incluse fonctionne aussi dans un terminal :
+configuration MCP native, ou utilisez l’URL HTTP locale affichée, sans jeton en
+Free. Les configurations sans choix explicite migrent vers Free ; les profils
+explicitement choisis sont conservés. La CLI incluse fonctionne aussi dans un terminal :
 
 ```powershell
 .\CyInsightsCli.exe list
@@ -253,7 +254,7 @@ ni la licence de l’application ni les conditions d’Epic. Consultez le
 | [CyDoc 0.1.0](https://github.com/MrMybal/CyDoc) | [MIT](LICENCES/CyDoc-MIT.txt) | Lecteur HTML hors ligne et compilateur utilisé à la génération ; seul le module média image est inclus. |
 | [Composants CyGPUInspector](https://github.com/MrMybal/CyGPUInspector) | [Analyse : AGPL-3.0-or-later](ThirdParty/CyGPUInspector/LICENSE) · [Core : MIT](ThirdParty/CyGPUInspector/CyGPUInspectorCore/LICENSE) | Analyse/session intégrées et code IPC/format partagé ; aucune application séparée nécessaire. |
 | [SDK ReShade](https://github.com/crosire/reshade) | [BSD-3-Clause](LICENCES/ReShade-SDK/LICENSE.md) · [ImGui de l’overlay : MIT](LICENCES/DearImGui-ReShade/LICENSE.txt) | En-têtes du collecteur Windows optionnel. La DLL du runtime externe n’est pas incluse ; ses [notices distinctes](LICENCES/ReShade/LICENSE-ReShade.txt) s’appliquent. |
-| [CyMCPSDK 0.7.0](https://github.com/MrMybal/CyMCPSDK) | [MIT](LICENCES/CyMCPSDK-MIT.txt) · [notices](LICENCES/CyMCPSDK-ThirdParty.md) | Assistant natif, registre typé partagé, CLI et MCP. |
+| [CyMCPSDK 0.7.1](https://github.com/MrMybal/CyMCPSDK) | [MIT](LICENCES/CyMCPSDK-MIT.txt) · [notices](LICENCES/CyMCPSDK-ThirdParty.md) | Assistant natif, registre typé partagé, CLI et MCP. |
 | [CPython](https://github.com/python/cpython) | [PSF et licences des composants](LICENCES/Python-Build.txt) | Interpréteur externe de compilation/documentation ; aucun environnement Python dans l’application. |
 | [OpenXR](https://github.com/KhronosGroup/OpenXR-SDK) | [Apache-2.0](LICENCES/OpenXR.txt) | Prérequis d’intégration Quest/native ; les en-têtes du moteur/SDK sont fournis séparément. |
 | [Unreal Engine](https://www.unrealengine.com/) | [Conditions Epic et périmètre d’intégration](Docs/Licensing.md#unreal-engine) | Prérequis externe licencié pour le plugin et les lecteurs natifs ; aucun code source, bibliothèque ou binaire Epic n’est livré. |

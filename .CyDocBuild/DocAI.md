@@ -8,13 +8,14 @@ reader's navigation or search.
 ## Application connection
 
 The desktop's AI Inspector > Connection enables a bridge for the current
-process/document. Read-only analysis, application control, annotations and remote
-recording have independent gates. Use the generated CyInsightsCli native stdio
-configuration, or the SDK loopback endpoint with its owner-only bearer token.
+process/document. Free is the default profile: address-only loopback HTTP permits all exposed
+operations. Controlled profiles retain separate application/capture gates. Use the generated CyInsightsCli native stdio
+configuration, or the SDK loopback endpoint. Token only and Protected require the owner-only
+bearer token; Free and Local controlled do not.
 Never print credentials or invent readiness. The assistant, CLI and MCP share
 one native registry. Calls return structured results. Explicit job_start/status/
 result/list/cancel/delete operations provide durable host jobs; job_import copies
-an old JSON report without rewriting old databases. Native UI gates remain
+an old JSON report without rewriting old databases. The selected profile’s operation rules remain
 mandatory. No Python companion is needed.
 
 ## Evidence and compact requests

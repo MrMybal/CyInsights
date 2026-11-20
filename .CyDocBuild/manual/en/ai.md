@@ -5,7 +5,7 @@ description: Local tools, external clients, permissions and compact evidence.
 section: Guides
 order: 0
 parent: developer-api
-revision: 34786a4944ee
+revision: 902403edeac5
 ---
 
 AI Inspector lets you run the application's native analysis tools and review findings. Open **Tools**, choose an operation, inspect its parameters, then run it. Preparing the form does not execute the tool. The native tools do not require an external model, Python or an MCP client.
@@ -13,8 +13,24 @@ AI Inspector lets you run the application's native analysis tools and review fin
 ## External connection {#external-connection}
 1. Open **AI Inspector > Connection** and enable the local MCP/SDK bridge.
 2. Copy the generated configuration into your MCP client. The native CyInsightsCli executable is already included; no runtime download or Python setup is needed.
-3. Enable application control or remote capture only for the actions you need. These independent permissions apply equally to the assistant, CLI and MCP.
+3. Free is the default profile: copy the HTTP URL and connect without a token. All exposed operations are allowed, with argument validation. Choose Local controlled, Token only or Protected to retain other access rules.
 4. Re-copy the PID/document connection after restarting or changing documents. Tokens in the private HTTP connection file must not be published.
+
+## Local access profiles {#access-profiles}
+
+| Profile | HTTP token | Operations |
+| --- | --- | --- |
+| Free (default) | None | All exposed operations |
+| Local controlled | None | Application/capture gates |
+| Token only | Required | All exposed operations |
+| Protected | Required | Application/capture gates |
+
+Select a profile in **Connection**. HTTP listens on `127.0.0.1`; Free clients need
+only the displayed address. A profile change restarts the active HTTP endpoint,
+so copy the new URL. Configurations with no explicit choice migrate to Free;
+existing profile choices remain intact. Invalid explicit settings use Protected
+without rewriting the original file. Validation and technical preconditions stay
+active in every profile. Native provider terminal/file permissions are separate.
 
 ## Integrated assistant {#integrated-assistant}
 Open **Assistant > Connection and options**, detect providers/local services, choose an explicit provider and model, then connect. The CyMCPSDK panel shows streamed Markdown, tool activity and errors, supports cancellation and provider-compatible attachments. Use an environment variable or a memory-only key. Saved conversations restore without resending turns. Model weights are not bundled; existing Codex, Ollama, LM Studio, llama.cpp and supported API profiles retain their own authentication and capabilities.
@@ -27,15 +43,16 @@ Optional remote MCP endpoints need an explicit tool allowlist and token environm
 
 ## Show evidence in the interface {#show-evidence}
 
-Enable **Allow AI application control** to let the assistant use the native
+Use Free/Token only, or enable **Allow AI application control** in a controlled
+profile, to let the assistant use the native
 interface actions: select and focus a time interval (`set_range`), highlight an
 exact function (`filter_function`), open its histogram (`show_histogram`), show
 an analysis panel (`focus_view`), pin a recorded counter (`pin_counter`) or
 publish a finding (`publish_finding`). Try: "Find the slowest frames, show me the
 interval and display the relevant counters."
 
-Read-only analysis remains available without control. Starting or stopping a
-remote recording needs the separate capture permission. The assistant accesses
+Read-only analysis remains available without control. In Local controlled and
+Protected, recording needs the separate capture permission. The assistant accesses
 the declared operations and recorded sources: it does not control every button,
 browse arbitrary files or automatically inspect all images and tile heatmaps.
 Missing channels remain unavailable. Inspect capabilities before drawing conclusions.

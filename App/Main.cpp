@@ -512,7 +512,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int) {
                 if(std::filesystem::exists(host/"AI/app/operations.json")||std::filesystem::exists(host.parent_path().parent_path()/"AI/app/operations.json"))return 21;
                 if(standalone_ai_future.valid()&&standalone_ai_future.wait_for(std::chrono::seconds(0))==std::future_status::ready){
                     auto local_result=standalone_ai_future.get();if(local_result["error"].IsObject()){auto diagnostic_path=snapshot;diagnostic_path+=L".standalone-ai-error.json";local_result["operation"]=standalone_ai_operations[standalone_ai_step];std::ofstream(diagnostic_path)<<local_result.Write(2);return 22;}
-                    if(standalone_ai_step==0&&(!local_result["ready"].AsBool()||local_result["permissions"]["appControl"].AsBool()))return 23;
+                    if(standalone_ai_step==0&&(!local_result["ready"].AsBool()||(local_result["accessProfile"].AsString()=="free"&&!local_result["permissions"]["appControl"].AsBool())))return 23;
                     if(standalone_ai_step==1&&local_result["method"]["workflow"].Size()!=9)return 24;
                     if(standalone_ai_step==2&&local_result["operations"].Size()!=39)return 25;
                     if(standalone_ai_step==3&&local_result["summary"]["count"].AsString()=="0")return 26;

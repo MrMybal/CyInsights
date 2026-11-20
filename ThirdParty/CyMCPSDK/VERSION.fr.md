@@ -1,3 +1,7 @@
+## 0.7.1 — intégration hôte
+
+Validation de schémas déléguée explicitement au validateur hôte ; authentification HTTP par callback avec principal opaque et limite de requête explicite ; présentation du texte MCP adaptable sans changer structuredContent. Les politiques et schémas par défaut restent stricts.
+
 # Notes de version de CyMCPSDK
 
 [English](VERSION.md) · [Manuel](Documentation/Documentation.html#/fr/overview)

@@ -20,6 +20,23 @@ void Wait(cymcp::ChatController& c,const std::function<bool()>& done){auto deadl
 }
 int main(int argc,char** argv){try{
     auto catalog=NativeJson::parse(EmbeddedAiCatalog().Write(-1));auto root=std::filesystem::current_path()/"NativeAiTestData"/std::to_string(GetCurrentProcessId());cymcp::private_directory(root);
+    if(argc==4&&std::string(argv[1])=="--http-instance"){
+        auto pid=uint32_t(std::stoul(argv[2]));auto endpoint=ReadPrivateJson(std::filesystem::u8path(argv[3]));
+        auto url=endpoint.at("url").get<std::string>();const bool tokenRequired=endpoint.at("requiresToken");
+        if(tokenRequired){cymcp::McpClient unauthenticated(url);Fails([&]{unauthenticated.connect();});}
+        else Check(!endpoint.contains("token"),"Address-only profile does not create a token");
+        cymcp::McpClient client(url,endpoint.value("token",std::string()));client.connect();
+        auto tools=client.list_tools();Check(tools.size()==5,"HTTP compact MCP discovery");
+        auto read=client.call_tool("cy_tools_call",{{"name","get_state"},{"arguments",NativeJson::object()}});
+        Check(!read.value("isError",false),"HTTP MCP reads the actual application");
+        auto state=CallNativeInstance(pid,0,"get_state",NativeJson::object());const bool allowed=state["permissions"]["appControl"];
+        auto changed=client.call_tool("cy_tools_call",{{"name","filter_function"},{"arguments",{{"function","HttpProfileTest"}}}});
+        Check(changed.value("isError",false)!=allowed,"HTTP mutation follows the selected profile");
+        if(allowed)Check(CallNativeInstance(pid,0,"get_state",NativeJson::object())["exactFunction"]=="HttpProfileTest","HTTP mutation changed real UI state");
+        auto invalid=client.call_tool("cy_tools_call",{{"name","filter_function"},{"arguments",{{"function",12}}}});
+        Check(invalid.value("isError",false),"Free access still validates tool arguments");
+        std::cout<<checks<<" real HTTP profile checks passed\n";return 0;
+    }
     if(argc==4&&std::string(argv[1])=="--denied"){
         cymcp::ProcessOptions process;process.executable=std::filesystem::u8path(argv[3]);process.arguments={"mcp","--pid",argv[2],"--full"};cymcp::McpClient client(process);client.connect();auto read=client.call_tool("get_state",NativeJson::object());Check(!read.value("isError",false),"MCP read in read-only instance");auto denied=client.call_tool("filter_function",{{"function","DeniedMcpMutation"}});Check(denied.value("isError",false),"MCP mutation denied in read-only instance");std::cout<<checks<<" MCP permission checks passed\n";return 0;
     }
@@ -42,11 +59,22 @@ int main(int argc,char** argv){try{
         cymcp::ProcessOptions process;process.executable=std::filesystem::u8path(argv[4]);process.arguments={"mcp","--pid",argv[2],"--full"};cymcp::McpClient client(process);client.connect();auto tools=client.list_tools();Check(tools.size()>=39,"Real stdio MCP discovery");auto state=client.call_tool("get_state",NativeJson::object());Check(!state.value("isError",false),"Real stdio MCP read");auto changed=client.call_tool("filter_function",{{"function","NativeMcpTest"}});Check(!changed.value("isError",false),"Real stdio MCP mutation");Check(CallNativeInstance(pid,0,"get_state",NativeJson::object())["exactFunction"]=="NativeMcpTest","MCP mutation reaches the real instance");
         std::cout<<checks<<" real-instance checks passed\n";return 0;
     }
+    Check(NativeAiOptions{}.access_profile==cymcp::LocalAccessProfile::free,"New configurations default to Free");
+    Check(NativeAiOptions::From({{"performance",true}}).access_profile==cymcp::LocalAccessProfile::free,"Configurations without an explicit choice migrate to Free");
+    for(auto profile:{cymcp::LocalAccessProfile::free,cymcp::LocalAccessProfile::local_controlled,cymcp::LocalAccessProfile::token_only,cymcp::LocalAccessProfile::protected_access}){
+        NativeAiOptions o;o.access_profile=profile;Check(NativeAiOptions::From(o.Json()).access_profile==profile,"Explicit profile round-trips unchanged");
+        auto directory=root/NativeAccessProfileName(profile);WritePrivateJson(directory/"options.json",o.Json());
+        {NativeAi saved(catalog,NativeJson::object(),directory,[](const auto&,const auto&,const auto&){return NativeJson::object();});Check(saved.options.access_profile==profile,"Explicit profile survives configuration loading");}
+    }
+    Fails([&]{NativeAiOptions::From({{"accessProfile","invalid-explicit-choice"}});});
+    WritePrivateJson(root/"unknown-options"/"options.json",{{"accessProfile","unknown"}});
+    {NativeAi guarded(catalog,NativeJson::object(),root/"unknown-options",[](const auto&,const auto&,const auto&){return NativeJson::object();});Check(guarded.RequiresToken()&&guarded.ControlsOperations(),"Malformed explicit choices never fall back to Free");Check(ReadPrivateJson(root/"unknown-options"/"options.json")["accessProfile"]=="unknown","Malformed settings are preserved for repair");}
     std::atomic_int calls=0;std::atomic_bool slow=false;bool allowed=false;auto handler=[&](const std::string& op,const NativeJson&,const cymcp::CallContext& c){c.cancellation.check();if(op=="filter_function"&&!allowed)throw cymcp::Error("AccessDenied","Control disabled");++calls;while(slow){c.cancellation.check();std::this_thread::sleep_for(1ms);}return NativeJson{{"accepted",true},{"rows",NativeJson::array()},{"operation",op},{"trace","PERF_RESULT_SECRET"},{"permissions",{{"appControl",allowed}}}};};
-    WritePrivateJson(root/"host"/"options.json",{{"performance",true}});
+    WritePrivateJson(root/"host"/"options.json",{{"performance",true},{"preservedOption","keep"}});
     std::string id;
     {
         NativeAi host(catalog,NativeJson::parse(EmbeddedAiMethod().Write(-1)),root/"host",handler);
+        auto migrated=ReadPrivateJson(root/"host"/"options.json");Check(migrated["accessProfile"]=="free"&&migrated["preservedOption"]=="keep","Migration records Free without deleting other settings");
         Check(host.registry->size()==48,"All business and native utility operations registered");
         Fails([&]{host.Invoke("filter_function",{{"function","X"}});});allowed=true;Check(host.Invoke("filter_function",{{"function","PERF_INPUT_SECRET"}})["accepted"],"Authorized business handler");
         Fails([&]{host.Invoke("filter_function",{{"function",12}});});Fails([&]{host.Invoke("capture_probe",{{"ipv4","not-an-ip"}});});
@@ -65,10 +93,14 @@ int main(int argc,char** argv){try{
         host.UpdateState({{"revision",1}});auto rev=host.changes->sequence();host.UpdateState({{"revision",2}});Check(host.changes->sequence()>rev,"Changes published before TTL");
         host.Start(0);auto publicInfo=host.Connection();Check(!publicInfo.contains("token"),"UI connection metadata excludes bearer token");
         auto endpoint=ReadPrivateJson(root/"host"/("connection-"+std::to_string(GetCurrentProcessId())+".json"));
-        cymcp::McpClient client(endpoint.at("url"),endpoint.at("token"));client.connect();auto first=client.read_resource("cyinsights://state");client.read_resource("cyinsights://state");Check(client.cache_stats().hits>0,"HTTP resource cache used before TTL");
+        cymcp::McpClient client(endpoint.at("url"),endpoint.value("token",std::string()));client.connect();auto first=client.read_resource("cyinsights://state");client.read_resource("cyinsights://state");Check(client.cache_stats().hits>0,"HTTP resource cache used before TTL");
         client.start_notifications({{"resourcesListChanged",true},{"toolsListChanged",true}});std::this_thread::sleep_for(100ms);host.UpdateState({{"revision",3}});
         auto until=cymcp::Clock::now()+3s;bool fresh=false;do{client.drain_notifications();auto state=client.read_resource("cyinsights://state");fresh=state.dump().find("revision\\\":3")!=std::string::npos;if(!fresh)std::this_thread::sleep_for(10ms);}while(!fresh&&cymcp::Clock::now()<until);
         Check(fresh,"HTTP subscription invalidates state cache before TTL");client.stop_notifications();
+        host.SetAccessProfile(cymcp::LocalAccessProfile::protected_access);auto protectedEndpoint=ReadPrivateJson(root/"host"/("connection-"+std::to_string(GetCurrentProcessId())+".json"));
+        Check(protectedEndpoint["requiresToken"]&&protectedEndpoint.contains("token"),"Profile switch restarts HTTP with token authentication");
+        {cymcp::McpClient noToken(protectedEndpoint.at("url"));Fails([&]{noToken.connect();});cymcp::McpClient authenticated(protectedEndpoint.at("url"),protectedEndpoint.at("token"));authenticated.connect();}
+        Check(ReadPrivateJson(root/"host"/"options.json")["accessProfile"]=="protected_access","Explicit selected profile is persisted");
         // Exercise the same remote connector used by the Assistant, including
         // an exact allowlist and a structured tool error over real HTTP MCP.
         auto remoteRegistry=std::make_shared<cymcp::Registry>(cymcp::Policy::allow_all());

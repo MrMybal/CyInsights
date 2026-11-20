@@ -19,7 +19,7 @@ struct IndexProgressScope {
 };
 BOOL WINAPI Interrupt(DWORD event){if(event==CTRL_C_EVENT||event==CTRL_BREAK_EVENT){cancelled.cancel();std::lock_guard lock(progress_mutex);if(active_progress)active_progress->cancel=true;return TRUE;}return FALSE;}
 void Help(){std::cout<<"CyInsightsCli - native CyMCPSDK "<<cymcp::version<<"\n"
-    "  list [--pid PID --document ID | --connection FILE | --trace timing.csv]\n"
+    "  list [--pid PID --document ID | --connection FILE | --url URL | --trace timing.csv]\n"
     "  describe OPERATION\n  invoke OPERATION [--json JSON | --params-file FILE]\n"
     "  mcp [--pid PID --document ID | --trace timing.csv] [--full]\n"
     "  providers\n"
@@ -37,12 +37,13 @@ int wmain(int argc,wchar_t** argv){
     try{
         std::vector<std::string> args;for(int i=1;i<argc;++i)args.push_back(std::filesystem::path(argv[i]).u8string());
         if(args.empty()||args[0]=="help"||args[0]=="--help"||args[0]=="-h"){Help();return 0;}
-        const auto command=args[0];uint32_t pid=0;uint64_t document=0;std::filesystem::path trace,connection;bool full=false;std::string operation;NativeJson parameters=NativeJson::object();
+        const auto command=args[0];uint32_t pid=0;uint64_t document=0;std::filesystem::path trace,connection;bool full=false;std::string operation;NativeJson parameters=NativeJson::object();std::string endpoint_url;
         for(size_t i=1;i<args.size();++i){auto value=[&](){if(i+1>=args.size())throw cymcp::Error("InvalidArguments","Missing option value");return args[++i];};
             if(args[i]=="--pid")pid=static_cast<uint32_t>(std::stoul(value()));
             else if(args[i]=="--document")document=std::stoull(value());
             else if(args[i]=="--trace")trace=std::filesystem::u8path(value());
             else if(args[i]=="--connection")connection=std::filesystem::u8path(value());
+            else if(args[i]=="--url")endpoint_url=value();
             else if(args[i]=="--json")parameters=cymcp::parse_json(value(),65536);
             else if(args[i]=="--params-file")parameters=ReadPrivateJson(std::filesystem::u8path(value()),65536);
             else if(args[i]=="--full")full=true;
@@ -51,18 +52,18 @@ int wmain(int argc,wchar_t** argv){
         }
         cymcp::CallContext context;context.cancellation=cancelled;
         if(command=="providers"){auto providers=cymcp::ProviderRegistry();NativeJson rows=NativeJson::array();for(auto& d:providers.discover({},context))rows.push_back({{"id",d.provider_id},{"name",d.name},{"state",d.state},{"source",d.source},{"models",d.models},{"errorCode",d.error_code}});std::cout<<rows.dump()<<'\n';return 0;}
-        if((pid?1:0)+(!trace.empty()?1:0)+(!connection.empty()?1:0)>1)throw cymcp::Error("InvalidArguments","Choose one target: --pid, --connection or --trace");
+        if((pid?1:0)+(!trace.empty()?1:0)+(!connection.empty()?1:0)+(!endpoint_url.empty()?1:0)>1)throw cymcp::Error("InvalidArguments","Choose one target: --pid, --connection, --url or --trace");
         auto catalog=NativeJson::parse(EmbeddedAiCatalog().Write(-1));std::shared_ptr<PagedTimingStore> store;
         if(!trace.empty()){
             if(trace.extension()!=L".csv")throw cymcp::Error("InvalidArguments","Headless analysis expects an exported timing CSV; use an open instance for .utrace/.cycapture");
             trace=std::filesystem::absolute(trace);auto index=UserDataDirectory()/L"AI"/L"Indexes"/(cymcp::sha256(trace.u8string())+".index");cymcp::private_directory(index.parent_path());
             NativeReadProgress progress;IndexProgressScope active(progress);context.cancellation.check();std::string error;store=PagedTimingStore::Build(trace,index,progress,error);context.cancellation.check();if(!store)throw cymcp::Error("TraceError",error);
         }
-        NativeJson endpoint;if(!connection.empty()){endpoint=ReadPrivateJson(connection,8192);if(!cymcp::parse_url(endpoint.at("url")).loopback)throw cymcp::Error("InvalidArguments","An application connection must use loopback; configure remote tools separately");}
+        NativeJson endpoint;if(!connection.empty())endpoint=ReadPrivateJson(connection,8192);else if(!endpoint_url.empty())endpoint={{"url",endpoint_url}};if(!endpoint.is_null()){if(!cymcp::parse_url(endpoint.at("url")).loopback)throw cymcp::Error("InvalidArguments","An application connection must use loopback; configure remote tools separately");}
         NativeHandler invoke=[&](const std::string& op,const NativeJson& p,const cymcp::CallContext& c)->NativeJson{
             if(pid)return CallNativeInstance(pid,document,op,p,c);
-            if(!connection.empty()){
-                cymcp::HttpRequest request;request.method="POST";request.url=endpoint.at("url").get<std::string>();if(request.url.ends_with("/mcp"))request.url.replace(request.url.size()-4,4,"/v1");request.headers["Authorization"]="Bearer "+endpoint.at("token").get<std::string>();request.headers["Content-Type"]="application/json";request.body=NativeJson{{"method","invoke"},{"name",op},{"arguments",p}}.dump();
+            if(!endpoint.is_null()){
+                cymcp::HttpRequest request;request.method="POST";request.url=endpoint.at("url").get<std::string>();if(request.url.ends_with("/mcp"))request.url.replace(request.url.size()-4,4,"/v1");if(auto token=endpoint.value("token",std::string());!token.empty())request.headers["Authorization"]="Bearer "+token;request.headers["Content-Type"]="application/json";request.body=NativeJson{{"method","invoke"},{"name",op},{"arguments",p}}.dump();
                 auto response=cymcp::HttpClient().perform(request,c.cancellation);if(response.status==401||response.status==403)throw cymcp::Error("AccessDenied","The local application rejected this connection token");if(response.body.empty())throw cymcp::Error("ConnectionError","Local HTTP service returned no JSON result");auto out=cymcp::parse_json(response.body,16*1024*1024);if(response.status!=200||(out.contains("error")&&out["error"].is_object()))throw cymcp::Error(out.value("error",NativeJson::object()).value("code","ConnectionError"),"Native HTTP invocation failed");return out;
             }
             if(op=="get_analysis_guide")return {{"method",NativeJson::parse(EmbeddedAiMethod().Write(-1))},{"scope","headless_native_analysis"}};

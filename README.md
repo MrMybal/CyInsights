@@ -12,8 +12,8 @@
     </td>
     <td width="300" align="right" valign="top">
       <p><sub>Application license</sub><br><a href="LICENSE"><strong>AGPL-3.0-or-later</strong></a></p>
-      <p><sub>Version</sub><br><a href="Docs/Release-0.2.2-alpha.6.md"><strong>0.2.2-alpha.6</strong></a><br><strong>ALPHA</strong></p>
-      <p><a href="https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.6"><strong>Download</strong></a><br><sub>Windows x64 · Quest arm64</sub></p>
+      <p><sub>Version</sub><br><a href="Docs/Release-0.2.2-alpha.7.md"><strong>0.2.2-alpha.7</strong></a><br><strong>ALPHA</strong></p>
+      <p><a href="https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.7"><strong>Download</strong></a><br><sub>Windows x64 · Quest arm64</sub></p>
     </td>
   </tr>
 </table>
@@ -25,10 +25,10 @@ CPU/GPU traces, frame statistics and recorded network, storage and memory activi
 on one timeline. The standalone **CyInsightOVR** Quest app adds on-headset GPU
 metrics and optional development-game profiling.
 
-> **ALPHA · 0.2.2-alpha.6**
+> **ALPHA · 0.2.2-alpha.7**
 >
 > An experimental release for testing and feedback; some providers and hardware
-> paths remain incomplete. Read the [version notes and documented limitations](Docs/Release-0.2.2-alpha.6.md).
+> paths remain incomplete. Read the [version notes and documented limitations](Docs/Release-0.2.2-alpha.7.md).
 
 [![CyInsights CPU/GPU timeline with synchronized frames and recorded Quest GPU stages](Docs/Images/cyinsights-timeline.png)](Docs/Images/cyinsights-timeline.png)
 
@@ -70,7 +70,7 @@ Custom Vulkan overlays do not work universally on unmodified commercial games.
 - **Local analysis and AI integration:** native AI Inspector tools and a guided
   analysis method, an integrated native assistant, CLI and MCP with 48 shared operations
   (39 business operations and nine job/resource utilities).
-  Control and recording permissions are separate and disabled initially.
+  Free is the default local profile; controlled and token-protected profiles remain available.
 - **Illustrated offline manual:** English and French, search, screenshots,
   diagrams and public API references. Use **Help > User manual** / **F1** on
   Windows or **Help** in CyInsightOVR. The same CyDoc reader is available online.
@@ -83,8 +83,8 @@ Custom Vulkan overlays do not work universally on unmodified commercial games.
 
 ### Windows desktop
 
-1. Choose the [Windows installer (.exe)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.6/CyInsights-v0.2.2-alpha.6-Windows-x64-Setup.exe)
-   or the [portable edition (.zip)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.6/CyInsights-v0.2.2-alpha.6-Windows-x64-Portable.zip).
+1. Choose the [Windows installer (.exe)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.7/CyInsights-v0.2.2-alpha.7-Windows-x64-Setup.exe)
+   or the [portable edition (.zip)](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.7/CyInsights-v0.2.2-alpha.7-Windows-x64-Portable.zip).
 2. Run Setup for a per-user installation with Start menu shortcuts, or extract
    the **whole portable archive** and start `CyInsightsApp.exe`. The portable
    edition keeps its settings, layout, logs and caches in its adjacent `Data/`
@@ -99,7 +99,7 @@ not Unreal. The CSV timing bridge remains available if native preparation cannot
 finish. No Unreal binaries are bundled. See the
 [first-launch and packaging guide](Docs/GitHubRelease.md).
 
-The [Windows editions checksums](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.6/SHA256SUMS.txt)
+The [Windows editions checksums](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.7/SHA256SUMS.txt)
 cover all release packages. Their exact source commit is recorded in the release
 manifest.
 
@@ -126,15 +126,15 @@ explains authorization, target reopening and firmware limits.
 
 ### Optional Unreal plugin and AI SDK
 
-- [Unreal plugin sources](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.6/CyInsights-v0.2.2-alpha.6-Unreal-Plugins-Source.zip):
+- [Unreal plugin sources](https://github.com/MrMybal/CyInsights/releases/download/v0.2.2-alpha.7/CyInsights-v0.2.2-alpha.7-Unreal-Plugins-Source.zip):
   copy `Plugins/CyInsights` into your project's `Plugins` directory and compile
   with your licensed engine. Sources target **UE 4.27 and 5.0–5.8**; consult the
   [compatibility matrix](Docs/UnrealCompatibility.md) for actual validation.
   Editor, Debug, DebugGame and Development clients are supported configurations;
   Shipping, Test and Server are excluded. Configure **Project Settings > Plugins > CyInsights**.
-- **Native assistant, CLI and MCP:** CyMCPSDK 0.7.0 is compiled into the app. Open **AI Inspector > Assistant** for providers/local models or **Connection** for external MCP. CyInsightsCli ships with the app; no Python runtime installation is needed. The same 39 business operations and nine job/resource utilities share native permissions. See the [native integration guide](Docs/AiIntegration.md).
+- **Native assistant, CLI and MCP:** CyMCPSDK 0.7.1 is compiled into the app. Open **AI Inspector > Assistant** for providers/local models or **Connection** for external MCP. CyInsightsCli ships with the app; no Python runtime installation is needed. The same 39 business operations and nine job/resource utilities share native permissions. See the [native integration guide](Docs/AiIntegration.md).
 
-Use the [versioned alpha release](https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.6)
+Use the [versioned alpha release](https://github.com/MrMybal/CyInsights/releases/tag/v0.2.2-alpha.7)
 for downloads and checksums. Alpha builds are listed on the
 [complete Releases page](https://github.com/MrMybal/CyInsights/releases).
 
@@ -145,15 +145,18 @@ model and connect. Your existing authentication is used; model weights are not
 included. Responses stream into the chat, which supports cancellation, saved
 conversations and compatible attachments.
 
-Enable **Allow AI application control** to let the assistant select and focus a
-time interval, highlight a function, open its histogram, show analysis panels or
-pin recorded counter curves. For example: *"Find the slowest frames, show me the
-interval and display the relevant counters."* Read-only analysis works without
-that permission; remote recording has its own gate. Access uses the declared
-operations, not unrestricted desktop/file access or automatic image inspection.
+The default **Free** local profile lets the assistant select/focus a time
+interval, highlight a function, open a histogram, show analysis panels and pin
+recorded counters without additional permission prompts. Local controlled,
+Token only and Protected remain available in **Connection**. Controlled profiles
+retain separate application-control and capture permissions. Argument validation
+and capture availability still apply; access uses declared operations, not
+unrestricted desktop/file access or automatic image inspection.
 
 For an external AI, enable the bridge in **Connection** and copy the native MCP
-configuration. The included CLI also works from a terminal:
+configuration, or connect to the displayed loopback HTTP URL with no token in
+Free. Existing configurations without an explicit profile migrate to Free; explicit
+profile choices are preserved. The included CLI also works from a terminal:
 
 ```powershell
 .\CyInsightsCli.exe list
@@ -239,7 +242,7 @@ license or Epic's terms. See the [licensing scope](Docs/Licensing.md).
 | [CyDoc 0.1.0](https://github.com/MrMybal/CyDoc) | [MIT](LICENCES/CyDoc-MIT.txt) | Offline HTML reader and build-time compiler; only the image media module is included. |
 | [CyGPUInspector components](https://github.com/MrMybal/CyGPUInspector) | [Analysis: AGPL-3.0-or-later](ThirdParty/CyGPUInspector/LICENSE) · [Core: MIT](ThirdParty/CyGPUInspector/CyGPUInspectorCore/LICENSE) | Vendored analysis/session and shared IPC/format code; no separate application required. |
 | [ReShade SDK](https://github.com/crosire/reshade) | [BSD-3-Clause](LICENCES/ReShade-SDK/LICENSE.md) · [overlay ImGui: MIT](LICENCES/DearImGui-ReShade/LICENSE.txt) | Headers for the optional Windows collector. The external runtime DLL is not included; its [separate notices](LICENCES/ReShade/LICENSE-ReShade.txt) apply. |
-| [CyMCPSDK 0.7.0](https://github.com/MrMybal/CyMCPSDK) | [MIT](LICENCES/CyMCPSDK-MIT.txt) · [notices](LICENCES/CyMCPSDK-ThirdParty.md) | Native assistant, shared typed registry, CLI and MCP. |
+| [CyMCPSDK 0.7.1](https://github.com/MrMybal/CyMCPSDK) | [MIT](LICENCES/CyMCPSDK-MIT.txt) · [notices](LICENCES/CyMCPSDK-ThirdParty.md) | Native assistant, shared typed registry, CLI and MCP. |
 | [CPython](https://github.com/python/cpython) | [PSF and component terms](LICENCES/Python-Build.txt) | External build/documentation interpreter; no Python runtime in the application. |
 | [OpenXR](https://github.com/KhronosGroup/OpenXR-SDK) | [Apache-2.0](LICENCES/OpenXR.txt) | Quest/native integration prerequisite; engine/SDK headers are supplied separately. |
 | [Unreal Engine](https://www.unrealengine.com/) | [Epic terms and integration scope](Docs/Licensing.md#unreal-engine) | External licensed plugin/native-reader prerequisite; no Epic source, libraries or binaries are bundled. |

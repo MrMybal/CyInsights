@@ -4,16 +4,17 @@ title: SDK et API publique
 description: Connecter un client externe et utiliser les contrats des opérations disponibles.
 section: Référence / API développeur
 order: 50
-sourceRevision: 5df6c949853b
+sourceRevision: 57261f95a005
 ---
 
-Les 39 contrats metier ci-dessous appartiennent au registre CyMCPSDK natif. Les memes handlers servent l’assistant integre, le terminal et MCP externe. La disponibilite des sources et les autorisations independantes de controle/capture du document restent applicables. Lire [AI Inspector](doc:ai).
+Les 39 contrats metier ci-dessous appartiennent au registre CyMCPSDK natif. Les memes handlers servent l’assistant integre, le terminal et MCP externe. La disponibilité des sources reste obligatoire. Free autorise toutes les opérations exposées ; Local contrôlé et Protégé appliquent aussi les droits de contrôle et de capture du document. Lire [AI Inspector](doc:ai).
 
 ## Point d’entree CLI natif {#python-entry}
 
 ```powershell
 CyInsightsCli list
 CyInsightsCli describe histogram
+CyInsightsCli invoke get_state --url http://127.0.0.1:8765/mcp
 CyInsightsCli invoke get_state --pid 1234
 CyInsightsCli invoke histogram --trace timing.csv --json '{"function":"Work"}'
 ```

@@ -152,7 +152,7 @@ def main():
     plugins['README.txt'] = b'Unreal plugin sources. Copy Plugins/CyInsights into your project Plugins directory and build with your licensed engine. See Docs/UnrealCompatibility.md and Docs/Licensing.md. No compiled Unreal binaries are included.\n'
     sdk={name:data for name,data in app.items() if name.startswith(('AI/','LICENCES/')) or name in ('LICENSE','THIRD-PARTY-CyGPUInspector.md','CyInsightsCli.exe')}
     sdk['Docs/AiIntegration.md']=(ROOT/'Docs/AiIntegration.md').read_bytes()
-    sdk['README.txt']=b'Native CyInsightsCli with CyMCPSDK 0.7.0. No Python runtime. Use --help, list, describe, invoke and mcp. Headless timing CSV analysis is supported; real UI/capture actions require the application bridge. See Docs/AiIntegration.md. Model services and credentials are user supplied.\n'
+    sdk['README.txt']=b'Native CyInsightsCli with CyMCPSDK 0.7.1. No Python runtime. Use --help, list, describe, invoke and mcp. Headless timing CSV analysis is supported; real UI/capture actions require the application bridge. See Docs/AiIntegration.md. Model services and credentials are user supplied.\n'
     archives = []
     for label, entries in (('Windows-x64-Update', app), ('Windows-x64-Portable', portable), ('Unreal-Plugins-Source', plugins), ('AI-SDK',sdk)):
         archive = output/('CyInsights-'+args.version+'-'+label+'.zip')

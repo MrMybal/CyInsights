@@ -4,16 +4,17 @@ title: SDK and public API
 description: Connect an external client and use the supported operation contracts.
 section: Reference / Developer API
 order: 50
-revision: 5df6c949853b
+revision: 57261f95a005
 ---
 
-The 39 business contracts below belong to the native CyMCPSDK registry. The same handlers serve the integrated Assistant, console and external MCP. Source availability and the document's independent control/capture permissions still apply. Read [AI Inspector](doc:ai).
+The 39 business contracts below belong to the native CyMCPSDK registry. The same handlers serve the integrated Assistant, console and external MCP. Source availability always applies. Free permits all exposed operations; Local controlled and Protected also enforce the document's control/capture gates. Read [AI Inspector](doc:ai).
 
 ## Native CLI entry point {#python-entry}
 
 ```powershell
 CyInsightsCli list
 CyInsightsCli describe histogram
+CyInsightsCli invoke get_state --url http://127.0.0.1:8765/mcp
 CyInsightsCli invoke get_state --pid 1234
 CyInsightsCli invoke histogram --trace timing.csv --json '{"function":"Work"}'
 ```

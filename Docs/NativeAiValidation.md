@@ -1,7 +1,7 @@
 # Native AI migration verification
 
-Local Windows x64 verification, 19 November 2026. No GitHub workflow was run.
-CyMCPSDK 0.7.0: `791d4d7d7680213b282ec8529d248a10f8494d77`.
+Local Windows x64 verification, 20 November 2026. No GitHub workflow was run.
+CyMCPSDK 0.7.1: `34d4bcae126bc83d1a2925b5047dac36e3d09d92`.
 CyUI 1.2.0: `6ef01cfcdb197f3a89d64618ce5ef8818c704728`.
 Both source snapshots and the shared Dear ImGui override are hash-checked.
 
@@ -11,7 +11,7 @@ Both source snapshots and the shared Dear ImGui override are hash-checked.
 - Existing capture, native timing, counters, activities, tasks, comparisons, UI modules, Quest/Windows capture contracts and update checks retained.
 - Existing `CyCaptureTool pack`, `inspect` and `extract` executed on a synthetic archive, including byte-for-byte binary payload recovery.
 - CLI help, list (48 operations), describe, scriptable JSON, invalid-schema exit 2, unavailable instance exit 3, denied mutation/authentication exit 4, successful native CSV histogram.
-- Two real app processes: read-only and control-enabled. Native stdio MCP discovery, reads, mutation and denial; HTTP connection-file read and incorrect bearer-token rejection.
+- Five real app configurations: Free, Local controlled, Token only, Protected, and Protected with application control enabled. Native stdio MCP discovery, reads, mutation and denial; HTTP connection-file read and incorrect bearer-token rejection.
 - Real SDK Chat Completions streaming protocol fixture: progressive response, native filter mutation on the real application, cancellation and history restoration without replay.
 - Portable text attachment delivered through the API and restored after deleting its test source file.
 - Actual app render-loop smoke: captures of the displayed partial response and cancellation; proof also checks the actual function filter changed.
@@ -22,7 +22,30 @@ Both source snapshots and the shared Dear ImGui override are hash-checked.
 - Actual operation telemetry excludes test input/output markers; context projection preserves full stored history, system instructions and active turn.
 - Native provider discovery returns 23 profiles without exposing credential fields.
 - Generated English/French offline documentation, native embedded contracts and translations.
-- Clean Windows update/portable payloads and NSIS installer built locally. Archive manifests and file hashes verified; no Python runtime/wheels, CyToolsCore, test/user data or trace files are shipped. The extracted delivery CLI discovers 48 operations and measures the synthetic `Work` scope once at 4 ms.
+- Windows update/portable payloads and NSIS installer built locally. Archive manifests and file hashes verified. The extracted delivery CLI discovers 48 operations and measures the synthetic `Work` scope once at 4 ms.
+
+## Local access profiles
+
+The profile verification launches real application instances with `--ai-enable`
+(no control permission flag) for Free, Local controlled, Token only and Protected,
+then a Protected instance with `--ai-control`. Native HTTP MCP clients discover
+and invoke tools against these processes. Address-only reads/mutations succeed
+in Free; Local controlled reads work without a token while mutations are gated.
+Token only and Protected reject missing or invalid tokens. Token only allows
+mutations with its token; Protected also requires its application-control gate.
+CLI connections by URL, private connection file and named pipe follow the same
+rules. Free chat tests use no application-control flag.
+
+Configuration checks cover the default, migration of a missing profile without
+losing other options, all explicit profiles on disk, a live profile change and
+invalid settings falling back to Protected without rewriting the original file.
+
+## Current run
+
+The Alpha 7 build passed all 32 local CTest suites, including the native
+access-profile checks. The real-application profile matrix and existing
+chat/CLI/MCP end-to-end fixture passed. The five showcase checks and
+English/French reader checks also passed.
 
 ## Commands
 

@@ -17,7 +17,10 @@ NativeJson NativeDefaults(const NativeJson& schema,NativeJson arguments);
 std::shared_ptr<cymcp::Registry> ConnectNativeRemote(std::shared_ptr<const cymcp::Registry>,const NativeJson&,const cymcp::Cancellation&,int cache_seconds=30,bool notifications=true);
 void WritePrivateJson(const std::filesystem::path&,const NativeJson&);
 NativeJson ReadPrivateJson(const std::filesystem::path&,size_t limit=1024*1024);
+const char* NativeAccessProfileName(cymcp::LocalAccessProfile);
+cymcp::LocalAccessProfile NativeAccessProfileFrom(const std::string&);
 struct NativeAiOptions {
+    cymcp::LocalAccessProfile access_profile=cymcp::LocalAccessProfile::free;
     bool compact=true,disk_spool=true,notifications=true,performance=false;
     int cache_seconds=30,retention_seconds=300,chunk_kib=32,spool_mib=256;
     size_t context_kib=128;
@@ -34,6 +37,7 @@ class NativeAi {
     std::string token_;
     NativeJson connection_=NativeJson::object();
     std::filesystem::path connection_path_;
+    std::string options_error_;
     NativeHandler native_;
 public:
     NativeAi(const NativeJson& catalog,const NativeJson& method,const std::filesystem::path&,NativeHandler);
@@ -51,6 +55,10 @@ public:
     void Shutdown();
     void Cancel();
     bool Running() const {return bool(http_);}
+    bool ControlsOperations() const {return cymcp::local_access_settings(options.access_profile).control_operations;}
+    bool RequiresToken() const {return cymcp::local_access_settings(options.access_profile).require_token;}
+    const std::string& OptionsError() const {return options_error_;}
+    void SetAccessProfile(cymcp::LocalAccessProfile);
     void DrainPerformance();
     void UpdateState(const NativeJson&);
     const std::filesystem::path& Directory() const {return directory_;}

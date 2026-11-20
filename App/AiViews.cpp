@@ -44,7 +44,7 @@ cygi::Json Application::AiState() const {
     auto j=J::Object();j["protocol"]="cyinsights-native/1";j["generation"]=std::to_string(ai_generation_);j["pid"]=std::to_string(GetCurrentProcessId());j["documentId"]=std::to_string(document_id_);
     j["trace"]=trace_.empty()?J():J(trace_.u8string());j["ready"]=native_.store&&!native_.Busy()&&load_error_.empty();j["busy"]=AnalysisBusy();j["message"]=message_;j["error"]=load_error_.empty()?J():J(load_error_);
     j["events"]=std::to_string(native_.store?native_.store->count:0);j["selection"]["start"]=range_start_==range_end_?view_start_:std::min(range_start_,range_end_);j["selection"]["end"]=range_start_==range_end_?view_end_:std::max(range_start_,range_end_);j["selection"]["explicit"]=range_start_!=range_end_;
-    j["exactFunction"]=timing_exact_name_;j["permissions"]["appControl"]=ai_control_;j["permissions"]["remoteCapture"]=ai_capture_;
+    j["exactFunction"]=timing_exact_name_;const bool controlled=!ai_native_||ai_native_->ControlsOperations();j["permissions"]["appControl"]=!controlled||ai_control_;j["permissions"]["remoteCapture"]=!controlled||ai_capture_;if(ai_native_)j["accessProfile"]=NativeAccessProfileName(ai_native_->options.access_profile);
     j["tasks"]["loaded"]=tasks_store_!=nullptr;j["tasks"]["nativeCount"]=std::to_string(tasks_store_?tasks_store_->count:0);j["tasks"]["status"]=tasks_message_;
     if(native_.store){j["domain"]["start"]=native_.store->start;j["domain"]["end"]=native_.store->end;j["frames"]["count"]=std::to_string(native_.store->frames.size());j["frames"]["identity"]=native_.store->frames_native?"native":"derived_tick_candidate";
         bool gpu=false;for(auto& lane:native_.store->tracks)gpu|=lane.gpu;j["availability"]["gpuTiming"]=gpu;j["availability"]["nativeTaskTrace"]=tasks_store_&&tasks_store_->count>0;}
@@ -61,7 +61,7 @@ void Application::AiDispatch(const std::shared_ptr<AiRequest>& request,bool exte
         if(descriptor.IsNull())throw std::runtime_error("UnknownOperation: unknown native tool");
         if(p.IsObject())for(auto& property:descriptor["inputSchema"]["properties"].Members())if(!p.Has(property.first)&&property.second.Has("default"))p[property.first]=property.second["default"];
         Validate(descriptor,p);
-        if(external)for(auto& permission:descriptor["permissions"].Items()){
+        if(external&&(!ai_native_||ai_native_->ControlsOperations()))for(auto& permission:descriptor["permissions"].Items()){
             if(permission.AsString()=="appControl"&&!ai_control_)throw std::runtime_error("AccessDenied: enable AI application control in AI Inspector");
             if(permission.AsString()=="remoteCapture"&&!ai_capture_)throw std::runtime_error("AccessDenied: enable AI remote capture in AI Inspector");
         }
@@ -175,17 +175,30 @@ void Application::AiView(){
             bool enabled=ai_rpc_.Running();if(ImGui::Checkbox(text("Enable local MCP/SDK bridge","Activer le pont local MCP/SDK"),&enabled)){
                 if(enabled)EnableAi(ai_control_,ai_capture_);else{ai_native_->Stop();ai_rpc_.Stop();}
             }
-            ImGui::Checkbox(text("Allow AI application control","Autoriser le controle de l'application"),&ai_control_);
-            ImGui::Checkbox(text("Allow AI remote capture","Autoriser les captures reseau"),&ai_capture_);
+            auto profile=ai_native_->options.access_profile;int selected=int(profile);
+            const char* profiles[]={"Free",text("Local controlled","Local controle"),text("Token only","Jeton seul"),text("Protected","Protege")};
+            if(ImGui::Combo(text("MCP access profile","Profil d'acces MCP"),&selected,profiles,4)){
+                try{ai_native_->SetAccessProfile(cymcp::LocalAccessProfile(selected));ai_state_snapshot_.clear();}
+                catch(const std::exception& e){ai_message_=e.what();}
+            }
+            if(!ai_native_->OptionsError().empty())ImGui::TextWrapped("%s",ai_native_->OptionsError().c_str());
+            ImGui::TextWrapped("%s",text("Free is the default: address only and all exposed operations. Protected requires a token and application permissions.","Free par defaut : adresse seule et toutes les operations exposees. Protege exige un jeton et les droits de l'application."));
+            const bool controlled=ai_native_->ControlsOperations();bool control=controlled?ai_control_:true,capture=controlled?ai_capture_:true;
+            ImGui::BeginDisabled(!controlled);
+            ImGui::Checkbox(text("Allow AI application control","Autoriser le controle de l'application"),&control);
+            ImGui::Checkbox(text("Allow AI remote capture","Autoriser les captures reseau"),&capture);ImGui::EndDisabled();
+            if(controlled){ai_control_=control;ai_capture_=capture;}
             ImGui::Text("CyMCPSDK %s | PID %lu | Document %llu",cymcp::version,GetCurrentProcessId(),static_cast<unsigned long long>(document_id_));
             ImGui::TextWrapped("%s",ai_message_.c_str());
             auto config=NativeJson::object();auto& server=config["mcpServers"]["CyInsights"];
             server["command"]=(ExecutableDirectory()/L"CyInsightsCli.exe").u8string();server["args"]={"mcp","--pid",std::to_string(GetCurrentProcessId()),"--document",std::to_string(document_id_)};
             auto display=config.dump(2);if(ImGui::Button(text("Copy MCP configuration","Copier la configuration MCP")))ImGui::SetClipboardText(display.c_str());
             ImGui::TextWrapped("%s",display.c_str());
-            ImGui::TextWrapped("%s",text("Native stdio server; no Python installation. The local bridge is restricted to this Windows user. CLI and MCP share the same application permissions. Capture stop is explicit; cancelling an AI request does not stop recording.","Serveur stdio natif, sans installation Python. Le pont local est reserve a cet utilisateur Windows. CLI et MCP partagent les permissions de l'application. L'arret d'une capture reste une action explicite."));
+            ImGui::TextWrapped("%s",text("Native stdio uses this Windows user. HTTP listens on 127.0.0.1; its token and operation permissions follow the selected profile. CLI, chat and MCP share operation permissions. Capture stop is explicit; cancelling an AI request does not stop recording.","Serveur stdio natif, sans installation Python. Le pont local est reserve a cet utilisateur Windows. CLI et MCP partagent les permissions de l'application. L'arret d'une capture reste une action explicite."));
             ImGui::TextWrapped("HTTP: %s",ai_native_->Connection().value("url",std::string("disabled")).c_str());
-            ImGui::TextWrapped("%s",text("HTTP token: owner-only connection.json in the document AI directory. Never copy it into a public configuration.","Jeton HTTP : connection.json prive dans le dossier IA du document. Ne pas le publier."));
+            if(ImGui::Button(text("Copy HTTP URL","Copier l'URL HTTP"))){auto url=ai_native_->Connection().value("url",std::string());if(!url.empty())ImGui::SetClipboardText(url.c_str());}
+            if(ai_native_->RequiresToken())ImGui::TextWrapped("%s",text("HTTP token: owner-only connection file in the document AI directory.","Jeton HTTP : fichier de connexion prive dans le dossier IA du document."));
+            else ImGui::TextWrapped("%s",text("HTTP clients connect using the address alone; no token is required.","Les clients HTTP se connectent avec l'adresse seule, sans jeton."));
             ImGui::EndTabItem();
         }
         if(ImGui::BeginTabItem(text("Tools","Outils"),nullptr,ai_requested_tab_==2?ImGuiTabItemFlags_SetSelected:0)){
@@ -210,7 +223,7 @@ void Application::AiView(){
         }
         if(ImGui::BeginTabItem(text("Assistant","Assistant"),nullptr,ai_requested_tab_==4?ImGuiTabItemFlags_SetSelected:0)){if(ai_requested_tab_==4)ai_requested_tab_=-1;DrawNativeChat();ImGui::EndTabItem();}
         if(ImGui::BeginTabItem("Options")){
-            ImGui::Checkbox("Francais",&ai_french_);ImGui::TextUnformatted("CyMCPSDK 0.7.0: MIT - https://github.com/MrMybal/CyMCPSDK");ImGui::TextUnformatted("CyInsights: AGPL-3.0-or-later | Dear ImGui: MIT | MCP SDK: MIT");
+            ImGui::Checkbox("Francais",&ai_french_);ImGui::TextUnformatted("CyMCPSDK 0.7.1: MIT - https://github.com/MrMybal/CyMCPSDK");ImGui::TextUnformatted("CyInsights: AGPL-3.0-or-later | Dear ImGui: MIT | MCP SDK: MIT");
             ImGui::TextWrapped("Native providers and tool calling are available in Assistant. No model weights are bundled.");
             if(ImGui::Button(text("Save options","Sauver les options"))){auto p=J::Object();p["schemaVersion"]=1.;p["french"]=ai_french_;p["autoAnalysis"]=ai_auto_;p["targetFps"]=static_cast<double>(ai_fps_);std::ofstream(HostDirectory()/"CyInsights-AI-options.json")<<p.Write(2);}
             ImGui::EndTabItem();

@@ -5,7 +5,7 @@ description: Outils locaux, clients externes, droits et preuves ciblées.
 section: Guides
 order: 0
 parent: developer-api
-sourceRevision: 34786a4944ee
+sourceRevision: 902403edeac5
 ---
 
 AI Inspector permet d’exécuter les outils d’analyse natifs et de consulter les constats. Ouvrez **Tools**, choisissez une opération, vérifiez ses paramètres, puis lancez-la. Préparer le formulaire n’exécute pas l’outil. Les outils natifs ne demandent ni modèle externe, ni Python, ni client MCP.
@@ -13,8 +13,24 @@ AI Inspector permet d’exécuter les outils d’analyse natifs et de consulter 
 ## Connexion externe {#external-connection}
 1. Ouvrez **AI Inspector > Connection** et activez le pont local MCP/SDK.
 2. Copiez la configuration dans votre client MCP. CyInsightsCli natif est deja fourni : aucun telechargement d’environnement ni installation Python.
-3. Activez le controle de l’application ou la capture distante uniquement pour les actions souhaitees. Ces droits independants s’appliquent a l’assistant, au CLI et a MCP.
+3. Free est le profil par défaut : copiez l’URL HTTP et connectez-vous sans jeton. Toutes les opérations exposées sont autorisées, avec validation des arguments. Local contrôlé, Jeton seul et Protégé restent disponibles.
 4. Recopiez le PID/document apres redemarrage ou changement de document. Ne publiez pas les jetons du fichier de connexion HTTP prive.
+
+## Profils d’accès locaux {#access-profiles}
+
+| Profil | Jeton HTTP | Opérations |
+| --- | --- | --- |
+| Free (défaut) | Aucun | Toutes les opérations exposées |
+| Local contrôlé | Aucun | Droits de contrôle/capture |
+| Jeton seul | Requis | Toutes les opérations exposées |
+| Protégé | Requis | Droits de contrôle/capture |
+
+Choisissez le profil dans **Connection**. HTTP écoute sur `127.0.0.1` ; Free
+nécessite uniquement l’adresse affichée. Changer le profil redémarre le serveur
+actif : recopiez sa nouvelle URL. Les configurations sans choix explicite migrent
+vers Free ; les profils déjà choisis sont conservés. Un réglage explicite invalide
+utilise Protégé sans réécrire le fichier original. La validation et les conditions
+techniques restent actives. Les droits du terminal du fournisseur restent distincts.
 
 ## Assistant integre {#integrated-assistant}
 Ouvrez **Assistant > Connexion et options**, detectez les fournisseurs/services locaux, choisissez explicitement un fournisseur et un modele, puis connectez-vous. Le panneau CyMCPSDK affiche le Markdown progressif, les outils et erreurs, permet l’annulation et les pieces jointes compatibles. Utilisez une variable d’environnement ou une cle en memoire. L’historique restaure ne renvoie aucun tour. Aucun poids de modele n’est fourni ; Codex, Ollama, LM Studio, llama.cpp et les API compatibles conservent leur authentification et leurs capacites.
@@ -27,15 +43,16 @@ Les serveurs MCP distants optionnels demandent une liste explicite d’outils au
 
 ## Montrer les résultats dans l’interface {#show-evidence}
 
-Activez **Allow AI application control** pour autoriser les actions natives :
+Utilisez Free/Jeton seul, ou activez **Allow AI application control** dans un
+profil contrôlé, pour autoriser les actions natives :
 sélectionner et cadrer un intervalle (`set_range`), mettre une fonction exacte en
 évidence (`filter_function`), ouvrir son histogramme (`show_histogram`), afficher
 un panneau (`focus_view`), épingler un compteur enregistré (`pin_counter`) ou
 publier un constat (`publish_finding`). Essayez : « Trouve les frames les plus
 lentes, montre-moi l’intervalle et affiche les compteurs utiles. »
 
-L’analyse en lecture seule reste disponible sans contrôle. Démarrer ou arrêter
-un enregistrement distant nécessite l’autorisation de capture distincte. L’accès
+L’analyse en lecture seule reste disponible sans contrôle. Dans Local contrôlé
+et Protégé, l’enregistrement nécessite le droit de capture distinct. L’accès
 passe par les opérations déclarées et les sources enregistrées : l’assistant ne
 contrôle pas chaque bouton, ne parcourt pas librement les fichiers et n’inspecte
 pas automatiquement toutes les images et heatmaps. Les canaux absents restent

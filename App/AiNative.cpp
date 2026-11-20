@@ -95,10 +95,35 @@ J ReadPrivateJson(const std::filesystem::path& p,size_t limit){
     if(!std::filesystem::is_regular_file(p)||std::filesystem::file_size(p)>limit)throw cymcp::Error("NotFound","Private record missing or too large");
     std::ifstream in(p,std::ios::binary);std::string s((std::istreambuf_iterator<char>(in)),{});return cymcp::parse_json(s,limit);
 }
-J NativeAiOptions::Json()const{return {{"compact",compact},{"diskSpool",disk_spool},{"notifications",notifications},{"performance",performance},{"cacheSeconds",cache_seconds},{"retentionSeconds",retention_seconds},{"chunkKiB",chunk_kib},{"spoolMiB",spool_mib},{"contextKiB",context_kib}};}
-NativeAiOptions NativeAiOptions::From(const J& p){NativeAiOptions o;o.compact=p.value("compact",true);o.disk_spool=p.value("diskSpool",true);o.notifications=p.value("notifications",true);o.performance=p.value("performance",false);o.cache_seconds=std::clamp(p.value("cacheSeconds",30),0,3600);o.retention_seconds=std::clamp(p.value("retentionSeconds",300),10,86400);o.chunk_kib=std::clamp(p.value("chunkKiB",32),1,256);o.spool_mib=std::clamp(p.value("spoolMiB",256),16,4096);o.context_kib=std::clamp(p.value("contextKiB",size_t(128)),size_t(0),size_t(16384));return o;}
+const char* NativeAccessProfileName(cymcp::LocalAccessProfile profile){
+    switch(profile){
+    case cymcp::LocalAccessProfile::free:return "free";
+    case cymcp::LocalAccessProfile::local_controlled:return "local_controlled";
+    case cymcp::LocalAccessProfile::token_only:return "token_only";
+    case cymcp::LocalAccessProfile::protected_access:return "protected_access";
+    }return "protected_access";
+}
+cymcp::LocalAccessProfile NativeAccessProfileFrom(const std::string& name){
+    for(auto profile:{cymcp::LocalAccessProfile::free,cymcp::LocalAccessProfile::local_controlled,cymcp::LocalAccessProfile::token_only,cymcp::LocalAccessProfile::protected_access})
+        if(name==NativeAccessProfileName(profile))return profile;
+    throw cymcp::Error("InvalidOptions","Unknown local MCP access profile");
+}
+J NativeAiOptions::Json()const{return {{"accessProfile",NativeAccessProfileName(access_profile)},{"compact",compact},{"diskSpool",disk_spool},{"notifications",notifications},{"performance",performance},{"cacheSeconds",cache_seconds},{"retentionSeconds",retention_seconds},{"chunkKiB",chunk_kib},{"spoolMiB",spool_mib},{"contextKiB",context_kib}};}
+NativeAiOptions NativeAiOptions::From(const J& p){NativeAiOptions o;if(p.contains("accessProfile"))o.access_profile=NativeAccessProfileFrom(p.at("accessProfile").get<std::string>());o.compact=p.value("compact",true);o.disk_spool=p.value("diskSpool",true);o.notifications=p.value("notifications",true);o.performance=p.value("performance",false);o.cache_seconds=std::clamp(p.value("cacheSeconds",30),0,3600);o.retention_seconds=std::clamp(p.value("retentionSeconds",300),10,86400);o.chunk_kib=std::clamp(p.value("chunkKiB",32),1,256);o.spool_mib=std::clamp(p.value("spoolMiB",256),16,4096);o.context_kib=std::clamp(p.value("contextKiB",size_t(128)),size_t(0),size_t(16384));return o;}
 NativeAi::NativeAi(const J& catalog,const J& method,const std::filesystem::path& directory,NativeHandler h):directory_(directory),native_(std::move(h)){
-    cymcp::private_directory(directory_);try{options=NativeAiOptions::From(ReadPrivateJson(directory_/"options.json"));}catch(...){}
+    cymcp::private_directory(directory_);
+    try{
+        auto file=directory_/"options.json";
+        if(std::filesystem::exists(file)){
+            auto saved=ReadPrivateJson(file);options=NativeAiOptions::From(saved);
+            // A missing profile is not an explicit choice. Keep unrelated options.
+            if(!saved.contains("accessProfile")){saved["accessProfile"]="free";WritePrivateJson(file,saved);}
+        }else WritePrivateJson(file,options.Json());
+    }catch(const std::exception&){
+        // An unreadable/unknown explicit choice must never turn into free access.
+        options.access_profile=cymcp::LocalAccessProfile::protected_access;
+        options_error_="Cannot load native AI options; Protected is active. Select and save a profile to repair the settings.";
+    }
     changes=std::make_shared<cymcp::ChangeFeed>();
     if(options.performance){cymcp::PerformanceOptions p;p.jsonl_file=directory_/("performance-"+std::to_string(GetCurrentProcessId())+"-"+cymcp::random_token(16)+".jsonl");performance=std::make_shared<cymcp::PerformanceMonitor>(p);}
     registry=MakeNativeRegistry(catalog,[this](const auto& op,const J& p,const cymcp::CallContext& c){auto call=c;call.cancellation.ancestors.push_back(lifetime_.flag);call.cancellation.check();return native_(op,p,call);});
@@ -115,13 +140,23 @@ NativeAi::NativeAi(const J& catalog,const J& method,const std::filesystem::path&
 NativeAi::~NativeAi(){Shutdown();}
 std::shared_ptr<const cymcp::Registry> NativeAi::Tools()const{return options.compact?gateway->tools():registry;}
 void NativeAi::Start(uint64_t document){
-    if(http_)return;transport_=cymcp::Cancellation{};token_=cymcp::random_token();cymcp::McpServerOptions mo;mo.resources=resources;mo.cache_ttl=std::chrono::seconds(options.cache_seconds);mo.performance=performance;if(options.notifications)mo.changes=changes;
-    // HTTP uses one endpoint identity. Token grants only this Windows-user endpoint,
-    // never a principal supplied by a request. App gates run in every business call.
+    if(http_)return;transport_=cymcp::Cancellation{};token_=RequiresToken()?cymcp::random_token():std::string();cymcp::McpServerOptions mo;mo.resources=resources;mo.cache_ttl=std::chrono::seconds(options.cache_seconds);mo.performance=performance;if(options.notifications)mo.changes=changes;
     mcp_=std::make_unique<cymcp::McpServer>(*Tools(),"CyInsights",mo);
-    auto server=std::make_unique<cymcp::LocalHttpServer>(token_,[this](const J& p,const cymcp::CallContext& input){auto c=input;c.principal="local";c.cancellation.ancestors.push_back(lifetime_.flag);c.cancellation.ancestors.push_back(transport_.flag);if(!p.contains("jsonrpc")&&p.value("method","")=="invoke")return Invoke(p.at("name"),p.value("arguments",J::object()),c);return p.contains("jsonrpc")?mcp_->handle(p,c):cymcp::dispatch_app(*registry,p,c);});
-    auto port=server->start();connection_={{"sdkVersion",cymcp::version},{"pid",GetCurrentProcessId()},{"document",document},{"url","http://127.0.0.1:"+std::to_string(port)+"/mcp"},{"token",token_}};
+    auto endpoint=[this](const J& p,const cymcp::CallContext& input){auto c=input;c.principal="local";c.cancellation.ancestors.push_back(lifetime_.flag);c.cancellation.ancestors.push_back(transport_.flag);if(!p.contains("jsonrpc")&&p.value("method","")=="invoke")return Invoke(p.at("name"),p.value("arguments",J::object()),c);return p.contains("jsonrpc")?mcp_->handle(p,c):cymcp::dispatch_app(*registry,p,c);};
+    // SDK transport always binds 127.0.0.1. Free/Local controlled require no token.
+    std::unique_ptr<cymcp::LocalHttpServer> server;
+    if(RequiresToken())server=std::make_unique<cymcp::LocalHttpServer>(token_,endpoint);
+    else server=std::make_unique<cymcp::LocalHttpServer>(cymcp::LocalHttpServer::UnauthenticatedLoopback{},endpoint);
+    auto port=server->start();connection_={{"sdkVersion",cymcp::version},{"pid",GetCurrentProcessId()},{"document",document},{"url","http://127.0.0.1:"+std::to_string(port)+"/mcp"},{"accessProfile",NativeAccessProfileName(options.access_profile)},{"requiresToken",RequiresToken()},{"controlledOperations",ControlsOperations()}};
+    if(RequiresToken())connection_["token"]=token_;
     connection_path_=directory_/("connection-"+std::to_string(GetCurrentProcessId())+".json");WritePrivateJson(connection_path_,connection_);http_=std::move(server);
+}
+void NativeAi::SetAccessProfile(cymcp::LocalAccessProfile profile){
+    auto saved=options.Json();saved["accessProfile"]=NativeAccessProfileName(profile);
+    WritePrivateJson(directory_/"options.json",saved);
+    const bool running=Running();const auto document=connection_.value("document",uint64_t(0));
+    Stop();options.access_profile=profile;options_error_.clear();
+    if(running)Start(document);
 }
 void NativeAi::Stop(){transport_.cancel();if(mcp_)mcp_->cancel_all();if(http_)http_->stop();http_.reset();mcp_.reset();if(!connection_path_.empty()){std::error_code e;std::filesystem::remove(connection_path_,e);}connection_=J::object();token_.clear();}
 void NativeAi::Cancel(){lifetime_.cancel();if(jobs_)jobs_->CancelAll();}

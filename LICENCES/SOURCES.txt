@@ -88,8 +88,8 @@ weights are bundled. The SDK MIT licenses do not relicense this product.
 Repository links supplement, and never replace, the full license texts.
 
 CyInsights native AI integration update (2026-11-19):
-CyMCPSDK 0.7.0 (MIT), source commit
-791d4d7d7680213b282ec8529d248a10f8494d77.
+CyMCPSDK 0.7.1 (MIT), source commit
+34d4bcae126bc83d1a2925b5047dac36e3d09d92.
 Upstream: https://github.com/MrMybal/CyMCPSDK
 Source snapshot and exact hashes: ../ThirdParty/CyMCPSDK/.
 Full grant: CyMCPSDK-MIT.txt. Native dependency notices:
